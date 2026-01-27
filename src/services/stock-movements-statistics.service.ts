@@ -1,6 +1,6 @@
 import {
   StockMovementsRepository,
-  type StockMovementWithProduct,
+  StockMovementAggregationRow,
 } from "@/repositories/stock-movements.repository";
 
 export interface StockStatisticsItem {
@@ -18,7 +18,6 @@ export interface StockStatisticsOptions {
   fromDate?: string;
   toDate?: string;
   categoryId?: number | null;
-  pageSize?: number;
 }
 
 export class StockMovementsStatisticsService {
@@ -27,80 +26,52 @@ export class StockMovementsStatisticsService {
   async getStatistics(
     options: StockStatisticsOptions = {}
   ): Promise<StockStatisticsItem[]> {
-    const allMovements: StockMovementWithProduct[] = [];
-
-    const pageSize =
-      options.pageSize && Number.isFinite(options.pageSize) && options.pageSize > 0
-        ? Math.min(Math.floor(options.pageSize), 100000)
-        : 5000;
-
-    let offset = 0;
-    while (true) {
-      const chunk = await this.repository.findAllWithProduct({
-        fromDate: options.fromDate,
-        toDate: options.toDate,
-        limit: pageSize,
-        offset,
-      });
-      if (chunk.length === 0) {
-        break;
-      }
-      allMovements.push(...chunk);
-      if (chunk.length < pageSize) {
-        break;
-      }
-      offset += pageSize;
-    }
+    const rows = await this.repository.aggregateStatistics({
+      fromDate: options.fromDate,
+      toDate: options.toDate,
+      categoryId: options.categoryId ?? undefined,
+    });
 
     const stats = new Map<number, StockStatisticsItem>();
 
-    allMovements.forEach((item) => {
-      if (!item.product) return;
+    rows.forEach((row: StockMovementAggregationRow) => {
+      if (row.uses_stock === false) return;
 
-      const product = Array.isArray(item.product) ? item.product[0] : item.product;
-      if (!product || product.uses_stock === false) {
-        return;
-      }
+      const categoryId = row.category_id ?? null;
+      const categoryName = row.category_name ?? null;
 
-      const category = product.category
-        ? Array.isArray(product.category)
-          ? product.category[0]
-          : product.category
-        : null;
-
-      const existing = stats.get(product.id) || {
-        productId: product.id,
-        productName: product.name,
-        categoryId: category?.id ?? null,
-        categoryName: category?.name ?? null,
+      const existing = stats.get(row.product_id) || {
+        productId: row.product_id,
+        productName: row.product_name,
+        categoryId,
+        categoryName,
         totalPurchases: 0,
         totalSales: 0,
         totalAdjustments: 0,
         currentStock: 0,
       };
 
-      if (item.movement_type === "purchase") {
-        existing.totalPurchases += item.quantity;
-        existing.currentStock += item.quantity;
-      } else if (item.movement_type === "sale") {
-        existing.totalSales += item.quantity;
-        existing.currentStock -= item.quantity;
-      } else if (item.movement_type === "adjustment") {
-        existing.totalAdjustments += item.quantity;
-        existing.currentStock += item.quantity;
+      const quantity = Number(row.total_quantity);
+      if (row.movement_type === "purchase") {
+        existing.totalPurchases += quantity;
+        existing.currentStock += quantity;
+      } else if (row.movement_type === "sale") {
+        existing.totalSales += quantity;
+        existing.currentStock -= quantity;
+      } else if (row.movement_type === "adjustment") {
+        existing.totalAdjustments += quantity;
+        existing.currentStock += quantity;
       }
 
-      stats.set(product.id, existing);
+      stats.set(row.product_id, existing);
     });
 
-    const filteredStats = options.categoryId
+    const filtered = options.categoryId
       ? Array.from(stats.values()).filter(
           (stat) => stat.categoryId === options.categoryId
         )
       : Array.from(stats.values());
 
-    return filteredStats.sort((a, b) =>
-      a.productName.localeCompare(b.productName)
-    );
+    return filtered.sort((a, b) => a.productName.localeCompare(b.productName));
   }
 }
