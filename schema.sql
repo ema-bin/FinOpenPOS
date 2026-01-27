@@ -303,6 +303,38 @@ CREATE TABLE stock_movements (
 
 CREATE INDEX idx_stock_movements_purchase_id ON stock_movements(purchase_id);
 
+CREATE OR REPLACE FUNCTION stock_movement_statistics(
+  p_from_date TIMESTAMPTZ DEFAULT NULL,
+  p_to_date TIMESTAMPTZ DEFAULT NULL,
+  p_category_id BIGINT DEFAULT NULL
+)
+RETURNS TABLE (
+  product_id BIGINT,
+  movement_type VARCHAR,
+  total_quantity BIGINT,
+  product_name TEXT,
+  uses_stock BOOLEAN,
+  category_id BIGINT,
+  category_name TEXT
+) AS $$
+SELECT
+  p.id,
+  sm.movement_type,
+  SUM(sm.quantity)::BIGINT,
+  p.name,
+  p.uses_stock,
+  c.id,
+  c.name
+FROM stock_movements sm
+JOIN products p ON p.id = sm.product_id
+LEFT JOIN product_categories c ON c.id = p.category_id
+WHERE (p_from_date IS NULL OR sm.created_at >= p_from_date)
+  AND (p_to_date IS NULL OR sm.created_at <= p_to_date)
+  AND (p_category_id IS NULL OR c.id = p_category_id)
+GROUP BY p.id, sm.movement_type, p.name, p.uses_stock, c.id, c.name
+ORDER BY p.name;
+$$ LANGUAGE SQL STABLE;
+
 -- =========================================================
 -- SUPPLIERS (proveedores)
 -- =========================================================
