@@ -58,7 +58,11 @@ async function fetchTournamentPlayoffs(tournamentId: number): Promise<PlayoffRow
   return tournamentsService.getPlayoffs(tournamentId);
 }
 
-export default function PlayoffsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "has_super_tiebreak"> }) {
+export default function PlayoffsTab({
+  tournament,
+}: {
+  tournament: Pick<TournamentDTO, "id" | "has_super_tiebreak" | "status">;
+}) {
   const queryClient = useQueryClient();
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
@@ -66,6 +70,8 @@ export default function PlayoffsTab({ tournament }: { tournament: Pick<Tournamen
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [simulatingResults, setSimulatingResults] = useState(false);
+  const [finishingTournament, setFinishingTournament] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   // React Query para compartir cache con GroupsTab y PlayoffsViewTab
   const {
@@ -187,6 +193,23 @@ export default function PlayoffsTab({ tournament }: { tournament: Pick<Tournamen
     }
   };
 
+  const handleFinishTournament = async () => {
+    try {
+      setFinishError(null);
+      setFinishingTournament(true);
+      await tournamentsService.finish(tournament.id);
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournament-playoffs", tournament.id] });
+    } catch (error: any) {
+      console.error("Error finishing tournament:", error);
+      setFinishError(
+        error instanceof Error ? error.message : "Error al finalizar el torneo"
+      );
+    } finally {
+      setFinishingTournament(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[200px] flex items-center justify-center">
@@ -256,44 +279,64 @@ export default function PlayoffsTab({ tournament }: { tournament: Pick<Tournamen
             </CardDescription>
           </div>
           {rows.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSimulateResults}
-                disabled={true}
-                hidden={true}
-              >
-                {simulatingResults ? (
-                  <>
-                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                    Simulando...
-                  </>
-                ) : (
-                  <>
-                    <PlayIcon className="h-4 w-4 mr-2" />
-                    Simular Resultados
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={deleting}
-              >
-                {deleting ? (
-                  <>
-                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                    Eliminando...
-                  </>
-                ) : (
-                  <>
-                    <TrashIcon className="h-4 w-4 mr-2" />
-                    Eliminar Playoffs
-                  </>
-                )}
-              </Button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSimulateResults}
+                  disabled={true}
+                  hidden={true}
+                >
+                  {simulatingResults ? (
+                    <>
+                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                      Simulando...
+                    </>
+                  ) : (
+                    <>
+                      <PlayIcon className="h-4 w-4 mr-2" />
+                      Simular Resultados
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <TrashIcon className="h-4 w-4 mr-2" />
+                      Eliminar Playoffs
+                    </>
+                  )}
+                </Button>
+              </div>
+              {tournament.status === "in_progress" && (
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleFinishTournament}
+                    disabled={finishingTournament}
+                  >
+                    {finishingTournament && (
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Finalizar torneo
+                  </Button>
+                  {finishError && (
+                    <p className="text-xs text-destructive">{finishError}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

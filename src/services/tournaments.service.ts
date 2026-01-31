@@ -1,4 +1,5 @@
 import { TournamentPlayoff, TournamentTeam } from "@/models/db";
+import type { TournamentStatus } from "@/models/db";
 import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, TournamentDTO, AvailableSchedule, ScheduleConfig, TournamentPaymentsApiResponse, TournamentRegistrationPaymentDTO } from "@/models/dto/tournament";
 
 export interface CreateTournamentInput {
@@ -29,12 +30,31 @@ export interface RegenerateScheduleInput {
 class TournamentsService {
   private baseUrl = "/api/tournaments";
 
-  async getAll(): Promise<TournamentDTO[]> {
-    const response = await fetch(this.baseUrl);
+  async getAll(statusFilters?: TournamentStatus[]): Promise<TournamentDTO[]> {
+    const queryParams = new URLSearchParams();
+    if (statusFilters && statusFilters.length > 0) {
+      queryParams.set("status", statusFilters.join(","));
+    }
+    const queryString = queryParams.toString();
+    const response = await fetch(
+      queryString ? `${this.baseUrl}?${queryString}` : this.baseUrl
+    );
     if (!response.ok) {
       throw new Error("Failed to fetch tournaments");
     }
     return response.json();
+  }
+
+  async finish(tournamentId: number): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/finish`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.error || "Error finishing tournament";
+      throw new Error(errorMessage);
+    }
   }
 
   async getById(id: number): Promise<TournamentDTO> {

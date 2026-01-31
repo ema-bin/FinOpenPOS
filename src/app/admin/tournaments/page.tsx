@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -21,8 +21,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2Icon, PlusIcon } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import type { TournamentListItem } from "@/models/dto/tournament";
+import type { TournamentStatus } from "@/models/db/tournament";
 import { tournamentsService } from "@/services";
 
 export default function TournamentsPage() {
@@ -35,20 +43,46 @@ export default function TournamentsPage() {
   const [matchDuration, setMatchDuration] = useState<number>(60);
   const [creating, setCreating] = useState(false);
   const router = useRouter();
+  const [statusFilter, setStatusFilter] =
+    useState<StatusFilterOption>("active");
+  const [isFiltering, setIsFiltering] = useState(false);
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
+    let isActive = true;
+    const isFirstLoad = !hasFetchedRef.current;
+    const statuses = getStatusesForFilter(statusFilter);
+
     const fetchData = async () => {
       try {
-        const data = await tournamentsService.getAll();
+        if (isFirstLoad) {
+          setLoading(true);
+        } else {
+          setIsFiltering(true);
+        }
+
+        const data = await tournamentsService.getAll(statuses);
+        if (!isActive) return;
         setTournaments(data);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!isActive) return;
+        if (isFirstLoad) {
+          setLoading(false);
+        } else {
+          setIsFiltering(false);
+        }
+        hasFetchedRef.current = true;
       }
     };
+
     fetchData();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [statusFilter]);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -98,7 +132,36 @@ export default function TournamentsPage() {
           Nuevo torneo
         </Button>
       </CardHeader>
-      <CardContent className="p-0 pt-4">
+      <CardContent className="p-0 pt-4 space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <Label htmlFor="tournament-status-filter">Estado</Label>
+            <Select
+              defaultValue={statusFilter}
+              value={statusFilter}
+              onValueChange={(value) =>
+                setStatusFilter(value as StatusFilterOption)
+              }
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusFilterOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {isFiltering && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2Icon className="h-4 w-4 animate-spin" />
+              Actualizando...
+            </div>
+          )}
+        </div>
         {tournaments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Todavía no creaste ningún torneo.
@@ -189,3 +252,36 @@ export default function TournamentsPage() {
     </Card>
   );
 }
+
+type StatusFilterOption = "active" | "all" | TournamentStatus;
+
+const ACTIVE_STATUSES: TournamentStatus[] = [
+  "draft",
+  "schedule_review",
+  "in_progress",
+];
+
+const statusFilterOptions: Array<{
+  value: StatusFilterOption;
+  label: string;
+}> = [
+  { value: "active", label: "Activos" },
+  { value: "all", label: "Todos" },
+  { value: "draft", label: "Inscripción" },
+  { value: "schedule_review", label: "Revisión de horarios" },
+  { value: "in_progress", label: "En progreso" },
+  { value: "finished", label: "Finalizado" },
+  { value: "cancelled", label: "Cancelado" },
+];
+
+const getStatusesForFilter = (
+  option: StatusFilterOption
+): TournamentStatus[] | undefined => {
+  if (option === "all") {
+    return undefined;
+  }
+  if (option === "active") {
+    return ACTIVE_STATUSES;
+  }
+  return [option];
+};
