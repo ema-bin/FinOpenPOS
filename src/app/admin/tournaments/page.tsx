@@ -137,7 +137,7 @@ export default function TournamentsPage() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
             <Label htmlFor="tournament-status-filter">Estado</Label>
             <Select
-              id="tournament-status-filter"
+              defaultValue={statusFilter}
               value={statusFilter}
               onValueChange={(value) =>
                 setStatusFilter(value as StatusFilterOption)

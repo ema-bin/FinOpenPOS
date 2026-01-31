@@ -198,7 +198,7 @@ export default function PlayoffsTab({
       setFinishError(null);
       setFinishingTournament(true);
       await tournamentsService.finish(tournament.id);
-      queryClient.invalidateQueries(["tournament", tournament.id]);
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
       queryClient.invalidateQueries({ queryKey: ["tournament-playoffs", tournament.id] });
     } catch (error: any) {
       console.error("Error finishing tournament:", error);

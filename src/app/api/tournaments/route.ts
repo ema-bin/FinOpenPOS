@@ -14,14 +14,14 @@ const ALLOWED_STATUSES: TournamentStatus[] = [
 export async function GET(request: Request) {
   try {
     const repos = await createRepositories();
-    const statusParam = request.nextUrl.searchParams.get("status");
+    const statusParam = (request as any).nextUrl.searchParams.get("status");
     const requestedStatuses = statusParam
       ? Array.from(
           new Set(
             statusParam
               .split(",")
-              .map((status) => status.trim())
-              .filter((status) => ALLOWED_STATUSES.includes(status as TournamentStatus))
+              .map((status: string) => status.trim())
+              .filter((status: string) => ALLOWED_STATUSES.includes(status as TournamentStatus))
           )
         )
       : [];
