@@ -829,69 +829,81 @@ export default function OrderDetailPage() {
         </div>
         </div>
 
-      <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
-        <OrderProductSelectorPanel
-          products={products}
-          onProductSelect={handleProductSelect}
-          loadingProducts={loadingProducts}
-          isEditable={isOrderOpen}
-          showMoreProductsSelect={true}
-          moreProductsSelectValue={moreProductsSelectValue}
-          onMoreProductsSelectChange={(value) => {
-            setMoreProductsSelectValue(value);
-            if (value !== "none") {
-              const product = products.find((p) => p.id === Number(value));
-              if (product) {
-                handleProductSelect(product, 1);
-                setMoreProductsSelectValue("none");
-              }
-            }
-          }}
-        />
+        <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
+          <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+            <OrderProductSelectorPanel
+              products={products}
+              onProductSelect={handleProductSelect}
+              loadingProducts={loadingProducts}
+              isEditable={isOrderOpen}
+              showMoreProductsSelect={true}
+              moreProductsSelectValue={moreProductsSelectValue}
+              onMoreProductsSelectChange={(value) => {
+                setMoreProductsSelectValue(value);
+                if (value !== "none") {
+                  const product = products.find((p) => p.id === Number(value));
+                  if (product) {
+                    handleProductSelect(product, 1);
+                    setMoreProductsSelectValue("none");
+                  }
+                }
+              }}
+            />
+          </div>
 
-        <OrderConsumptionPanel
-          items={orderItems}
-          isLoading={isOrderLoading}
-          isEditable={isOrderOpen}
-          onUpdateQuantity={(item, newQuantity) => {
-            const orderItem = displayOrder?.items?.find((i) => i.id === item.id);
-            if (orderItem) {
-              updateItemQuantity(orderItem, newQuantity);
-            }
-          }}
-          onRemoveItem={(item) => {
-            const orderItem = displayOrder?.items?.find((i) => i.id === item.id);
-            if (orderItem) {
-              removeItem(orderItem);
-            }
-          }}
-          hasPendingChanges={hasPendingChanges}
-          onSaveChanges={handleSaveChanges}
-          savingChanges={savingChanges}
-        />
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-4">
+              <OrderConsumptionPanel
+                items={orderItems}
+                isLoading={isOrderLoading}
+                isEditable={isOrderOpen}
+                onUpdateQuantity={(item, newQuantity) => {
+                  const orderItem = displayOrder?.items?.find((i) => i.id === item.id);
+                  if (orderItem) {
+                    updateItemQuantity(orderItem, newQuantity);
+                  }
+                }}
+                onRemoveItem={(item) => {
+                  const orderItem = displayOrder?.items?.find((i) => i.id === item.id);
+                  if (orderItem) {
+                    removeItem(orderItem);
+                  }
+                }}
+                hasPendingChanges={hasPendingChanges}
+                onSaveChanges={handleSaveChanges}
+                savingChanges={savingChanges}
+              />
+            </div>
+          </div>
 
-        <OrderSummaryPanel
-          total={computedTotal}
-          finalTotal={finalTotal}
-          discountValue={discountValue}
-          discountPercentage={isOrderOpen ? discountPercentage : displayOrder?.discount_percentage ?? null}
-          discountAmount={isOrderOpen ? discountAmount : displayOrder?.discount_amount ?? null}
-          isEditable={isOrderOpen}
-          isLoading={isOrderLoading}
-          onDiscountPercentageChange={setDiscountPercentage}
-          onDiscountAmountChange={setDiscountAmount}
-          paymentMethods={paymentMethods}
-          selectedPaymentMethodId={selectedPaymentMethodId}
-          onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
-          loadingPaymentMethods={loadingPM}
-          paymentInfo={paymentInfo}
-          onProcess={handlePay}
-          onCancel={handleCancel}
-          processing={paying}
-          cancelling={cancelling}
-          isDiscountSectionEnabled={isOrderOpen}
-        />
-      </div>
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-4">
+              <OrderSummaryPanel
+                total={computedTotal}
+                finalTotal={finalTotal}
+                discountValue={discountValue}
+                discountPercentage={
+                  isOrderOpen ? discountPercentage : displayOrder?.discount_percentage ?? null
+                }
+                discountAmount={isOrderOpen ? discountAmount : displayOrder?.discount_amount ?? null}
+                isEditable={isOrderOpen}
+                isLoading={isOrderLoading}
+                onDiscountPercentageChange={setDiscountPercentage}
+                onDiscountAmountChange={setDiscountAmount}
+                paymentMethods={paymentMethods}
+                selectedPaymentMethodId={selectedPaymentMethodId}
+                onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
+                loadingPaymentMethods={loadingPM}
+                paymentInfo={paymentInfo}
+                onProcess={handlePay}
+                onCancel={handleCancel}
+                processing={paying}
+                cancelling={cancelling}
+                isDiscountSectionEnabled={isOrderOpen}
+              />
+            </div>
+          </div>
+        </div>
     </div>
   );
 }

@@ -325,46 +325,58 @@ export default function QuickSalePage() {
 
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
-            <OrderProductSelectorPanel
-              products={products}
-              onProductSelect={handleAddProduct}
-              loadingProducts={loadingProducts}
-              isEditable={!isProcessing}
-              showMoreProductsSelect={true}
-            />
-            <OrderConsumptionPanel
-              items={orderItems}
-              isLoading={isLoading}
-              isEditable={!isProcessing}
-              onUpdateQuantity={(item, newQuantity) => {
-                if (!item.product) return;
-                handleUpdateQuantity(item.product.id, newQuantity - item.quantity);
-              }}
-              onRemoveItem={(item) => {
-                if (!item.product) return;
-                handleRemoveProduct(item.product.id);
-              }}
-              hasPendingChanges={cart.length > 0}
-              emptyMessage="El carrito está vacío. Agregá productos para continuar."
-            />
-            <OrderSummaryPanel
-              total={total}
-              finalTotal={total}
-              discountValue={0}
-              isEditable={!isProcessing}
-              paymentMethods={paymentMethods}
-              selectedPaymentMethodId={selectedPaymentMethodId}
-              onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
-              loadingPaymentMethods={loadingPaymentMethods}
-              onProcess={handleProcessSale}
-              processing={isProcessing}
-              onClear={() => {
-                setCart([]);
-                setSelectedPaymentMethodId("none");
-              }}
-              processButtonLabel={isProcessing ? "Procesando..." : "Procesar venta"}
-              clearButtonLabel="Limpiar"
-            />
+            <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+              <OrderProductSelectorPanel
+                products={products}
+                onProductSelect={handleAddProduct}
+                loadingProducts={loadingProducts}
+                isEditable={!isProcessing}
+                showMoreProductsSelect={true}
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              <div className="lg:sticky lg:top-4">
+                <OrderConsumptionPanel
+                  items={orderItems}
+                  isLoading={isLoading}
+                  isEditable={!isProcessing}
+                  onUpdateQuantity={(item, newQuantity) => {
+                    if (!item.product) return;
+                    handleUpdateQuantity(item.product.id, newQuantity - item.quantity);
+                  }}
+                  onRemoveItem={(item) => {
+                    if (!item.product) return;
+                    handleRemoveProduct(item.product.id);
+                  }}
+                  hasPendingChanges={cart.length > 0}
+                  emptyMessage="El carrito está vacío. Agregá productos para continuar."
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-1">
+              <div className="lg:sticky lg:top-4">
+                <OrderSummaryPanel
+                  total={total}
+                  finalTotal={total}
+                  discountValue={0}
+                  isEditable={!isProcessing}
+                  paymentMethods={paymentMethods}
+                  selectedPaymentMethodId={selectedPaymentMethodId}
+                  onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
+                  loadingPaymentMethods={loadingPaymentMethods}
+                  onProcess={handleProcessSale}
+                  processing={isProcessing}
+                  onClear={() => {
+                    setCart([]);
+                    setSelectedPaymentMethodId("none");
+                  }}
+                  processButtonLabel={isProcessing ? "Procesando..." : "Procesar venta"}
+                  clearButtonLabel="Limpiar"
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
