@@ -21,15 +21,47 @@ export async function GET() {
     const openOrdersTotal = openOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
 
     // 2. Ventas del día: monto total diferenciado por tipo de pago
+    const TIMEZONE = "America/Argentina/Buenos_Aires";
+
+    const formatParts = (date: Date) => {
+      const dtf = new Intl.DateTimeFormat("en-US", {
+        timeZone: TIMEZONE,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      const parts = dtf.formatToParts(date);
+      const map: Record<string, number> = {};
+      parts.forEach(({ type, value }) => {
+        if (!value) return;
+        if (type === "year") map.year = Number(value);
+        if (type === "month") map.month = Number(value);
+        if (type === "day") map.day = Number(value);
+        if (type === "hour") map.hour = Number(value);
+        if (type === "minute") map.minute = Number(value);
+        if (type === "second") map.second = Number(value);
+      });
+      return map;
+    };
+
     const now = new Date();
-    const start = new Date(now);
-    if (now.getHours() < 3) {
-      start.setDate(start.getDate() - 1);
+    const parts = formatParts(now);
+    const argentinaNow = new Date(
+      Date.UTC(parts.year!, parts.month! - 1, parts.day!, parts.hour!, parts.minute!, parts.second!)
+    );
+
+    const start = new Date(argentinaNow);
+    if (argentinaNow.getUTCHours() < 3) {
+      start.setUTCDate(start.getUTCDate() - 1);
     }
-    start.setHours(3, 0, 0, 0);
+    start.setUTCHours(3, 0, 0, 0);
 
     const end = new Date(start);
-    end.setDate(start.getDate() + 1);
+    end.setUTCDate(start.getUTCDate() + 1);
 
     const { data: todayTransactions, error: txError } = await supabase
       .from("transactions")
