@@ -50,6 +50,7 @@ export default function TournamentDetailPage() {
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
 
+
   if (!id || Number.isNaN(id)) {
     return <div>Invalid tournament id</div>;
   }

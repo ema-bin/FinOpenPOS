@@ -22,11 +22,17 @@ export class TournamentsRepository extends BaseRepository {
   /**
    * Get all tournaments
    */
-  async findAll(): Promise<Tournament[]> {
-    const { data, error } = await this.supabase
+  async findAll(statusFilters?: TournamentStatus[]): Promise<Tournament[]> {
+    let query = this.supabase
       .from("tournaments")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (statusFilters && statusFilters.length > 0) {
+      query = query.in("status", statusFilters);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch tournaments: ${error.message}`);

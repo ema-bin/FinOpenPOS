@@ -1,11 +1,36 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import type { TournamentStatus } from "@/models/db/tournament";
 
-export async function GET() {
+const ALLOWED_STATUSES: TournamentStatus[] = [
+  "draft",
+  "schedule_review",
+  "in_progress",
+  "finished",
+  "cancelled",
+];
+
+export async function GET(request: Request) {
   try {
     const repos = await createRepositories();
-    const tournaments = await repos.tournaments.findAll();
+    const statusParam = request.nextUrl.searchParams.get("status");
+    const requestedStatuses = statusParam
+      ? Array.from(
+          new Set(
+            statusParam
+              .split(",")
+              .map((status) => status.trim())
+              .filter((status) => ALLOWED_STATUSES.includes(status as TournamentStatus))
+          )
+        )
+      : [];
+    const statusesFilter =
+      requestedStatuses.length > 0
+        ? (requestedStatuses as TournamentStatus[])
+        : undefined;
+
+    const tournaments = await repos.tournaments.findAll(statusesFilter);
     return NextResponse.json(tournaments);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
