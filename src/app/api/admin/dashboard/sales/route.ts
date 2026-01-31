@@ -21,10 +21,15 @@ export async function GET() {
     const openOrdersTotal = openOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
 
     // 2. Ventas del día: monto total diferenciado por tipo de pago
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    const now = new Date();
+    const start = new Date(now);
+    if (now.getHours() < 3) {
+      start.setDate(start.getDate() - 1);
+    }
+    start.setHours(3, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
 
     const { data: todayTransactions, error: txError } = await supabase
       .from("transactions")
@@ -38,8 +43,8 @@ export async function GET() {
       `)
       .eq("type", "income")
       .eq("status", "completed")
-      .gte("created_at", todayStart.toISOString())
-      .lt("created_at", todayEnd.toISOString())
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString())
       .not("order_id", "is", null);
 
     if (txError) {
