@@ -50,7 +50,9 @@ export async function POST(_req: Request, { params }: RouteParams) {
       .from("tournament_matches")
       .select("id, phase")
       .eq("tournament_id", tournamentId)
-      .neq("status", "finished");
+      .neq("status", "finished")
+      .not("team1_id", "is", null)
+      .not("team2_id", "is", null);
 
     if (pendingMatchesError) {
       console.error("Error checking match results:", pendingMatchesError);
