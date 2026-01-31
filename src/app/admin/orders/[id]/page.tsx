@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Loader2Icon,
   ArrowLeftIcon,
@@ -96,7 +97,7 @@ export default function OrderDetailPage() {
 
   // UI state para agregar ítem (ya no se usa selectedProductId)
   const [newItemQty, setNewItemQty] = useState<number | "">(1);
-  const [moreProductsSelectValue, setMoreProductsSelectValue] = useState<string>("none");
+  const [productFilter, setProductFilter] = useState("");
 
   // UI pago
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<
@@ -171,6 +172,14 @@ export default function OrderDetailPage() {
   useEffect(() => {
     if (pmError) toast.error("Error al cargar los métodos de pago.");
   }, [pmError]);
+
+  const filteredProducts = useMemo(() => {
+    if (!productFilter.trim()) return products;
+    const term = productFilter.toLowerCase();
+    return products.filter((product) =>
+      product.name.toLowerCase().includes(term)
+    );
+  }, [products, productFilter]);
 
   // Order para mostrar en UI: estado local (optimistic) o, si todavía no, lo que vino del server
   const displayOrder = order ?? orderData ?? null;
@@ -831,23 +840,20 @@ export default function OrderDetailPage() {
 
         <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
           <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+            <div className="mb-3">
+              <Input
+                placeholder="Filtrar productos..."
+                value={productFilter}
+                onChange={(event) => setProductFilter(event.target.value)}
+                className="w-full"
+              />
+            </div>
             <OrderProductSelectorPanel
-              products={products}
+              products={filteredProducts}
               onProductSelect={handleProductSelect}
               loadingProducts={loadingProducts}
               isEditable={isOrderOpen}
-              showMoreProductsSelect={true}
-              moreProductsSelectValue={moreProductsSelectValue}
-              onMoreProductsSelectChange={(value) => {
-                setMoreProductsSelectValue(value);
-                if (value !== "none") {
-                  const product = products.find((p) => p.id === Number(value));
-                  if (product) {
-                    handleProductSelect(product, 1);
-                    setMoreProductsSelectValue("none");
-                  }
-                }
-              }}
+              showMoreProductsSelect={false}
             />
           </div>
 

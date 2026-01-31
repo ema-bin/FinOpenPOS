@@ -11,6 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectTrigger,
@@ -76,6 +77,7 @@ export default function QuickSalePage() {
   const queryClient = useQueryClient();
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [productFilter, setProductFilter] = useState("");
 
   const aggregatedCart = useMemo<CartItem[]>(() => {
     const map = new Map<number, CartItem>();
@@ -175,6 +177,12 @@ export default function QuickSalePage() {
   }, []);
 
   // Calcular total
+  const filteredProducts = useMemo(() => {
+    if (!productFilter.trim()) return products;
+    const term = productFilter.toLowerCase();
+    return products.filter((product) => product.name.toLowerCase().includes(term));
+  }, [products, productFilter]);
+
   const total = aggregatedCart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
@@ -326,12 +334,19 @@ export default function QuickSalePage() {
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
             <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+              <div className="mb-3">
+                <Input
+                  placeholder="Filtrar productos..."
+                  value={productFilter}
+                  onChange={(event) => setProductFilter(event.target.value)}
+                />
+              </div>
               <OrderProductSelectorPanel
-                products={products}
+                products={filteredProducts}
                 onProductSelect={handleAddProduct}
                 loadingProducts={loadingProducts}
                 isEditable={!isProcessing}
-                showMoreProductsSelect={true}
+                showMoreProductsSelect={false}
               />
             </div>
 
