@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -190,11 +191,12 @@ export default function AdvertisementsPage() {
           </div>
           <Button onClick={() => openDialog()}>Nueva publicidad</Button>
         </CardHeader>
-        <CardContent className="p-0">
+      <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                <TableHead>Preview</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Orden</TableHead>
                   <TableHead>Activo</TableHead>
@@ -204,6 +206,19 @@ export default function AdvertisementsPage() {
               <TableBody>
                 {sortedAds.map((ad) => (
                   <TableRow key={ad.id}>
+                  <TableCell className="h-14 w-24">
+                    {ad.image_url ? (
+                      <Image
+                        src={ad.image_url}
+                        alt={ad.name}
+                        width={96}
+                        height={40}
+                        className="rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-20 rounded bg-muted/40" />
+                    )}
+                  </TableCell>
                     <TableCell>{ad.name}</TableCell>
                     <TableCell>{ad.ordering}</TableCell>
                     <TableCell>
@@ -235,7 +250,7 @@ export default function AdvertisementsPage() {
                 ))}
                 {!sortedAds.length && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4">
+                    <TableCell colSpan={5} className="text-center py-4">
                       No hay publicidades todavía
                     </TableCell>
                   </TableRow>
@@ -279,20 +294,40 @@ export default function AdvertisementsPage() {
               />
             </div>
             <div className="grid gap-1">
-              <Label>URL de la imagen</Label>
-              <Input
-                value={formState.image_url}
-                onChange={(e) => setFormState((prev) => ({ ...prev, image_url: e.target.value }))}
-                placeholder={`${ADS_BUCKET_URL}/banner1.png`}
+              <Label>Imagen</Label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  const res = await fetch("/api/advertisements/upload", {
+                    method: "POST",
+                    body: formData,
+                  });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+                    toast.error(err.error || "Error uploading image");
+                    return;
+                  }
+                  const { url } = await res.json();
+                  setFormState((prev) => ({ ...prev, image_url: url }));
+                  toast.success("Imagen cargada al bucket");
+                }}
               />
-            </div>
-            <div className="grid gap-1">
-              <Label>Link destino (opcional)</Label>
-              <Input
-                value={formState.target_url}
-                onChange={(e) => setFormState((prev) => ({ ...prev, target_url: e.target.value }))}
-                placeholder="https://"
-              />
+              {formState.image_url && (
+                <div className="w-full">
+                  <Image
+                    src={formState.image_url}
+                    alt="Preview"
+                    width={240}
+                    height={80}
+                    className="w-full rounded object-cover"
+                  />
+                </div>
+              )}
             </div>
             <div className="grid gap-1">
               <Label>Descripción</Label>

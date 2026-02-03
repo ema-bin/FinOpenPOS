@@ -1,5 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "wzwdmxpifdaihvvuhmwz.supabase.co",
+      },
+      {
+        protocol: "https",
+        hostname: "hafmbknsmdooywavlfib.supabase.co",
+      },
+    ],
+  },
   // Configuración para mejorar el hot-reload y evitar problemas de cache
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {

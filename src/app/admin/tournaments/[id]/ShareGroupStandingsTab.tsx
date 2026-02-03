@@ -11,7 +11,7 @@ import { formatDate, formatTime, getDayOfWeek } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import type { TournamentDTO, ApiResponseStandings } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
-import { tournamentsService, advertisementsService, fallbackAdvertisements, type AdvertisementDTO } from "@/services";
+import { tournamentsService, advertisementsService, type AdvertisementDTO } from "@/services";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
@@ -84,7 +84,7 @@ export default function ShareGroupStandingsTab({ tournament }: { tournament: Pic
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const adsToShow = advertisements.length > 0 ? advertisements : fallbackAdvertisements;
+  const adsToShow = advertisements;
 
   const courtMap = new Map<number, string>();
   courts.forEach((court) => {

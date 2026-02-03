@@ -80,3 +80,4 @@ class AdvertisementsService {
 }
 
 export const advertisementsService = new AdvertisementsService();
+
