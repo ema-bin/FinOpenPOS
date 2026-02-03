@@ -9,7 +9,7 @@ export class ProductCategoriesRepository extends BaseRepository {
   async findAll(options: FindProductCategoriesOptions = {}): Promise<ProductCategoryDB[]> {
     let query = this.supabase
       .from("product_categories")
-      .select("id, name, description, color, is_sellable, is_active, created_at");
+      .select("id, name, description, color, is_sellable, is_active, is_cantina_revenue, created_at");
 
     if (options.onlyActive) {
       query = query.eq("is_active", true);
@@ -38,7 +38,7 @@ export class ProductCategoriesRepository extends BaseRepository {
   async findById(categoryId: number): Promise<ProductCategoryDB | null> {
     const { data, error } = await this.supabase
       .from("product_categories")
-      .select("id, name, description, color, is_sellable, is_active, created_at")
+      .select("id, name, description, color, is_sellable, is_active, is_cantina_revenue, created_at")
       .eq("id", categoryId)
       .single();
 
@@ -64,9 +64,10 @@ export class ProductCategoriesRepository extends BaseRepository {
         color: input.color ?? null,
         is_sellable: input.is_sellable ?? true,
         is_active: input.is_active ?? true,
+        is_cantina_revenue: input.is_cantina_revenue ?? true,
         user_uid: this.userId,
       })
-      .select("id, name, description, color, is_sellable, is_active, created_at")
+      .select("id, name, description, color, is_sellable, is_active, is_cantina_revenue, created_at")
       .single();
 
     if (error) {

@@ -46,6 +46,10 @@ export async function POST(request: Request) {
       color: body.color ?? null,
       is_sellable: body.is_sellable ?? true,
       is_active: body.is_active ?? true,
+      is_cantina_revenue:
+        body.is_cantina_revenue !== undefined
+          ? Boolean(body.is_cantina_revenue)
+          : true,
     });
 
     return NextResponse.json(category, { status: 201 });

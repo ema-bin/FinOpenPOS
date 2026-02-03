@@ -7,6 +7,7 @@ export interface ProductCategoryDB {
   color: string | null;
   is_sellable: boolean;
   is_active: boolean;
+  is_cantina_revenue: boolean;
   created_at: string;
 }
 
@@ -41,6 +42,7 @@ export interface CreateProductCategoryInput {
   color?: string | null;
   is_sellable?: boolean;
   is_active?: boolean;
+  is_cantina_revenue?: boolean;
 }
 
 export type ProductStatusFilter = "active" | "inactive" | "all";
