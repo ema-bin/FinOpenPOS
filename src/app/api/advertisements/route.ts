@@ -27,7 +27,6 @@ export async function GET() {
           created_at
         `
       )
-      .eq("user_uid", user.id)
       .eq("is_active", true)
       .order("ordering", { ascending: true });
 
