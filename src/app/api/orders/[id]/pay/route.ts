@@ -178,7 +178,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     // 2) Asegurarnos que haya items
-    const { data: items, error: itemsError } = await supabase
+    const { data: fetchedItems, error: itemsError } = await supabase
       .from("order_items")
       .select(`
         id,
@@ -187,7 +187,13 @@ export async function POST(request: Request, { params }: RouteParams) {
         product_id,
         product:product_id (
           name,
-          uses_stock
+          uses_stock,
+          category_id,
+          category:category_id (
+            id,
+            name,
+            is_cantina_revenue
+          )
         )
       `)
       .eq("order_id", orderId);
@@ -200,7 +206,36 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    if (!items || items.length === 0) {
+    const allItems = fetchedItems ?? [];
+    const nonRevenueItemIds = allItems
+      .filter(
+        (item: any) =>
+          item.product?.category?.is_cantina_revenue === false
+      )
+      .map((item: any) => item.id);
+
+    if (nonRevenueItemIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("order_items")
+        .delete()
+        .eq("order_id", orderId)
+        .in("id", nonRevenueItemIds);
+
+      if (deleteError) {
+        console.error("Error removing non-cantina items:", deleteError);
+        return NextResponse.json(
+          { error: "Error removing special items" },
+          { status: 500 }
+        );
+      }
+    }
+
+    const revenueItems = allItems.filter(
+      (item: any) =>
+        item.product?.category?.is_cantina_revenue !== false
+    );
+
+    if (revenueItems.length === 0) {
       return NextResponse.json(
         { error: "Cannot pay an empty order" },
         { status: 400 }
@@ -307,7 +342,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       user_uid: string;
     };
 
-    const stockMovementsPayload = items
+    const stockMovementsPayload = revenueItems
       .map((item: any) => {
         const product = normalizeProductRecord(item.product);
         if (product && product.uses_stock === false) {

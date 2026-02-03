@@ -127,6 +127,7 @@ CREATE TABLE product_categories (
     color       VARCHAR(20),   -- opcional, para mostrar en la UI
     is_sellable BOOLEAN NOT NULL DEFAULT TRUE, -- si los productos de esta categoría se venden
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    is_cantina_revenue BOOLEAN NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT product_categories_unique_per_user UNIQUE (user_uid, name)
 );

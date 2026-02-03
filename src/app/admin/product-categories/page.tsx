@@ -64,6 +64,8 @@ export default function ProductCategoriesPage() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("");
   const [categoryIsSellable, setCategoryIsSellable] = useState(true);
+  const [categoryCountsForCantina, setCategoryCountsForCantina] =
+    useState(true);
 
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
     useState(false);
@@ -77,6 +79,7 @@ export default function ProductCategoriesPage() {
     setDescription("");
     setColor("");
     setCategoryIsSellable(true);
+    setCategoryCountsForCantina(true);
     setIsEdit(false);
   };
 
@@ -127,6 +130,9 @@ export default function ProductCategoriesPage() {
     setDescription(category.description ?? "");
     setColor(category.color ?? "");
     setCategoryIsSellable(category.is_sellable);
+    setCategoryCountsForCantina(
+      category.is_cantina_revenue !== false
+    );
     setIsEdit(true);
     setIsDialogOpen(true);
   };
@@ -142,6 +148,7 @@ export default function ProductCategoriesPage() {
       description: description.trim() || null,
       color: color.trim() || null,
       is_sellable: categoryIsSellable,
+      is_cantina_revenue: categoryCountsForCantina,
     };
 
     try {
@@ -289,6 +296,7 @@ export default function ProductCategoriesPage() {
                   <TableHead>Descripcion</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead>Venta</TableHead>
+                  <TableHead>Cantina</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -313,13 +321,20 @@ export default function ProductCategoriesPage() {
                         "-"
                       )}
                     </TableCell>
-                    <TableCell>
+                  <TableCell>
                       {cat.is_sellable ? (
                         <span className="text-emerald-600 font-medium">Sí</span>
                       ) : (
                         <span className="text-muted-foreground">No</span>
                       )}
                     </TableCell>
+                  <TableCell>
+                    {cat.is_cantina_revenue ? (
+                      <span className="text-emerald-600 font-medium">Sí</span>
+                    ) : (
+                      <span className="text-muted-foreground">No</span>
+                    )}
+                  </TableCell>
                     <TableCell>
                       {cat.is_active ? (
                         <span className="text-green-600 font-medium">Activa</span>
@@ -355,7 +370,7 @@ export default function ProductCategoriesPage() {
                 ))}
                 {filteredCategories.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6">
+                    <TableCell colSpan={6} className="text-center py-6">
                       No se encontraron categorías.
                     </TableCell>
                   </TableRow>
@@ -448,6 +463,23 @@ export default function ProductCategoriesPage() {
                 />
                 <span className="text-sm text-muted-foreground">
                   Los productos de esta categoría solo aparecerán en los selectores de venta si está habilitada.
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cat-cantina" className="text-right">
+                ¿Cuenta como cantina?
+              </Label>
+              <div className="col-span-3 flex items-center gap-2">
+                <Switch
+                  id="cat-cantina"
+                  checked={categoryCountsForCantina}
+                  onCheckedChange={(checked) =>
+                    setCategoryCountsForCantina(Boolean(checked))
+                  }
+                />
+                <span className="text-sm text-muted-foreground">
+                  Si está activada, los productos contarán como ingresos de la cantina; si no, se excluyen al cerrar la cuenta.
                 </span>
               </div>
             </div>

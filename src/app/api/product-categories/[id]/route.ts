@@ -71,6 +71,10 @@ export async function PATCH(request: Request, { params }: Params) {
       updateFields.is_sellable = body.is_sellable;
     }
 
+    if (typeof body.is_cantina_revenue === 'boolean') {
+      updateFields.is_cantina_revenue = body.is_cantina_revenue;
+    }
+
     if (Object.keys(updateFields).length === 0) {
       return NextResponse.json(
         { error: 'No fields to update' },

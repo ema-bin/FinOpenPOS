@@ -67,6 +67,7 @@ export function ProductCategoriesTab() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("");
   const [categoryIsSellable, setCategoryIsSellable] = useState(true);
+  const [categoryCountsForCantina, setCategoryCountsForCantina] = useState(true);
 
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
     useState(false);
@@ -80,6 +81,7 @@ export function ProductCategoriesTab() {
     setDescription("");
     setColor("");
     setCategoryIsSellable(true);
+    setCategoryCountsForCantina(true);
     setIsEdit(false);
   };
 
@@ -147,6 +149,7 @@ export function ProductCategoriesTab() {
     setIsEdit(true);
     setIsDialogOpen(true);
     setCategoryIsSellable(category.is_sellable);
+    setCategoryCountsForCantina(category.is_cantina_revenue !== false);
   };
 
   const handleSave = useCallback(async () => {
@@ -160,6 +163,7 @@ export function ProductCategoriesTab() {
       description: description.trim() || null,
       color: color.trim() || null,
       is_sellable: categoryIsSellable,
+      is_cantina_revenue: categoryCountsForCantina,
     };
 
     try {
@@ -215,6 +219,7 @@ export function ProductCategoriesTab() {
     description,
     color,
     categoryIsSellable,
+    categoryCountsForCantina,
   ]);
 
   const handleDelete = useCallback(async () => {
@@ -343,6 +348,7 @@ export function ProductCategoriesTab() {
                   <TableHead>Descripción</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead>Venta</TableHead>
+                  <TableHead>Cantina</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -369,6 +375,13 @@ export function ProductCategoriesTab() {
                     </TableCell>
                     <TableCell>
                       {cat.is_sellable ? (
+                        <span className="text-emerald-600 font-medium">Sí</span>
+                      ) : (
+                        <span className="text-muted-foreground">No</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {cat.is_cantina_revenue ? (
                         <span className="text-emerald-600 font-medium">Sí</span>
                       ) : (
                         <span className="text-muted-foreground">No</span>
@@ -409,7 +422,7 @@ export function ProductCategoriesTab() {
                 ))}
                 {filteredCategories.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6">
+                    <TableCell colSpan={7} className="text-center py-6">
                       No se encontraron categorías.
                     </TableCell>
                   </TableRow>
@@ -502,6 +515,23 @@ export function ProductCategoriesTab() {
                 />
                 <span className="text-sm text-muted-foreground">
                   Los productos de esta categoría aparecerán en los selectores de venta solo si está habilitada.
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cat-cantina" className="text-right">
+                ¿Cuenta como cantina?
+              </Label>
+              <div className="col-span-3 flex items-center gap-2">
+                <Switch
+                  id="cat-cantina"
+                  checked={categoryCountsForCantina}
+                  onCheckedChange={(checked) =>
+                    setCategoryCountsForCantina(Boolean(checked))
+                  }
+                />
+                <span className="text-sm text-muted-foreground">
+                  Si está activo, esta categoría se considera ingreso de cantina. Si no, se excluye de los ingresos al cerrar cuentas.
                 </span>
               </div>
             </div>
