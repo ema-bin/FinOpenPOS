@@ -21,8 +21,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('partners')
-      .select('id, first_name, last_name, phone, email, status, notes, created_at')
-      .eq('user_uid', user.id);
+      .select('id, first_name, last_name, phone, email, status, notes, created_at');
 
     if (onlyActive) {
       query = query.eq('status', 'active');
