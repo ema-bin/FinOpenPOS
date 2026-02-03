@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { supabaseStorageService } from "@/services/supabase-storage.service";
 
 export async function POST(request: Request) {
   try {
@@ -10,27 +10,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    const supabase = createClient();
-    const fileExt = file.name.split(".").pop() || "png";
-    const key = `advertisements/${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
-
-    const { data, error: uploadError } = await supabase.storage
-      .from("advertisements")
-      .upload(key, file, { cacheControl: "3600" });
-
-    if (uploadError || !data) {
-      console.error("Upload error", uploadError);
-      return NextResponse.json(
-        { error: uploadError?.message || "Upload failed" },
-        { status: 500 }
-      );
-    }
-
-    const { data: publicData } = supabase.storage
-      .from("advertisements")
-      .getPublicUrl(data.path);
-
-    return NextResponse.json({ url: publicData.publicUrl });
+    const url = await supabaseStorageService.uploadAdvertisementImage(file);
+    return NextResponse.json({ url });
   } catch (error) {
     console.error("Upload error", error);
     return NextResponse.json(

@@ -44,10 +44,9 @@ type FormState = {
   is_active: boolean;
 };
 
-const DEV_BUCKET = "https://supabase.com/dashboard/project/wzwdmxpifdaihvvuhmwz/storage/files/buckets/advertisements";
-const PROD_BUCKET = "https://supabase.com/dashboard/project/hafmbknsmdooywavlfib/storage/files/buckets/advertisements";
 const ADS_BUCKET_URL =
-  process.env.NODE_ENV === "production" ? PROD_BUCKET : DEV_BUCKET;
+  process.env.NEXT_PUBLIC_ADS_BUCKET_URL ??
+  "https://supabase.com/dashboard/project/wzwdmxpifdaihvvuhmwz/storage/files/buckets/advertisements";
 
 export default function AdvertisementsPage() {
   const queryClient = useQueryClient();
