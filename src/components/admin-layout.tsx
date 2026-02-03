@@ -18,6 +18,7 @@ import {
   ShoppingCartIcon,
   CalendarIcon,
   TrophyIcon,
+  PackageIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -36,6 +37,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/court-slots": "Turnos de canchas",
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",
+  "/admin/advertisements": "Publicidades",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -169,6 +171,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           >
             <TrophyIcon className="h-4 w-4" />
             Torneos
+          </Link>
+          <Link
+            href="/admin/advertisements"
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              mounted && pathname?.startsWith("/admin/advertisements")
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+            }`}
+          >
+            <PackageIcon className="h-4 w-4" />
+            Publicidades
           </Link>
         </nav>
       </header>
