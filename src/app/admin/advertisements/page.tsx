@@ -151,9 +151,9 @@ export default function AdvertisementsPage() {
     };
 
     if (selectedId) {
-      mutateUpdate.mutate({ id: selectedId, payload });
+      mutateUpdate.mutate({ id: selectedId, payload: payload as Partial<FormState> });
     } else {
-      mutateCreate.mutate(payload);
+      mutateCreate.mutate(payload as Omit<FormState, "id">);
     }
   }, [formState, selectedId, mutateCreate, mutateUpdate]);
 
@@ -362,7 +362,7 @@ export default function AdvertisementsPage() {
             <Button variant="outline" onClick={closeDialog}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} disabled={mutateCreate.isLoading || mutateUpdate.isLoading}>
+            <Button onClick={handleSubmit} disabled={mutateCreate.isPending || mutateUpdate.isPending}>
               {selectedId ? "Guardar cambios" : "Crear publicidad"}
             </Button>
           </DialogFooter>
