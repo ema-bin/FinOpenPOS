@@ -67,8 +67,22 @@ export default function AdvertisementsPage() {
     is_active: true,
   });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const resetImageSelection = useCallback(() => {
+    setPendingImageFile(null);
+    setPendingImagePreview((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  }, []);
 
   const openDialog = (ad?: AdvertisementDTO) => {
+    resetImageSelection();
     if (ad) {
       setFormState({
         id: ad.id,
@@ -95,6 +109,7 @@ export default function AdvertisementsPage() {
   };
 
   const closeDialog = () => {
+    resetImageSelection();
     setIsDialogOpen(false);
     setSelectedId(null);
   };
@@ -131,36 +146,68 @@ export default function AdvertisementsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const handleSubmit = useCallback(() => {
+  const uploadPendingImage = useCallback(async (): Promise<string> => {
+    if (!pendingImageFile) {
+      return formState.image_url.trim();
+    }
+    const formData = new FormData();
+    formData.append("file", pendingImageFile);
+    const res = await fetch("/api/advertisements/upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Error uploading image" }));
+      throw new Error(err.error || "Error uploading image");
+    }
+    const { url } = await res.json();
+    return url;
+  }, [pendingImageFile, formState.image_url]);
+
+  const handleSubmit = useCallback(async () => {
     if (!formState.name.trim()) {
       toast.error("El nombre es obligatorio");
       return;
     }
-    if (!formState.image_url.trim()) {
-      toast.error("Subí o pegá la URL de la imagen desde el bucket.");
+    if (!formState.image_url.trim() && !pendingImageFile) {
+      toast.error("Elegí una imagen para la publicidad.");
       return;
     }
 
-    const payload = {
-      name: formState.name.trim(),
-      image_url: formState.image_url.trim(),
-      target_url: formState.target_url.trim() || null,
-      description: formState.description.trim() || null,
-      ordering: formState.ordering,
-      is_active: formState.is_active,
-    };
+    setIsSubmitting(true);
+    try {
+      let imageUrl = formState.image_url.trim();
+      if (pendingImageFile) {
+        imageUrl = await uploadPendingImage();
+      }
 
-    if (selectedId) {
-      mutateUpdate.mutate({ id: selectedId, payload: payload as Partial<FormState> });
-    } else {
-      mutateCreate.mutate(payload as Omit<FormState, "id">);
+      const payload = {
+        name: formState.name.trim(),
+        image_url: imageUrl,
+        target_url: formState.target_url.trim() || null,
+        description: formState.description.trim() || null,
+        ordering: formState.ordering,
+        is_active: formState.is_active,
+      };
+
+      if (selectedId) {
+        await mutateUpdate.mutateAsync({ id: selectedId, payload: payload as Partial<FormState> });
+      } else {
+        await mutateCreate.mutateAsync(payload as Omit<FormState, "id">);
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        toast.error(error.message);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [formState, selectedId, mutateCreate, mutateUpdate]);
+  }, [formState, selectedId, pendingImageFile, uploadPendingImage, mutateCreate, mutateUpdate]);
 
   const instructions = useMemo(
     () => [
-      `Subí las imágenes al bucket de Supabase y copiá la URL pública (ej: ${ADS_BUCKET_URL}).`,
-      "Es importante que la URL comience con https:// y sea accesible públicamente.",
+      "Elegí una imagen en el formulario; se subirá al bucket al guardar la publicidad.",
+      `Las URLs se generan en el bucket (ej: ${ADS_BUCKET_URL}).`,
     ],
     []
   );
@@ -264,7 +311,7 @@ export default function AdvertisementsPage() {
         <CardHeader>
           <CardTitle className="text-lg font-semibold">Bucket de imágenes</CardTitle>
           <CardDescription className="text-sm text-muted-foreground">
-            Trabajamos directamente sobre el bucket de Supabase. Subí tus imágenes ahí y usá la URL pública:
+            Las imágenes se suben al bucket de Supabase al guardar cada publicidad.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -281,7 +328,7 @@ export default function AdvertisementsPage() {
           <DialogHeader>
             <DialogTitle>{selectedId ? "Editar publicidad" : "Nueva publicidad"}</DialogTitle>
             <DialogDescription>
-              Completá la información y pegá la URL de la imagen obtenida desde el bucket.
+              Completá la información y elegí una imagen. La imagen se subirá al bucket al guardar.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -297,26 +344,25 @@ export default function AdvertisementsPage() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={async (event) => {
+                onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (!file) return;
-                  const formData = new FormData();
-                  formData.append("file", file);
-                  const res = await fetch("/api/advertisements/upload", {
-                    method: "POST",
-                    body: formData,
+                  setPendingImageFile(file);
+                  setPendingImagePreview((current) => {
+                    if (current) URL.revokeObjectURL(current);
+                    return URL.createObjectURL(file);
                   });
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({ error: "Upload failed" }));
-                    toast.error(err.error || "Error uploading image");
-                    return;
-                  }
-                  const { url } = await res.json();
-                  setFormState((prev) => ({ ...prev, image_url: url }));
-                  toast.success("Imagen cargada al bucket");
                 }}
               />
-              {formState.image_url && (
+              {pendingImagePreview ? (
+                <div className="w-full">
+                  <img
+                    src={pendingImagePreview}
+                    alt="Preview"
+                    className="w-full max-h-40 rounded object-cover"
+                  />
+                </div>
+              ) : formState.image_url ? (
                 <div className="w-full">
                   <Image
                     src={formState.image_url}
@@ -326,7 +372,7 @@ export default function AdvertisementsPage() {
                     className="w-full rounded object-cover"
                   />
                 </div>
-              )}
+              ) : null}
             </div>
             <div className="grid gap-1">
               <Label>Descripción</Label>
@@ -362,8 +408,8 @@ export default function AdvertisementsPage() {
             <Button variant="outline" onClick={closeDialog}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} disabled={mutateCreate.isPending || mutateUpdate.isPending}>
-              {selectedId ? "Guardar cambios" : "Crear publicidad"}
+            <Button onClick={handleSubmit} disabled={isSubmitting || mutateCreate.isPending || mutateUpdate.isPending}>
+              {isSubmitting ? "Subiendo imagen..." : selectedId ? "Guardar cambios" : "Crear publicidad"}
             </Button>
           </DialogFooter>
         </DialogContent>
