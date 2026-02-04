@@ -31,6 +31,7 @@ import {
   FilePenIcon,
   TrashIcon,
   RotateCcwIcon,
+  Loader2Icon,
 } from "lucide-react";
 import {
   Select,
@@ -225,14 +226,6 @@ export default function AdvertisementsPage() {
     }
   }, [formState, selectedId, pendingImageFile, uploadPendingImage, mutateCreate, mutateUpdate]);
 
-  const instructions = useMemo(
-    () => [
-      "Elegí una imagen en el formulario; se subirá al bucket al guardar la publicidad.",
-      `Las URLs se generan en el bucket (ej: ${ADS_BUCKET_URL}).`,
-    ],
-    []
-  );
-
   const sortedAds = useMemo(
     () => [...ads].sort((a, b) => a.ordering - b.ordering),
     [ads]
@@ -243,14 +236,6 @@ export default function AdvertisementsPage() {
     if (statusFilter === "active") return sortedAds.filter((ad) => ad.is_active);
     return sortedAds.filter((ad) => !ad.is_active);
   }, [sortedAds, statusFilter]);
-
-  if (isLoading && !ads.length) {
-    return (
-      <div className="h-[70vh] flex items-center justify-center">
-        <span>Loading...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -289,87 +274,84 @@ export default function AdvertisementsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAds.map((ad) => (
-                  <TableRow key={ad.id}>
-                  <TableCell className="h-14 w-24">
-                    {ad.image_url ? (
-                      <Image
-                        src={ad.image_url}
-                        alt={ad.name}
-                        width={96}
-                        height={40}
-                        className="rounded object-cover"
-                      />
-                    ) : (
-                      <div className="h-10 w-20 rounded bg-muted/40" />
-                    )}
-                  </TableCell>
-                    <TableCell>{ad.name}</TableCell>
-                    <TableCell>{ad.ordering}</TableCell>
-                    <TableCell>
-                      {ad.is_active ? "Sí" : "No"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => openDialog(ad)}
-                          aria-label="Editar publicidad"
-                        >
-                          <FilePenIcon className="h-4 w-4" />
-                        </Button>
-                        {ad.is_active ? (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => mutateDeactivate.mutate(ad.id)}
-                            aria-label="Inactivar publicidad"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => mutateReactivate.mutate(ad.id)}
-                            disabled={mutateReactivate.isPending}
-                            aria-label="Reactivar publicidad"
-                          >
-                            <RotateCcwIcon className="h-4 w-4" />
-                          </Button>
-                        )}
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2Icon className="h-5 w-5 animate-spin" />
+                        <span>Cargando...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
-                {!filteredAds.length && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-4">
-                      {sortedAds.length
-                        ? "No hay publicidades con este filtro"
-                        : "No hay publicidades todavía"}
-                    </TableCell>
-                  </TableRow>
+                ) : (
+                  <>
+                    {filteredAds.map((ad) => (
+                      <TableRow key={ad.id}>
+                        <TableCell className="h-14 w-24">
+                          {ad.image_url ? (
+                            <Image
+                              src={ad.image_url}
+                              alt={ad.name}
+                              width={96}
+                              height={40}
+                              className="rounded object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-20 rounded bg-muted/40" />
+                          )}
+                        </TableCell>
+                        <TableCell>{ad.name}</TableCell>
+                        <TableCell>{ad.ordering}</TableCell>
+                        <TableCell>
+                          {ad.is_active ? "Sí" : "No"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => openDialog(ad)}
+                              aria-label="Editar publicidad"
+                            >
+                              <FilePenIcon className="h-4 w-4" />
+                            </Button>
+                            {ad.is_active ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => mutateDeactivate.mutate(ad.id)}
+                                aria-label="Inactivar publicidad"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => mutateReactivate.mutate(ad.id)}
+                                disabled={mutateReactivate.isPending}
+                                aria-label="Reactivar publicidad"
+                              >
+                                <RotateCcwIcon className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!filteredAds.length && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-4">
+                          {sortedAds.length
+                            ? "No hay publicidades con este filtro"
+                            : "No hay publicidades todavía"}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 )}
               </TableBody>
             </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="p-6">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Bucket de imágenes</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Las imágenes se suben al bucket de Supabase al guardar cada publicidad.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-1 text-xs">
-            {instructions.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
           </div>
         </CardContent>
       </Card>
