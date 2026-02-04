@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET() {
+const STATUS_VALUES = ["active", "inactive", "all"] as const;
+
+export async function GET(request: Request) {
   try {
     const supabase = createClient();
     const {
@@ -13,7 +15,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const url = new URL(request.url);
+    const statusParam = url.searchParams.get("status") ?? "active";
+    const status = STATUS_VALUES.includes(statusParam as (typeof STATUS_VALUES)[number])
+      ? (statusParam as (typeof STATUS_VALUES)[number])
+      : "active";
+
+    let query = supabase
       .from("advertisements")
       .select(
         `
@@ -27,8 +35,15 @@ export async function GET() {
           created_at
         `
       )
-      .eq("is_active", true)
       .order("ordering", { ascending: true });
+
+    if (status === "active") {
+      query = query.eq("is_active", true);
+    } else if (status === "inactive") {
+      query = query.eq("is_active", false);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("GET /advertisements error:", error);

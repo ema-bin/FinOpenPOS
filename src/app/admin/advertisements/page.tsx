@@ -30,7 +30,15 @@ import { toast } from "sonner";
 import {
   FilePenIcon,
   TrashIcon,
+  RotateCcwIcon,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { advertisementsService } from "@/services/advertisements.service";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
 
@@ -48,12 +56,16 @@ const ADS_BUCKET_URL =
   process.env.NEXT_PUBLIC_ADS_BUCKET_URL ??
   "https://supabase.com/dashboard/project/wzwdmxpifdaihvvuhmwz/storage/files/buckets/advertisements";
 
+type AdvertisementFilterOption = "active" | "inactive" | "all";
+
 export default function AdvertisementsPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [statusFilter, setStatusFilter] = useState<AdvertisementFilterOption>("active");
+
   const { data: ads = [], isLoading, refetch } = useQuery({
-    queryKey: ["advertisements"],
-    queryFn: () => advertisementsService.getAll(),
+    queryKey: ["advertisements", statusFilter],
+    queryFn: () => advertisementsService.getAll(statusFilter),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -146,6 +158,15 @@ export default function AdvertisementsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const mutateReactivate = useMutation({
+    mutationFn: (id: number) => advertisementsService.update(id, { is_active: true }),
+    onSuccess: () => {
+      toast.success("Publicidad reactivada");
+      queryClient.invalidateQueries({ queryKey: ["advertisements"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const uploadPendingImage = useCallback(async (): Promise<string> => {
     if (!pendingImageFile) {
       return formState.image_url.trim();
@@ -217,6 +238,12 @@ export default function AdvertisementsPage() {
     [ads]
   );
 
+  const filteredAds = useMemo(() => {
+    if (statusFilter === "all") return sortedAds;
+    if (statusFilter === "active") return sortedAds.filter((ad) => ad.is_active);
+    return sortedAds.filter((ad) => !ad.is_active);
+  }, [sortedAds, statusFilter]);
+
   if (isLoading && !ads.length) {
     return (
       <div className="h-[70vh] flex items-center justify-center">
@@ -228,14 +255,26 @@ export default function AdvertisementsPage() {
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold">Publicidad</h1>
             <p className="text-sm text-muted-foreground">
               Administrá los banners que se muestran en la app (solo las activas aparecen).
             </p>
           </div>
-          <Button onClick={() => openDialog()}>Nueva publicidad</Button>
+          <div className="flex items-center gap-2">
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AdvertisementFilterOption)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Activas</SelectItem>
+                <SelectItem value="inactive">Inactivas</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={() => openDialog()}>Nueva publicidad</Button>
+          </div>
         </CardHeader>
       <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -250,7 +289,7 @@ export default function AdvertisementsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedAds.map((ad) => (
+                {filteredAds.map((ad) => (
                   <TableRow key={ad.id}>
                   <TableCell className="h-14 w-24">
                     {ad.image_url ? (
@@ -280,7 +319,7 @@ export default function AdvertisementsPage() {
                         >
                           <FilePenIcon className="h-4 w-4" />
                         </Button>
-                        {ad.is_active && (
+                        {ad.is_active ? (
                           <Button
                             size="icon"
                             variant="ghost"
@@ -289,15 +328,27 @@ export default function AdvertisementsPage() {
                           >
                             <TrashIcon className="h-4 w-4" />
                           </Button>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => mutateReactivate.mutate(ad.id)}
+                            disabled={mutateReactivate.isPending}
+                            aria-label="Reactivar publicidad"
+                          >
+                            <RotateCcwIcon className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
-                {!sortedAds.length && (
+                {!filteredAds.length && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-4">
-                      No hay publicidades todavía
+                      {sortedAds.length
+                        ? "No hay publicidades con este filtro"
+                        : "No hay publicidades todavía"}
                     </TableCell>
                   </TableRow>
                 )}

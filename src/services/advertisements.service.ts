@@ -18,11 +18,15 @@ type UpdateAdvertisementInput = Partial<{
   is_active: boolean;
 }>;
 
+export type AdvertisementStatusFilter = "active" | "inactive" | "all";
+
 class AdvertisementsService {
   private baseUrl = "/api/advertisements";
 
-  async getAll(): Promise<AdvertisementDTO[]> {
-    const response = await fetch(this.baseUrl);
+  async getAll(status: AdvertisementStatusFilter = "active"): Promise<AdvertisementDTO[]> {
+    const params = new URLSearchParams();
+    params.set("status", status);
+    const response = await fetch(`${this.baseUrl}?${params.toString()}`);
     if (!response.ok) {
       throw new Error("Error loading advertisements");
     }
