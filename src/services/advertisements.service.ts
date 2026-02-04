@@ -1,77 +1,87 @@
-export interface AdvertisementDTO {
-  id: number;
-  user_uid: string;
+import type { AdvertisementDTO } from "@/models/dto/advertisement";
+
+type CreateAdvertisementInput = {
+  name: string;
+  image_url: string;
+  target_url?: string | null;
+  description?: string | null;
+  ordering?: number;
+  is_active?: boolean;
+};
+
+type UpdateAdvertisementInput = Partial<{
   name: string;
   image_url: string;
   target_url: string | null;
   description: string | null;
-  is_active: boolean;
   ordering: number;
-  created_at: string;
-  updated_at: string;
-}
+  is_active: boolean;
+}>;
+
+export type AdvertisementStatusFilter = "active" | "inactive" | "all";
 
 class AdvertisementsService {
   private baseUrl = "/api/advertisements";
 
-  async getAll(): Promise<AdvertisementDTO[]> {
-    const response = await fetch(this.baseUrl);
+  async getAll(status: AdvertisementStatusFilter = "active"): Promise<AdvertisementDTO[]> {
+    const params = new URLSearchParams();
+    params.set("status", status);
+    const response = await fetch(`${this.baseUrl}?${params.toString()}`);
     if (!response.ok) {
-      throw new Error("Error al cargar las publicidades");
+      throw new Error("Error loading advertisements");
     }
     return response.json();
+  }
+
+  async getById(id: number): Promise<AdvertisementDTO> {
+    const response = await fetch(`${this.baseUrl}/${id}`);
+    if (!response.ok) {
+      throw new Error("Advertisement not found");
+    }
+    return response.json();
+  }
+
+  async create(input: CreateAdvertisementInput): Promise<AdvertisementDTO> {
+    const response = await fetch(this.baseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Error creating advertisement");
+    }
+
+    return response.json();
+  }
+
+  async update(id: number, input: UpdateAdvertisementInput): Promise<AdvertisementDTO> {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Error updating advertisement");
+    }
+
+    return response.json();
+  }
+
+  async deactivate(id: number): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Error deactivating advertisement");
+    }
   }
 }
 
 export const advertisementsService = new AdvertisementsService();
 
-export const fallbackAdvertisements: AdvertisementDTO[] = [
-  {
-    id: -1,
-    user_uid: "system",
-    name: "Publicidad 1",
-    image_url: "/logos-advertisement/logo-1.jpg",
-    target_url: null,
-    description: "Aviso 1",
-    is_active: true,
-    ordering: 0,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: -2,
-    user_uid: "system",
-    name: "Publicidad 2",
-    image_url: "/logos-advertisement/logo-2.jpg",
-    target_url: null,
-    description: "Aviso 2",
-    is_active: true,
-    ordering: 0,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: -3,
-    user_uid: "system",
-    name: "Publicidad 3",
-    image_url: "/logos-advertisement/logo-3.jpg",
-    target_url: null,
-    description: "Aviso 3",
-    is_active: true,
-    ordering: 0,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: -4,
-    user_uid: "system",
-    name: "Publicidad 4",
-    image_url: "/logos-advertisement/logo-4.jpg",
-    target_url: null,
-    description: "Aviso 4",
-    is_active: true,
-    ordering: 0,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];

@@ -36,6 +36,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/court-slots": "Turnos de canchas",
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",
+  "/admin/advertisements": "Publicidades",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

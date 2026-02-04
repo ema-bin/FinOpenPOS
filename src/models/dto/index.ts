@@ -8,4 +8,5 @@ export * from "./court";
 export * from "./supplier";
 export * from "./purchase";
 export * from "./payment-method";
+export * from "./advertisement";
 

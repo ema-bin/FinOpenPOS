@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2Icon, CopyIcon } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/date-utils";
 import type { TournamentDTO, GroupsApiResponse, MatchDTO } from "@/models/dto/tournament";
-import { tournamentsService, advertisementsService, fallbackAdvertisements, type AdvertisementDTO } from "@/services";
+import { tournamentsService, advertisementsService } from "@/services";
+import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import { useRef } from "react";
 import { toast } from "sonner";
 import type { CourtDTO } from "@/models/dto/court";
@@ -111,7 +112,7 @@ export default function ShareGroupScheduleTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const adsToShow = advertisements.length > 0 ? advertisements : fallbackAdvertisements;
+  const adsToShow = advertisements;
 
   // Obtener canchas para mostrar nombres
   const { data: courts = [] } = useQuery<CourtDTO[]>({
