@@ -174,7 +174,7 @@ function getStandardSeedOrder(size: number): number[] {
 /**
  * Distribuye equipos en posiciones del bracket en tres fases:
  * 1. 1ros de cada zona: se asignan a las mejores posiciones en orden (1A, 1B, 1C, ...).
- * 2a. Cabezas de bracket (posiciones seed 1 y 2): se rellenan con 2dos en orden 2E, 2D, ...
+ * 2a. Cabezas de bracket (posiciones seed 1 y 2): se rellenan con 2dos en orden 2F, 2E, 2D, ...
  *     cada uno en la mitad opuesta a su 1ro (máximo 2 equipos, uno por cabeza).
  * 2b. 2dos restantes: se asignan al mejor hueco disponible en la mitad opuesta a su 1ro;
  *     ya tendrán rival en el bracket (1ro u otro 2do).
@@ -232,7 +232,7 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
     return null;
   }
 
-  // Fase 1: 1ros a las mejores posiciones en orden (1A, 1B, 1C, …)
+  // Fase 1: 1ros quedan fijados en las mejores posiciones (1A, 1B, 1C, …). No se mueve nada.
   for (const team of firsts) {
     const pos = pickBestPosition();
     if (pos === null) break;
@@ -246,16 +246,14 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
     .filter((pos) => seedOrder[pos] <= 2)
     .map((pos) => ({ pos, half: isTopHalf(pos) ? 0 : 1 }));
 
-  // Fase 2a.1: Solo cabezas de serie restantes — si alguna cabeza quedó vacía, colocar 2do (mitad contraria al 1ro de su zona).
-  // El 2do debe ir en la mitad contraria al 1ro de su zona (no cruzarse hasta la final).
+  // Fase 2a.1: Solo los huecos que quedaron (si faltan cabezas u otras posiciones) se rellenan con 2dos (2F, 2E…), mitad contraria al 1ro
   const placedSecondIds = new Set<number>();
   for (const cabeza of cabezaPositions) {
     if (!available.has(cabeza.pos)) continue;
-    const halfOfThisCabeza = cabeza.half; // 0 = top, 1 = bottom
+    const halfOfThisCabeza = cabeza.half;
     const team = seconds.find((s) => {
       if (placedSecondIds.has(s.team_id)) return false;
       const halfOfFirstInZone = groupHalf.get(s.group_order);
-      // Si no hay 1ro de esa zona, cualquier 2do puede ir; si hay, solo la mitad contraria
       const oppositeHalfOfFirst = halfOfFirstInZone === undefined ? undefined : halfOfFirstInZone === 0 ? 1 : 0;
       return oppositeHalfOfFirst === undefined || oppositeHalfOfFirst === halfOfThisCabeza;
     });
@@ -267,32 +265,25 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
   }
   const secondsLeftFor2b = seconds.filter((s) => !placedSecondIds.has(s.team_id));
 
-  // Fase 2a.2: (comentado) Asignar los 2dos restantes a otras posiciones del bracket
-  // for (const team of secondsLeftFor2b) {
-  //   const halfOfFirst = groupHalf.get(team.group_order);
-  //   const requiredHalf = halfOfFirst === undefined ? undefined : halfOfFirst === 0 ? 1 : 0;
-  //   const pos = requiredHalf !== undefined
-  //     ? pickBestPositionWithRival(requiredHalf) ?? pickBestPosition(requiredHalf)
-  //     : pickBestPositionWithRival() ?? pickBestPosition();
-  //   if (pos === null) break;
-  //   seeded[pos] = team;
-  //   available.delete(pos);
-  // }
+  // Fase 2a.2: 2dos restantes — cada hueco n del bracket recibe el 2do que corresponde (por calidad y mitad)
+  // Se recorre por HUECO (orden de calidad): el mejor hueco vacío recibe el mejor 2do que encaje en esa mitad.
+  const emptyByQuality = positionsByQuality.filter((p) => available.has(p));
+  const placedSecondIds2 = new Set(placedSecondIds);
+  for (const pos of emptyByQuality) {
+    const halfOfPos = isTopHalf(pos) ? 0 : 1;
+    const team = secondsLeftFor2b.find(
+      (s) =>
+        !placedSecondIds2.has(s.team_id) &&
+        (groupHalf.get(s.group_order) === undefined || (groupHalf.get(s.group_order) === 0 ? 1 : 0) === halfOfPos)
+    );
+    if (team) {
+      seeded[pos] = team;
+      available.delete(pos);
+      placedSecondIds2.add(team.team_id);
+    }
+  }
 
-  // --- Por ahora solo cabezas de bracket; el resto se comenta para enfocarnos en balanceo ---
-  // Fase 2b: 2dos restantes al mejor hueco en la mitad opuesta a su 1ro donde ya hay rival en el bracket
-  // for (const team of secondsLeftFor2b) {
-  //   const halfOfFirst = groupHalf.get(team.group_order);
-  //   const requiredHalf = halfOfFirst === undefined ? undefined : halfOfFirst === 0 ? 1 : 0;
-  //   const pos = requiredHalf !== undefined
-  //     ? pickBestPositionWithRival(requiredHalf) ?? pickBestPosition(requiredHalf)
-  //     : pickBestPositionWithRival() ?? pickBestPosition();
-  //   if (pos === null) break;
-  //   seeded[pos] = team;
-  //   available.delete(pos);
-  // }
-
-  // Fase 3: 3ros en los huecos que queden
+  // Fase 3: (comentado) 3ros en los huecos que queden — se deja para una siguiente fase
   // for (const team of thirds) {
   //   const pos = pickBestPosition();
   //   if (pos === null) break;
@@ -627,44 +618,215 @@ function generateNextRoundWithByes(
   return matches;
 }
 
+// --- Etapas del bracket (primera ronda con byes) ---
+// 1. stageSeedBracketPositions     — Colocar equipos en posiciones (byes + seeds)
+// 2. stageClassifyPositions        — Byes, posiciones que necesitan rival, unplaced
+// 3. stageBuildGroupHalfMap       — Mitad del bracket por grupo (1ro/2do opuestos)
+// 4. stageBuildRealMatchesForFirstRound — Partidos reales respetando zona y mitad
+// 5. stageBuildFirstRoundMatchList — Lista de PlayoffMatch de la primera ronda
+// 6. stageGenerateSubsequentRounds — Siguiente ronda (con byes) + placeholders
+// stageAppendRemainingRoundsPlaceholders — Compartida: semis/final como "Ganador Ronda N"
+
+function getRoundName(size: number): string {
+  if (size === 2) return "final";
+  if (size === 4) return "semifinal";
+  if (size === 8) return "cuartos";
+  if (size === 16) return "octavos";
+  return "16avos";
+}
+
+/** Resultado de clasificar posiciones del bracket (byes, necesitan rival, equipos sin colocar) */
+interface ClassifiedPositions {
+  positionsWithByes: Array<{ position: number; team: QualifiedTeam }>;
+  positionsWithTeamNeedingRival: number[];
+  unplacedPlaying: QualifiedTeam[];
+}
+
+/** Helpers de mitad del bracket para respetar 1ro/2do en mitades opuestas */
+interface GroupHalfMap {
+  isTopHalf: (p: number) => boolean;
+  requiredHalfForSecond: (groupOrder: number) => number;
+}
+
+/** Partido real con posición en el bracket */
+interface RealMatchAtPosition {
+  team1: QualifiedTeam;
+  team2: QualifiedTeam;
+  strength: number;
+  position: number;
+}
+
 /**
- * Genera todos los matches de playoffs según las reglas del torneo.
- * 
- * @param rankedTeams Equipos ordenados según el ranking global
- * @returns Array de matches de todas las rondas
+ * Etapa 1: Colocar todos los equipos en las posiciones del bracket (byes + seeds).
+ * Devuelve el array de posiciones con el equipo asignado o vacío.
  */
-export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMatch[] {
-  const n = rankedTeams.length;
-  
-  if (n < 2) {
-    throw new Error("Se necesitan al menos 2 equipos para generar playoffs");
+function stageSeedBracketPositions(
+  rankedTeams: QualifiedTeam[],
+  nextRoundSize: number
+): (QualifiedTeam | null)[] {
+  return seedByeTeams([...rankedTeams], nextRoundSize);
+}
+
+/**
+ * Etapa 2: Clasificar posiciones en byes, posiciones que necesitan rival,
+ * e identificar equipos que juegan pero aún no tienen posición (unplaced).
+ */
+function stageClassifyPositions(
+  nextRoundSeeded: (QualifiedTeam | null)[],
+  nextRoundSize: number,
+  teamsWithByeList: QualifiedTeam[],
+  teamsPlayingInFirstRound: QualifiedTeam[]
+): ClassifiedPositions {
+  const placedTeamIds = new Set(nextRoundSeeded.filter(Boolean).map((t) => t!.team_id));
+  const unplacedPlaying = teamsPlayingInFirstRound.filter((t) => !placedTeamIds.has(t.team_id));
+  const positionsWithByes: Array<{ position: number; team: QualifiedTeam }> = [];
+  const positionsNeedingWinners: number[] = [];
+
+  for (let i = 0; i < nextRoundSize; i++) {
+    const team = nextRoundSeeded[i];
+    if (!team) {
+      positionsNeedingWinners.push(i);
+      continue;
+    }
+    if (teamsWithByeList.some((t) => t.team_id === team.team_id)) {
+      positionsWithByes.push({ position: i, team });
+    } else {
+      positionsNeedingWinners.push(i);
+    }
   }
 
-  const { firstRoundName, teamsPlaying, teamsWithBye, nextRoundSize } = calculateFirstRound(n);
-  const allMatches: PlayoffMatch[] = [];
+  const positionsWithTeamNeedingRival = positionsNeedingWinners.filter(
+    (pos) => nextRoundSeeded[pos] != null
+  );
 
-  // Separar equipos: los mejores tienen bye, los restantes juegan
-  const teamsWithByeList = rankedTeams.slice(0, teamsWithBye);
-  const teamsPlayingInFirstRound = rankedTeams.slice(teamsWithBye);
+  return { positionsWithByes, positionsWithTeamNeedingRival, unplacedPlaying };
+}
 
-  // Helper para obtener el nombre de la ronda
-  const getRoundName = (size: number): string => {
-    if (size === 2) return "final";
-    if (size === 4) return "semifinal";
-    if (size === 8) return "cuartos";
-    if (size === 16) return "octavos";
-    return "16avos";
+/**
+ * Etapa 3: Construir mapa de mitad del bracket por grupo (1ro arriba/abajo)
+ * para que los 2dos se asignen en la mitad opuesta a su 1ro.
+ */
+function stageBuildGroupHalfMap(
+  nextRoundSeeded: (QualifiedTeam | null)[],
+  nextRoundSize: number
+): GroupHalfMap {
+  const halfSize = Math.floor(nextRoundSize / 2);
+  const isTopHalf = (p: number) => p < halfSize;
+  const groupHalfFromSeeded = new Map<number, number>();
+  for (let i = 0; i < nextRoundSize; i++) {
+    const t = nextRoundSeeded[i];
+    if (t?.pos === 1) groupHalfFromSeeded.set(t.group_order, isTopHalf(i) ? 0 : 1);
+  }
+  const requiredHalfForSecond = (groupOrder: number): number => {
+    const half = groupHalfFromSeeded.get(groupOrder) ?? 0;
+    return 1 - half;
   };
+  return { isTopHalf, requiredHalfForSecond };
+}
 
-  // PRIMERA RONDA
-  if (teamsWithBye > 0 && teamsPlaying > 0) {
-    // Por ahora: solo lo que coloca seedByeTeams (1ros; 2dos comentados). No rellenar huecos con partidos reales.
-    const allTeamsForNextRound = [...rankedTeams];
-    const nextRoundSeeded = seedByeTeams(allTeamsForNextRound, nextRoundSize);
+/**
+ * Etapa 4: Formar partidos reales (team1 vs team2) para posiciones que necesitan rival.
+ * Respeta: no misma zona y, si team2 es 2do, posición en la mitad opuesta a su 1ro.
+ */
+function stageBuildRealMatchesForFirstRound(
+  positionsWithTeamNeedingRival: number[],
+  unplacedPlaying: QualifiedTeam[],
+  nextRoundSeeded: (QualifiedTeam | null)[],
+  rankedTeams: QualifiedTeam[],
+  halfMap: GroupHalfMap
+): Map<number, RealMatchAtPosition> {
+  const { isTopHalf, requiredHalfForSecond } = halfMap;
+  const realMatchesCount = Math.min(positionsWithTeamNeedingRival.length, unplacedPlaying.length);
+  const realMatches: RealMatchAtPosition[] = [];
+  const usedUnplaced = new Set<number>();
 
-    // Una ranura por posición: si hay equipo (1ro) se muestra; si no, hueco vacío (sin emparejar 2dos).
-    const allMatchData: Array<{ bracketPos: number; team1_id: number | null; team2_id: number | null }> = [];
-    for (let i = 0; i < nextRoundSize; i++) {
+  for (let i = 0; i < realMatchesCount; i++) {
+    const pos = positionsWithTeamNeedingRival[i];
+    const team1 = nextRoundSeeded[pos]!;
+    const posHalf = isTopHalf(pos) ? 0 : 1;
+
+    let team2: QualifiedTeam | null = null;
+    let team2Index = -1;
+    for (let j = 0; j < unplacedPlaying.length; j++) {
+      if (usedUnplaced.has(j)) continue;
+      const candidate = unplacedPlaying[j];
+      if (candidate.from_group_id === team1.from_group_id) continue;
+      if (candidate.pos === 2) {
+        const needHalf = requiredHalfForSecond(candidate.group_order);
+        if (posHalf !== needHalf) continue;
+      }
+      if (
+        team2 === null ||
+        rankedTeams.findIndex((t) => t.team_id === candidate.team_id) >
+          rankedTeams.findIndex((t) => t.team_id === team2!.team_id)
+      ) {
+        team2 = candidate;
+        team2Index = j;
+      }
+    }
+    if (team2 === null) {
+      for (let j = 0; j < unplacedPlaying.length; j++) {
+        if (usedUnplaced.has(j)) continue;
+        const candidate = unplacedPlaying[j];
+        if (candidate.from_group_id === team1.from_group_id) continue;
+        if (candidate.pos === 2) {
+          const needHalf = requiredHalfForSecond(candidate.group_order);
+          if (posHalf !== needHalf) continue;
+        }
+        team2 = candidate;
+        team2Index = j;
+        break;
+      }
+    }
+    if (team2 === null) {
+      for (let j = 0; j < unplacedPlaying.length; j++) {
+        if (usedUnplaced.has(j)) continue;
+        team2 = unplacedPlaying[j];
+        team2Index = j;
+        break;
+      }
+    }
+    if (team2) {
+      usedUnplaced.add(team2Index);
+      const strength = Math.min(
+        rankedTeams.findIndex((t) => t.team_id === team1.team_id),
+        rankedTeams.findIndex((t) => t.team_id === team2.team_id)
+      );
+      realMatches.push({ team1, team2, strength, position: pos });
+    }
+  }
+
+  const positionToRealMatch = new Map<number, RealMatchAtPosition>();
+  for (const m of realMatches) {
+    positionToRealMatch.set(m.position, m);
+  }
+  return positionToRealMatch;
+}
+
+/**
+ * Etapa 5: Construir la lista de matches de la primera ronda (byes + partidos reales + huecos).
+ */
+function stageBuildFirstRoundMatchList(
+  firstRoundName: string,
+  positionsWithByes: Array<{ position: number; team: QualifiedTeam }>,
+  positionToRealMatch: Map<number, RealMatchAtPosition>,
+  nextRoundSeeded: (QualifiedTeam | null)[],
+  nextRoundSize: number
+): PlayoffMatch[] {
+  const allMatchData: Array<{ bracketPos: number; team1_id: number | null; team2_id: number | null }> = [];
+  for (const { position, team } of positionsWithByes) {
+    allMatchData.push({ bracketPos: position + 1, team1_id: team.team_id, team2_id: null });
+  }
+  positionToRealMatch.forEach((match, position) => {
+    allMatchData.push({
+      bracketPos: position + 1,
+      team1_id: match.team1.team_id,
+      team2_id: match.team2.team_id,
+    });
+  });
+  const existingPositions = new Set(allMatchData.map((m) => m.bracketPos));
+  for (let i = 0; i < nextRoundSize; i++) {
+    if (!existingPositions.has(i + 1)) {
       const team = nextRoundSeeded[i];
       allMatchData.push({
         bracketPos: i + 1,
@@ -672,112 +834,152 @@ export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMat
         team2_id: null,
       });
     }
+  }
+  allMatchData.sort((a, b) => a.bracketPos - b.bracketPos);
 
-    const firstRoundMatches: PlayoffMatch[] = allMatchData.map((matchData) => ({
-      round: firstRoundName,
-      bracket_pos: matchData.bracketPos,
-      team1_id: matchData.team1_id,
-      team2_id: matchData.team2_id,
-      source_team1: null,
-      source_team2: null,
-    }));
-    allMatches.push(...firstRoundMatches);
+  return allMatchData.map((matchData) => ({
+    round: firstRoundName,
+    bracket_pos: matchData.bracketPos,
+    team1_id: matchData.team1_id,
+    team2_id: matchData.team2_id,
+    source_team1: null,
+    source_team2: null,
+  }));
+}
 
-    // Siguiente ronda: solo byes (no hay partidos reales aún), posiciones con equipo ya colocado
-    const nextRoundName = getRoundName(nextRoundSize);
-    const nextRoundMatches = generateNextRoundWithByes(
-      teamsWithByeList,
-      [], // sin partidos reales por ahora
+/**
+ * Etapa 6: Generar matches de la siguiente ronda (con byes) y las rondas restantes (placeholders).
+ */
+function stageGenerateSubsequentRounds(
+  allMatches: PlayoffMatch[],
+  firstRoundMatches: PlayoffMatch[],
+  teamsWithByeList: QualifiedTeam[],
+  rankedTeams: QualifiedTeam[],
+  nextRoundSize: number
+): void {
+  const nextRoundName = getRoundName(nextRoundSize);
+  const realMatchesOnly = firstRoundMatches.filter((m) => m.team1_id && m.team2_id);
+  const nextRoundMatches = generateNextRoundWithByes(
+    teamsWithByeList,
+    realMatchesOnly,
+    rankedTeams,
+    nextRoundName,
+    nextRoundSize
+  );
+  allMatches.push(...nextRoundMatches);
+
+  const numMatchesNextRound = Math.floor(nextRoundSize / 2);
+  stageAppendRemainingRoundsPlaceholders(allMatches, numMatchesNextRound, nextRoundName);
+}
+
+/**
+ * Etapa compartida: agrega las rondas restantes (semis, final) como placeholders
+ * "Ganador Ronda N", sin equipos asignados.
+ */
+function stageAppendRemainingRoundsPlaceholders(
+  allMatches: PlayoffMatch[],
+  initialRoundNumMatches: number,
+  initialRoundName: string
+): void {
+  let currentRoundSize = initialRoundNumMatches;
+  let currentRoundName = initialRoundName;
+
+  while (currentRoundSize > 1) {
+    const numMatchesInRound = Math.floor(currentRoundSize / 2);
+    const nextRoundNameLabel = getRoundName(currentRoundSize);
+    const prevRoundLabel = currentRoundName.charAt(0).toUpperCase() + currentRoundName.slice(1);
+
+    for (let i = 0; i < numMatchesInRound; i++) {
+      const matchNum = i + 1;
+      const prevMatch1 = i * 2 + 1;
+      const prevMatch2 = i * 2 + 2;
+
+      allMatches.push({
+        round: nextRoundNameLabel,
+        bracket_pos: matchNum,
+        team1_id: null,
+        team2_id: null,
+        source_team1: `Ganador ${prevRoundLabel}${prevMatch1}`,
+        source_team2: `Ganador ${prevRoundLabel}${prevMatch2}`,
+      });
+    }
+
+    currentRoundSize = numMatchesInRound;
+    currentRoundName = nextRoundNameLabel;
+  }
+}
+
+/**
+ * Genera todos los matches de playoffs según las reglas del torneo.
+ * La lógica se divide en etapas (funciones) que se invocan en orden.
+ *
+ * @param rankedTeams Equipos ordenados según el ranking global
+ * @returns Array de matches de todas las rondas
+ */
+export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMatch[] {
+  const n = rankedTeams.length;
+
+  if (n < 2) {
+    throw new Error("Se necesitan al menos 2 equipos para generar playoffs");
+  }
+
+  const { firstRoundName, teamsPlaying, teamsWithBye, nextRoundSize } = calculateFirstRound(n);
+  const allMatches: PlayoffMatch[] = [];
+
+  const teamsWithByeList = rankedTeams.slice(0, teamsWithBye);
+  const teamsPlayingInFirstRound = rankedTeams.slice(teamsWithBye);
+
+  // Rama: hay byes y equipos que juegan primera ronda
+  if (teamsWithBye > 0 && teamsPlaying > 0) {
+    const nextRoundSeeded = stageSeedBracketPositions(rankedTeams, nextRoundSize);
+    const { positionsWithByes, positionsWithTeamNeedingRival, unplacedPlaying } =
+      stageClassifyPositions(
+        nextRoundSeeded,
+        nextRoundSize,
+        teamsWithByeList,
+        teamsPlayingInFirstRound
+      );
+    const halfMap = stageBuildGroupHalfMap(nextRoundSeeded, nextRoundSize);
+    const positionToRealMatch = stageBuildRealMatchesForFirstRound(
+      positionsWithTeamNeedingRival,
+      unplacedPlaying,
+      nextRoundSeeded,
       rankedTeams,
-      nextRoundName,
+      halfMap
+    );
+    const firstRoundMatches = stageBuildFirstRoundMatchList(
+      firstRoundName,
+      positionsWithByes,
+      positionToRealMatch,
+      nextRoundSeeded,
       nextRoundSize
     );
-    allMatches.push(...nextRoundMatches);
-    
-    // Generar rondas restantes (solo ganadores)
-    let currentRoundSize = Math.floor(nextRoundSize / 2);
-    let currentRoundName = nextRoundName;
-    
-    while (currentRoundSize > 1) {
-      const nextRoundMatches = Math.floor(currentRoundSize / 2);
-      const nextRoundName = getRoundName(currentRoundSize);
-      const prevRoundLabel = currentRoundName.charAt(0).toUpperCase() + currentRoundName.slice(1);
-      
-      // Cambiar el patrón a consecutivo: matches consecutivos se enfrentan
-      for (let i = 0; i < nextRoundMatches; i++) {
-        const matchNum = i + 1;
-        // Matches consecutivos se enfrentan: (1,2), (3,4), (5,6), etc.
-        const prevMatch1 = i * 2 + 1; // Primer match del par (1, 3, 5, ...)
-        const prevMatch2 = i * 2 + 2; // Segundo match del par (2, 4, 6, ...)
-        
-        allMatches.push({
-          round: nextRoundName,
-          bracket_pos: matchNum,
-          team1_id: null,
-          team2_id: null,
-          source_team1: `Ganador ${prevRoundLabel}${prevMatch1}`,
-          source_team2: `Ganador ${prevRoundLabel}${prevMatch2}`,
-        });
-      }
-      
-      currentRoundSize = nextRoundMatches;
-      currentRoundName = nextRoundName;
-    }
+    allMatches.push(...firstRoundMatches);
+    stageGenerateSubsequentRounds(
+      allMatches,
+      firstRoundMatches,
+      teamsWithByeList,
+      rankedTeams,
+      nextRoundSize
+    );
   } else if (teamsPlaying > 0) {
-    // No hay byes, solo equipos que juegan
-    // Generar cruces: mejor seed vs peor seed disponible
+    // Rama: no hay byes, todos juegan la primera ronda
     const firstRoundMatches = generateFirstRoundMatches(teamsPlayingInFirstRound, firstRoundName);
     allMatches.push(...firstRoundMatches);
-    
-    // Generar rondas restantes (solo ganadores)
-    // El patrón estándar de bracket es: match 1 vs match 2, match 3 vs match 4, etc.
-    // Para cuartos (4 matches): semis = (1 vs 2), (3 vs 4)
-    // Para semis (2 matches): final = (1 vs 2)
-    // Esto asegura que los matches consecutivos se enfrenten en la siguiente ronda
-    let currentRoundSize = firstRoundMatches.length; // Número de matches en la ronda actual
-    let currentRoundName = firstRoundName;
-    
-    while (currentRoundSize > 1) {
-      const nextRoundMatches = Math.floor(currentRoundSize / 2);
-      const nextRoundName = getRoundName(currentRoundSize);
-      const prevRoundLabel = currentRoundName.charAt(0).toUpperCase() + currentRoundName.slice(1);
-      
-      // Patrón de bracket: matches consecutivos se enfrentan
-      // Para 4 cuartos: Semis 1 = Cuartos 1 vs Cuartos 2, Semis 2 = Cuartos 3 vs Cuartos 4
-      // Para 2 semis: Final = Semis 1 vs Semis 2
-      for (let i = 0; i < nextRoundMatches; i++) {
-        const matchNum = i + 1;
-        // Matches consecutivos se enfrentan: (1,2), (3,4), (5,6), etc.
-        const prevMatch1 = i * 2 + 1; // Primer match del par (1, 3, 5, ...)
-        const prevMatch2 = i * 2 + 2; // Segundo match del par (2, 4, 6, ...)
-        
-        allMatches.push({
-          round: nextRoundName,
-          bracket_pos: matchNum,
-          team1_id: null,
-          team2_id: null,
-          source_team1: `Ganador ${prevRoundLabel}${prevMatch1}`,
-          source_team2: `Ganador ${prevRoundLabel}${prevMatch2}`,
-        });
-      }
-      
-      currentRoundSize = nextRoundMatches;
-      currentRoundName = nextRoundName;
-    }
+    stageAppendRemainingRoundsPlaceholders(allMatches, firstRoundMatches.length, firstRoundName);
   } else {
-    // Todos tienen bye: ir directo a la siguiente ronda
-    // Esto es un caso raro, pero lo manejamos
+    // Rama: todos tienen bye, primera ronda es la siguiente (cuartos/semis según tamaño)
     const nextRoundName = getRoundName(nextRoundSize);
     const seededByes = seedByeTeams(teamsWithByeList, nextRoundSize);
     const numMatches = Math.floor(nextRoundSize / 2);
-    
+
     for (let i = 0; i < numMatches; i++) {
       const matchNum = i + 1;
       const pos1 = i * 2;
       const pos2 = i * 2 + 1;
       const team1 = seededByes[pos1];
       const team2 = seededByes[pos2];
-      
+
       allMatches.push({
         round: nextRoundName,
         bracket_pos: matchNum,
@@ -787,34 +989,8 @@ export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMat
         source_team2: null,
       });
     }
-    
-    // Generar rondas restantes
-    let currentRoundSize = numMatches;
-    let currentRoundName = nextRoundName;
-    
-    while (currentRoundSize > 1) {
-      const nextRoundMatches = Math.floor(currentRoundSize / 2);
-      const nextRoundName = getRoundName(currentRoundSize);
-      const prevRoundLabel = currentRoundName.charAt(0).toUpperCase() + currentRoundName.slice(1);
-      
-      for (let i = 0; i < nextRoundMatches; i++) {
-        const matchNum = i + 1;
-        const prevMatch1 = i * 2 + 1;
-        const prevMatch2 = i * 2 + 2;
-        
-        allMatches.push({
-          round: nextRoundName,
-          bracket_pos: matchNum,
-          team1_id: null,
-          team2_id: null,
-          source_team1: `Ganador ${prevRoundLabel}${prevMatch1}`,
-          source_team2: `Ganador ${prevRoundLabel}${prevMatch2}`,
-        });
-      }
-      
-      currentRoundSize = nextRoundMatches;
-      currentRoundName = nextRoundName;
-    }
+
+    stageAppendRemainingRoundsPlaceholders(allMatches, numMatches, nextRoundName);
   }
 
   return allMatches;
