@@ -265,8 +265,7 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
   }
   const secondsLeftFor2b = seconds.filter((s) => !placedSecondIds.has(s.team_id));
 
-  // Fase 2a.2: 2dos restantes — cada hueco n del bracket recibe el 2do que corresponde (por calidad y mitad)
-  // Se recorre por HUECO (orden de calidad): el mejor hueco vacío recibe el mejor 2do que encaje en esa mitad.
+  // Fase 2a.2: 2dos restantes — cada hueco por calidad y mitad
   const emptyByQuality = positionsByQuality.filter((p) => available.has(p));
   const placedSecondIds2 = new Set(placedSecondIds);
   for (const pos of emptyByQuality) {
@@ -283,7 +282,7 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
     }
   }
 
-  // Fase 3: 3ros (3A, 3B, …) en los huecos que queden, después de todos los 2dos
+  // Fase 3: 3ros (3A, 3B, …) en los huecos que queden
   for (const team of thirds) {
     const pos = pickBestPosition();
     if (pos === null) break;
@@ -745,7 +744,7 @@ function stageBuildRealMatchesForFirstRound(
     const team1 = nextRoundSeeded[pos]!;
     const posHalf = isTopHalf(pos) ? 0 : 1;
 
-    // Prioridad: primero ubicar todos los 2dos (respetando mitad), luego 3A y 3B en los huecos que queden
+    // Sin enfrentar 2do y 3ro de la misma zona en 8vos; preferir 3ros como rivales (2B vs 3A)
     let team2: QualifiedTeam | null = null;
     let team2Index = -1;
     for (let j = 0; j < unplacedPlaying.length; j++) {
@@ -758,7 +757,7 @@ function stageBuildRealMatchesForFirstRound(
       }
       const preferCandidate =
         team2 === null ||
-        (candidate.pos === 2 && team2.pos === 3) ||
+        (candidate.pos === 3 && team2.pos === 2) ||
         (candidate.pos === team2.pos &&
           rankedTeams.findIndex((t) => t.team_id === candidate.team_id) >
             rankedTeams.findIndex((t) => t.team_id === team2!.team_id));
@@ -781,7 +780,6 @@ function stageBuildRealMatchesForFirstRound(
         break;
       }
     }
-    // Último recurso: cualquier rival no usado; 2dos solo en su mitad correcta (1ro/2do en mitades opuestas)
     if (team2 === null) {
       for (let j = 0; j < unplacedPlaying.length; j++) {
         if (usedUnplaced.has(j)) continue;
@@ -855,6 +853,38 @@ function stageBuildFirstRoundMatchList(
     source_team1: null,
     source_team2: null,
   }));
+}
+
+/**
+ * Tras terminar de armar la primera ronda: si quedó algún 3ro (3A, 3B…) sin aparecer en el cuadro,
+ * forzar su colocación como rival en un partido que tenga team2_id null y team1 de otra zona.
+ */
+function stageForceUnplacedThirds(
+  firstRoundMatches: PlayoffMatch[],
+  rankedTeams: QualifiedTeam[]
+): void {
+  const thirds = rankedTeams.filter((t) => t.pos === 3);
+  if (thirds.length === 0) return;
+  const placedTeamIds = new Set<number>();
+  firstRoundMatches.forEach((m) => {
+    if (m.team1_id) placedTeamIds.add(m.team1_id);
+    if (m.team2_id) placedTeamIds.add(m.team2_id);
+  });
+  const unplacedThirds = thirds.filter((t) => !placedTeamIds.has(t.team_id));
+  if (unplacedThirds.length === 0) return;
+
+  for (const third of unplacedThirds) {
+    const team1FromGroup = (teamId: number) => rankedTeams.find((t) => t.team_id === teamId)?.from_group_id;
+    const match = firstRoundMatches.find(
+      (m) =>
+        m.team1_id != null &&
+        m.team2_id == null &&
+        team1FromGroup(m.team1_id) !== third.from_group_id
+    );
+    if (match) {
+      match.team2_id = third.team_id;
+    }
+  }
 }
 
 /**
@@ -964,6 +994,7 @@ export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMat
       nextRoundSeeded,
       nextRoundSize
     );
+    stageForceUnplacedThirds(firstRoundMatches, rankedTeams);
     allMatches.push(...firstRoundMatches);
     stageGenerateSubsequentRounds(
       allMatches,
