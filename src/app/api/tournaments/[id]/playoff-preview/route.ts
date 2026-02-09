@@ -371,7 +371,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     groupOrderMap.set(group.id, group.group_order ?? 999);
   });
 
-  const allMatches = generatePlayoffs(qualified, groupOrderMap);
+  const totalPairs = groupTeams?.length ?? 0;
+  const allMatches = generatePlayoffs(qualified, groupOrderMap, totalPairs);
   const allMatchesWithSchedule = allMatches.map((match) => ({
     ...match,
     match_date: null,

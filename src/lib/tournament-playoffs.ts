@@ -143,6 +143,102 @@ export function calculateFirstRound(totalTeams: number): {
 }
 
 /**
+ * Bracket prefijado: lista de partidos de primera ronda.
+ * Cada partido es { team1: "1A", team2: "2B" | null }.
+ * "1A" = 1ro grupo A, "2B" = 2do grupo B, "3A" = 3ro grupo A (A=1, B=2, …, E=5).
+ */
+type PredefinedFirstRoundMatch = { team1: string; team2: string | null };
+/** Clave = cantidad inicial de parejas del torneo (no clasificados). */
+const PREDEFINED_FIRST_ROUND_BRACKETS: Record<number, PredefinedFirstRoundMatch[]> = {
+  10: [
+    { team1: "1A", team2: null },
+    { team1: "2B", team2: "2C" },
+    { team1: "1B", team2: "3A" },
+    { team1: "1C", team2: "2A" },
+  ],
+  16: [
+    { team1: "1A", team2: null },
+    { team1: "2C", team2: "2B" },
+    { team1: "1D", team2: null },
+    { team1: "1E", team2: null },
+    { team1: "1B", team2: null },
+    { team1: "2D", team2: "2A" },
+    { team1: "1C", team2: null },
+    { team1: "2E", team2: "3A" },
+  ],
+};
+
+/** Convierte "1A" -> { pos: 1, group_order: 1 }, "2B" -> { pos: 2, group_order: 2 }, etc. */
+function parseSlot(slot: string): { pos: number; group_order: number } | null {
+  const m = slot.match(/^([123])([A-E])$/i);
+  if (!m) return null;
+  const pos = parseInt(m[1], 10);
+  const group_order = m[2].toUpperCase().charCodeAt(0) - 64; // A=1 .. E=5
+  return { pos, group_order };
+}
+
+/** Busca en rankedTeams el equipo que coincide con el slot (ej. 1A = pos 1, group_order 1). */
+function findTeamBySlot(rankedTeams: QualifiedTeam[], slot: string): QualifiedTeam | null {
+  const parsed = parseSlot(slot);
+  if (!parsed) return null;
+  return rankedTeams.find((t) => t.pos === parsed!.pos && t.group_order === parsed!.group_order) ?? null;
+}
+
+/** Genera la primera ronda desde un bracket prefijado y añade rondas siguientes (placeholders). */
+function generateFirstRoundFromPredefined(
+  firstRoundName: string,
+  template: PredefinedFirstRoundMatch[],
+  rankedTeams: QualifiedTeam[]
+): PlayoffMatch[] {
+  const matches: PlayoffMatch[] = [];
+  for (let i = 0; i < template.length; i++) {
+    const { team1: s1, team2: s2 } = template[i];
+    const t1 = s1 ? findTeamBySlot(rankedTeams, s1) : null;
+    const t2 = s2 ? findTeamBySlot(rankedTeams, s2) : null;
+    matches.push({
+      round: firstRoundName,
+      bracket_pos: i + 1,
+      team1_id: t1?.team_id ?? null,
+      team2_id: t2?.team_id ?? null,
+      source_team1: null,
+      source_team2: null,
+    });
+  }
+  const teamsWithByeList = matches
+    .filter((m) => m.team2_id == null && m.team1_id != null)
+    .map((m) => rankedTeams.find((t) => t.team_id === m.team1_id))
+    .filter((t): t is QualifiedTeam => t != null);
+  const { nextRoundSize } = calculateFirstRound(rankedTeams.length);
+  stageGenerateSubsequentRoundsFromFirst(
+    matches,
+    matches,
+    teamsWithByeList,
+    rankedTeams,
+    nextRoundSize
+  );
+  return matches;
+}
+
+/** Genera rondas siguientes a partir de primera ronda ya construida (por prefijado). */
+function stageGenerateSubsequentRoundsFromFirst(
+  allMatches: PlayoffMatch[],
+  firstRoundMatches: PlayoffMatch[],
+  teamsWithByeList: QualifiedTeam[],
+  rankedTeams: QualifiedTeam[],
+  nextRoundSize: number
+): void {
+  const nextRoundMatches = generateNextRoundWithByes(
+    teamsWithByeList,
+    firstRoundMatches.filter((m) => m.team1_id != null && m.team2_id != null),
+    rankedTeams,
+    getRoundName(nextRoundSize),
+    nextRoundSize
+  );
+  allMatches.push(...nextRoundMatches);
+  stageAppendRemainingRoundsPlaceholders(allMatches, nextRoundMatches.length, getRoundName(nextRoundSize));
+}
+
+/**
  * Orden estándar de seeds para el bracket (posición i recibe el seed seedOrder[i]).
  * Patrón: [1, 8, 4, 5, 2, 7, 3, 6] para 8 posiciones.
  */
@@ -954,13 +1050,23 @@ function stageAppendRemainingRoundsPlaceholders(
  * La lógica se divide en etapas (funciones) que se invocan en orden.
  *
  * @param rankedTeams Equipos ordenados según el ranking global
+ * @param totalPairs Cantidad inicial de parejas del torneo (para elegir bracket prefijado; ej. 10)
  * @returns Array de matches de todas las rondas
  */
-export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMatch[] {
+export function generatePlayoffBracket(
+  rankedTeams: QualifiedTeam[],
+  totalPairs?: number
+): PlayoffMatch[] {
   const n = rankedTeams.length;
 
   if (n < 2) {
     throw new Error("Se necesitan al menos 2 equipos para generar playoffs");
+  }
+
+  const predefined = totalPairs != null ? PREDEFINED_FIRST_ROUND_BRACKETS[totalPairs] : undefined;
+  if (predefined) {
+    const { firstRoundName } = calculateFirstRound(n);
+    return generateFirstRoundFromPredefined(firstRoundName, predefined, rankedTeams);
   }
 
   const { firstRoundName, teamsPlaying, teamsWithBye, nextRoundSize } = calculateFirstRound(n);
@@ -1039,14 +1145,16 @@ export function generatePlayoffBracket(rankedTeams: QualifiedTeam[]): PlayoffMat
 
 /**
  * Función principal que genera el bracket completo de playoffs.
- * 
+ *
  * @param qualifiedTeams Equipos clasificados con su posición y grupo
  * @param groupOrderMap Mapa de group_id -> group_order
+ * @param totalPairs Cantidad inicial de parejas del torneo (para bracket prefijado; ej. 10)
  * @returns Array de matches de todas las rondas
  */
 export function generatePlayoffs(
   qualifiedTeams: Array<{ team_id: number; from_group_id: number; pos: number }>,
-  groupOrderMap: Map<number, number>
+  groupOrderMap: Map<number, number>,
+  totalPairs?: number
 ): PlayoffMatch[] {
   // Agregar group_order a cada equipo
   const teamsWithOrder: QualifiedTeam[] = qualifiedTeams.map(t => ({
@@ -1057,7 +1165,7 @@ export function generatePlayoffs(
   // Construir ranking global
   const rankedTeams = buildGlobalRanking(teamsWithOrder);
 
-  // Generar bracket
-  return generatePlayoffBracket(rankedTeams);
+  // Generar bracket (usa prefijado si totalPairs tiene plantilla)
+  return generatePlayoffBracket(rankedTeams, totalPairs);
 }
 

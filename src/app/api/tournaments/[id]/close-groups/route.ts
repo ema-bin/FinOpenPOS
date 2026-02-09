@@ -339,8 +339,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     groupOrderMap.set(g.id, g.group_order);
   });
 
-  // Generar playoffs usando la nueva lógica
-  const allMatches = generatePlayoffs(qualifiedTeams, groupOrderMap);
+  const totalPairs = groupTeams?.length ?? 0;
+  const allMatches = generatePlayoffs(qualifiedTeams, groupOrderMap, totalPairs);
 
   // Agregar campos de horarios a los matches
   const allMatchesWithSchedule = allMatches.map(m => ({
