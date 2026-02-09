@@ -283,13 +283,13 @@ function seedByeTeams(teams: QualifiedTeam[], numPositions: number): (QualifiedT
     }
   }
 
-  // Fase 3: (comentado) 3ros en los huecos que queden — se deja para una siguiente fase
-  // for (const team of thirds) {
-  //   const pos = pickBestPosition();
-  //   if (pos === null) break;
-  //   seeded[pos] = team;
-  //   available.delete(pos);
-  // }
+  // Fase 3: 3ros (3A, 3B, …) en los huecos que queden, después de todos los 2dos
+  for (const team of thirds) {
+    const pos = pickBestPosition();
+    if (pos === null) break;
+    seeded[pos] = team;
+    available.delete(pos);
+  }
 
   return seeded;
 }
@@ -745,6 +745,7 @@ function stageBuildRealMatchesForFirstRound(
     const team1 = nextRoundSeeded[pos]!;
     const posHalf = isTopHalf(pos) ? 0 : 1;
 
+    // Prioridad: primero ubicar todos los 2dos (respetando mitad), luego 3A y 3B en los huecos que queden
     let team2: QualifiedTeam | null = null;
     let team2Index = -1;
     for (let j = 0; j < unplacedPlaying.length; j++) {
@@ -755,11 +756,13 @@ function stageBuildRealMatchesForFirstRound(
         const needHalf = requiredHalfForSecond(candidate.group_order);
         if (posHalf !== needHalf) continue;
       }
-      if (
+      const preferCandidate =
         team2 === null ||
-        rankedTeams.findIndex((t) => t.team_id === candidate.team_id) >
-          rankedTeams.findIndex((t) => t.team_id === team2!.team_id)
-      ) {
+        (candidate.pos === 2 && team2.pos === 3) ||
+        (candidate.pos === team2.pos &&
+          rankedTeams.findIndex((t) => t.team_id === candidate.team_id) >
+            rankedTeams.findIndex((t) => t.team_id === team2!.team_id));
+      if (preferCandidate) {
         team2 = candidate;
         team2Index = j;
       }
@@ -778,10 +781,17 @@ function stageBuildRealMatchesForFirstRound(
         break;
       }
     }
+    // Último recurso: cualquier rival no usado; 2dos solo en su mitad correcta (1ro/2do en mitades opuestas)
     if (team2 === null) {
       for (let j = 0; j < unplacedPlaying.length; j++) {
         if (usedUnplaced.has(j)) continue;
-        team2 = unplacedPlaying[j];
+        const candidate = unplacedPlaying[j];
+        if (candidate.from_group_id === team1.from_group_id) continue;
+        if (candidate.pos === 2) {
+          const needHalf = requiredHalfForSecond(candidate.group_order);
+          if (posHalf !== needHalf) continue;
+        }
+        team2 = candidate;
         team2Index = j;
         break;
       }
