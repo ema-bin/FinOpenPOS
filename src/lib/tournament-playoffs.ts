@@ -168,9 +168,9 @@ const PREDEFINED_FIRST_ROUND_BRACKETS: Record<number, PredefinedFirstRoundMatch[
   ],
   17: [
     { team1: "1A", team2: null },
-    { team1: "2C", team2: "3B" },
+    { team1: "2C", team2: "2B" },
     { team1: "1D", team2: null },
-    { team1: "1E", team2: null },
+    { team1: "1E", team2: "3B" },
     { team1: "1B", team2: null },
     { team1: "2D", team2: "2A" },
     { team1: "1C", team2: null },
