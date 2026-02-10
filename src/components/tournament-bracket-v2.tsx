@@ -66,9 +66,9 @@ export function TournamentBracketV2({ rounds, matchesByRound, onMatchClick, sele
       }
       const scheduleText = scheduleParts.length > 0 ? scheduleParts.join(' • ') : '';
       
-      // Nombres de las parejas
-      const team1Name = match.team1 ? match.team1.name : match.sourceTeam1 || "—";
-      const team2Name = match.team2 ? match.team2.name : match.sourceTeam2 || "—";
+      // Nombres de las parejas (placeholders tipo "Ganador Octavos N" se muestran vacíos)
+      const team1Name = match.team1 ? match.team1.name : (match.sourceTeam1 ? "" : "—");
+      const team2Name = match.team2 ? match.team2.name : (match.sourceTeam2 ? "" : "—");
       const scoresText = match.scores || "";
 
       // Usar un formato especial con el ID del match para identificarlo directamente
