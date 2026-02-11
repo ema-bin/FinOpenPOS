@@ -10,6 +10,7 @@ export interface CreateTournamentInput {
   max_teams?: number | null;
   format?: string | null;
   description?: string | null;
+  registration_fee?: number;
 }
 
 export interface CreateTournamentTeamInput {

@@ -75,6 +75,7 @@ export class TournamentsRepository extends BaseRepository {
         end_date: input.end_date ?? null,
         has_super_tiebreak: input.has_super_tiebreak ?? false,
         match_duration: input.match_duration ?? 60,
+        registration_fee: input.registration_fee ?? 0,
         status: "draft",
         user_uid: this.userId,
       })

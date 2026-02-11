@@ -41,6 +41,7 @@ export default function TournamentsPage() {
   const [category, setCategory] = useState("");
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
+  const [registrationFee, setRegistrationFee] = useState<number>(0);
   const [creating, setCreating] = useState(false);
   const router = useRouter();
   const [statusFilter, setStatusFilter] =
@@ -95,12 +96,14 @@ export default function TournamentsPage() {
         registration_deadline: "",
         format: category || null,
         description: null,
+        registration_fee: registrationFee,
       });
       setDialogOpen(false);
       setName("");
       setCategory("");
       setHasSuperTiebreak(false);
       setMatchDuration(60);
+      setRegistrationFee(0);
       setTournaments((prev) => [created, ...prev]);
       router.push(`/admin/tournaments/${created.id}`);
     } catch (err) {
@@ -220,6 +223,20 @@ export default function TournamentsPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Duración estimada de cada partido (por defecto 60 minutos)
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Cuota de inscripción</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={registrationFee}
+                onChange={(e) => setRegistrationFee(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Monto en la moneda que uses (0 = sin cuota)
               </p>
             </div>
             <div className="flex items-center justify-between space-x-2 py-2">
