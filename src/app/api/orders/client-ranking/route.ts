@@ -23,71 +23,32 @@ export async function GET(request: Request) {
     const fromDate = url.searchParams.get('fromDate');
     const toDate = url.searchParams.get('toDate');
 
-    // Obtener órdenes cerradas con información del cliente
-    // Excluir cliente de venta ocasional (id = 1)
-    let ordersQuery = supabase
-      .from('orders')
-      .select(`
-        id,
-        player_id,
-        total_amount,
-        closed_at,
-        player:player_id (
-          id,
-          first_name,
-          last_name
-        )
-      `)
-      .eq('status', 'closed')
-      .neq('player_id', 1);
+    const p_from_date = fromDate
+      ? new Date(fromDate + 'T00:00:00').toISOString()
+      : null;
+    const p_to_date = toDate
+      ? new Date(toDate + 'T23:59:59.999').toISOString()
+      : null;
 
-    // Filtrar por fecha de cierre (closed_at)
-    if (fromDate) {
-      const fromISO = new Date(fromDate + 'T00:00:00').toISOString();
-      ordersQuery = ordersQuery.gte('closed_at', fromISO);
-    }
-    if (toDate) {
-      const toISO = new Date(toDate + 'T23:59:59.999').toISOString();
-      ordersQuery = ordersQuery.lte('closed_at', toISO);
-    }
+    const { data: rows, error: rpcError } = await supabase.rpc(
+      'client_ranking_statistics',
+      { p_from_date, p_to_date }
+    );
 
-    const { data: orders, error } = await ordersQuery;
-
-    if (error) {
-      console.error('Error fetching client ranking:', error);
+    if (rpcError) {
+      console.error('client_ranking_statistics RPC error:', rpcError);
       return NextResponse.json(
-        { error: 'Failed to fetch client ranking' },
+        { error: rpcError.message || 'Failed to fetch client ranking' },
         { status: 500 }
       );
     }
 
-    // Agregar datos por cliente
-    const clientStats = new Map<number, ClientRankingItem>();
-
-    (orders || []).forEach((order: any) => {
-      if (!order.player_id || !order.player) return;
-
-      const player = Array.isArray(order.player) ? order.player[0] : order.player;
-      const playerId = player.id;
-      const playerName = `${player.first_name} ${player.last_name}`.trim();
-
-      const existing = clientStats.get(playerId) || {
-        playerId: playerId,
-        playerName: playerName,
-        totalAmount: 0,
-        orderCount: 0,
-      };
-
-      existing.totalAmount += Number(order.total_amount || 0);
-      existing.orderCount += 1;
-
-      clientStats.set(playerId, existing);
-    });
-
-    // Convertir a array y ordenar por monto descendente
-    const ranking = Array.from(clientStats.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount
-    );
+    const ranking: ClientRankingItem[] = (rows ?? []).map((row: any) => ({
+      playerId: row.player_id,
+      playerName: row.player_name ?? '',
+      totalAmount: Number(row.total_amount) ?? 0,
+      orderCount: Number(row.order_count) ?? 0,
+    }));
 
     return NextResponse.json(ranking);
   } catch (error) {
