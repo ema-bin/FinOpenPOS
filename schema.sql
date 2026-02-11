@@ -184,6 +184,40 @@ CREATE TABLE order_items (
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Estadísticas de ventas por producto (solo órdenes cerradas; evita límite de filas)
+CREATE OR REPLACE FUNCTION order_sales_statistics(
+  p_from_date   TIMESTAMPTZ DEFAULT NULL,
+  p_to_date     TIMESTAMPTZ DEFAULT NULL,
+  p_product_id  BIGINT DEFAULT NULL,
+  p_category_id BIGINT DEFAULT NULL
+)
+RETURNS TABLE (
+  product_id     BIGINT,
+  product_name   TEXT,
+  category_id    BIGINT,
+  category_name  TEXT,
+  total_quantity BIGINT,
+  total_amount   NUMERIC
+) AS $$
+  SELECT
+    p.id,
+    p.name,
+    c.id,
+    c.name,
+    SUM(oi.quantity)::BIGINT,
+    COALESCE(SUM(oi.total_price), 0) AS total_amount
+  FROM order_items oi
+  JOIN orders o ON o.id = oi.order_id AND o.status = 'closed'
+  JOIN products p ON p.id = oi.product_id
+  LEFT JOIN product_categories c ON c.id = p.category_id
+  WHERE (p_from_date IS NULL OR oi.created_at >= p_from_date)
+    AND (p_to_date   IS NULL OR oi.created_at <= p_to_date)
+    AND (p_product_id IS NULL OR p.id = p_product_id)
+    AND (p_category_id IS NULL OR p.category_id = p_category_id)
+  GROUP BY p.id, p.name, c.id, c.name
+  ORDER BY 6 DESC NULLS LAST;
+$$ LANGUAGE SQL STABLE;
+
 -- =========================================================
 -- COURTS (canchas de pádel)
 -- =========================================================

@@ -27,94 +27,36 @@ export async function GET(request: Request) {
     const productId = url.searchParams.get('productId');
     const categoryId = url.searchParams.get('categoryId');
 
-    // Obtener order_items directamente, filtrando por fecha del item y orden cerrada
-    let itemsQuery = supabase
-      .from('order_items')
-      .select(`
-        product_id,
-        quantity,
-        total_price,
-        created_at,
-        order:order_id (
-          status
-        ),
-        product:product_id (
-          id,
-          name,
-          category:category_id (
-            id,
-            name
-          )
-        )
-      `)
-      .eq('order.status', 'closed');
+    const p_from_date = fromDate
+      ? new Date(fromDate + 'T00:00:00').toISOString()
+      : null;
+    const p_to_date = toDate
+      ? new Date(toDate + 'T23:59:59.999').toISOString()
+      : null;
+    const p_product_id = productId ? Number(productId) : null;
+    const p_category_id = categoryId ? Number(categoryId) : null;
 
-    // Filtrar por fecha del item (created_at)
-    if (fromDate) {
-      const fromISO = new Date(fromDate + 'T00:00:00').toISOString();
-      itemsQuery = itemsQuery.gte('created_at', fromISO);
-    }
-    if (toDate) {
-      const toISO = new Date(toDate + 'T23:59:59.999').toISOString();
-      itemsQuery = itemsQuery.lte('created_at', toISO);
-    }
+    const { data: rows, error: rpcError } = await supabase.rpc(
+      'order_sales_statistics',
+      { p_from_date, p_to_date, p_product_id, p_category_id }
+    );
 
-    // Filtrar por producto si se especifica
-    if (productId) {
-      itemsQuery = itemsQuery.eq('product_id', Number(productId));
-    }
-
-    const { data, error } = await itemsQuery;
-
-    if (error) {
-      console.error('Error fetching order statistics:', error);
+    if (rpcError) {
+      console.error('order_sales_statistics RPC error:', rpcError);
       return NextResponse.json(
-        { error: 'Failed to fetch statistics' },
+        { error: rpcError.message || 'Failed to fetch statistics' },
         { status: 500 }
       );
     }
 
-    // Agregar los datos por producto
-    const productStats = new Map<number, OrderStatisticsItem>();
-
-    (data || []).forEach((item: any) => {
-      if (!item.product || !item.order) return;
-
-      const product = Array.isArray(item.product) ? item.product[0] : item.product;
-      const category = product.category 
-        ? (Array.isArray(product.category) ? product.category[0] : product.category)
-        : null;
-
-      // Filtro por producto
-      if (productId && product.id !== Number(productId)) {
-        return;
-      }
-
-      // Filtro por categoría (aplicar después de obtener los datos)
-      if (categoryId && category?.id !== Number(categoryId)) {
-        return;
-      }
-
-      const productIdKey = product.id;
-      const existing = productStats.get(productIdKey) || {
-        productId: product.id,
-        productName: product.name,
-        categoryId: category?.id ?? null,
-        categoryName: category?.name ?? null,
-        totalQuantity: 0,
-        totalAmount: 0,
-      };
-
-      existing.totalQuantity += item.quantity;
-      existing.totalAmount += Number(item.total_price);
-
-      productStats.set(productIdKey, existing);
-    });
-
-    // Convertir a array y ordenar por monto
-    const statistics = Array.from(productStats.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount
-    );
+    const statistics: OrderStatisticsItem[] = (rows ?? []).map((row: any) => ({
+      productId: row.product_id,
+      productName: row.product_name ?? '',
+      categoryId: row.category_id ?? null,
+      categoryName: row.category_name ?? null,
+      totalQuantity: Number(row.total_quantity) ?? 0,
+      totalAmount: Number(row.total_amount) ?? 0,
+    }));
 
     return NextResponse.json(statistics);
   } catch (error) {
