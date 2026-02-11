@@ -105,8 +105,8 @@ export default function PlayoffPreviewTab({ tournament }: { tournament: Pick<Tou
     title: getRoundLabel(round),
     seeds: matchesByRound[round].map((match) => {
       const seedId = match.id ?? roundIdx * 1000 + (match.bracket_pos || 0);
-      const team1Name = match.display_team1 ?? (match.source_team1 ? "" : "—");
-      const team2Name = match.display_team2 ?? (match.source_team2 ? "" : "—");
+      const team1Name = match.display_team1 ?? match.source_team1 ?? "—";
+      const team2Name = match.display_team2 ?? match.source_team2 ?? "—";
       return {
         id: seedId,
         teams: [
