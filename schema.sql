@@ -285,6 +285,46 @@ CREATE TABLE transactions (
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Balance agregado por método de pago (evita límite de filas del cliente)
+CREATE OR REPLACE FUNCTION transaction_balance_statistics(
+  p_from_date TIMESTAMPTZ DEFAULT NULL,
+  p_to_date   TIMESTAMPTZ DEFAULT NULL,
+  p_type      VARCHAR(20) DEFAULT NULL
+)
+RETURNS TABLE (
+  payment_method_id   BIGINT,
+  payment_method_name TEXT,
+  incomes             NUMERIC,
+  expenses            NUMERIC,
+  withdrawals         NUMERIC,
+  adjustments         NUMERIC,
+  balance             NUMERIC
+) AS $$
+  SELECT
+    t.payment_method_id,
+    pm.name,
+    COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN t.type = 'withdrawal' THEN t.amount ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN t.type = 'adjustment' THEN t.amount ELSE 0 END), 0),
+    COALESCE(SUM(
+      CASE t.type
+        WHEN 'income'     THEN t.amount
+        WHEN 'adjustment' THEN t.amount
+        WHEN 'expense'    THEN -t.amount
+        WHEN 'withdrawal' THEN -t.amount
+        ELSE 0
+      END
+    ), 0)
+  FROM transactions t
+  LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id
+  WHERE (p_from_date IS NULL OR t.created_at >= p_from_date)
+    AND (p_to_date   IS NULL OR t.created_at <= p_to_date)
+    AND (p_type      IS NULL OR p_type = '' OR t.type = p_type)
+  GROUP BY t.payment_method_id, pm.name
+  ORDER BY pm.name NULLS FIRST;
+$$ LANGUAGE SQL STABLE;
+
 -- =========================================================
 -- STOCK_MOVEMENTS (historial de stock del buffet)
 -- =========================================================

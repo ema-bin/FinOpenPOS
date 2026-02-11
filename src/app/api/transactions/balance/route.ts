@@ -19,113 +19,63 @@ export async function GET(req: Request, _ctx: QueryParams) {
     const toDate = url.searchParams.get("toDate");
     const typeFilter = url.searchParams.get("type");
 
-    // Construir la consulta base - incluir payment_method_id para calcular balance por método de pago
-    let query = supabase
-      .from("transactions")
-      .select("type, amount, payment_method_id");
+    const p_from_date = fromDate
+      ? new Date(`${fromDate}T00:00:00`).toISOString()
+      : null;
+    const p_to_date = toDate
+      ? new Date(`${toDate}T23:59:59.999`).toISOString()
+      : null;
+    const p_type =
+      typeFilter && typeFilter !== "all" ? typeFilter : null;
 
-    // Aplicar filtros de fecha
-    if (fromDate) {
-      query = query.gte("created_at", new Date(`${fromDate}T00:00:00`).toISOString());
-    }
-    if (toDate) {
-      query = query.lte("created_at", new Date(`${toDate}T23:59:59.999`).toISOString());
-    }
-    // Aplicar filtro de tipo
-    if (typeFilter && typeFilter !== "all") {
-      query = query.eq("type", typeFilter);
-    }
+    const { data: rows, error: rpcError } = await supabase.rpc(
+      "transaction_balance_statistics",
+      { p_from_date, p_to_date, p_type }
+    );
 
-    const { data: transactions, error: queryError } = await query;
-
-    if (queryError) {
-      console.error("transactions query error:", queryError);
+    if (rpcError) {
+      console.error("transaction_balance_statistics RPC error:", rpcError);
       return NextResponse.json(
-        { error: queryError.message || "Failed to fetch transactions" },
+        { error: rpcError.message || "Failed to fetch balance" },
         { status: 500 }
       );
     }
 
-    // Obtener métodos de pago para tener sus nombres
-    const { data: paymentMethods, error: pmError } = await supabase
-      .from("payment_methods")
-      .select("id, name");
+    const list = (rows ?? []) as Array<{
+      payment_method_id: number | null;
+      payment_method_name: string | null;
+      incomes: string | number;
+      expenses: string | number;
+      withdrawals: string | number;
+      adjustments: string | number;
+      balance: string | number;
+    }>;
 
-    if (pmError) {
-      console.error("payment_methods query error:", pmError);
-    }
-
-    const paymentMethodsMap = new Map(
-      (paymentMethods ?? []).map((pm: any) => [pm.id, pm.name])
-    );
-
-    // Hacer GROUP BY y suma en JavaScript por tipo de transacción
-    const summary = (transactions ?? []).reduce((acc: Record<string, number>, row: any) => {
-      const type = row.type;
-      const amount = Number(row.amount) || 0;
-      acc[type] = (acc[type] || 0) + amount;
-      return acc;
-    }, {});
-
-    // Calcular balance por método de pago
-    // Sumar incomes, restar expenses, restar withdrawals, sumar adjustments
-    const balanceByPaymentMethod: Record<
-      string,
-      {
-        payment_method_id: number | null;
-        payment_method_name: string | null;
-        incomes: number;
-        expenses: number;
-        withdrawals: number;
-        adjustments: number;
-        balance: number;
-      }
-    > = {};
-
-    (transactions ?? []).forEach((row: any) => {
-      const paymentMethodId = row.payment_method_id;
-      const key = paymentMethodId?.toString() ?? "null";
-      const amount = Number(row.amount) || 0;
-
-      if (!balanceByPaymentMethod[key]) {
-        balanceByPaymentMethod[key] = {
-          payment_method_id: paymentMethodId,
-          payment_method_name: paymentMethodId
-            ? paymentMethodsMap.get(paymentMethodId) ?? null
-            : null,
-          incomes: 0,
-          expenses: 0,
-          withdrawals: 0,
-          adjustments: 0,
-          balance: 0,
-        };
-      }
-
-      switch (row.type) {
-        case "income":
-          balanceByPaymentMethod[key].incomes += amount;
-          break;
-        case "expense":
-          balanceByPaymentMethod[key].expenses += amount;
-          break;
-        case "withdrawal":
-          balanceByPaymentMethod[key].withdrawals += amount;
-          break;
-        case "adjustment":
-          balanceByPaymentMethod[key].adjustments += amount;
-          break;
-      }
+    const summary: Record<string, number> = {};
+    list.forEach((row) => {
+      const inc = Number(row.incomes) || 0;
+      const exp = Number(row.expenses) || 0;
+      const with_ = Number(row.withdrawals) || 0;
+      const adj = Number(row.adjustments) || 0;
+      summary.income = (summary.income ?? 0) + inc;
+      summary.expense = (summary.expense ?? 0) + exp;
+      summary.withdrawal = (summary.withdrawal ?? 0) + with_;
+      summary.adjustment = (summary.adjustment ?? 0) + adj;
     });
 
-    // Calcular balance total por método de pago: incomes + adjustments - expenses - withdrawals
-    Object.values(balanceByPaymentMethod).forEach((balance) => {
-      balance.balance =
-        balance.incomes + balance.adjustments - balance.expenses - balance.withdrawals;
-    });
+    const balanceByPaymentMethod = list.map((row) => ({
+      payment_method_id: row.payment_method_id,
+      payment_method_name: row.payment_method_name,
+      incomes: Number(row.incomes) || 0,
+      expenses: Number(row.expenses) || 0,
+      withdrawals: Number(row.withdrawals) || 0,
+      adjustments: Number(row.adjustments) || 0,
+      balance: Number(row.balance) || 0,
+    }));
 
     return NextResponse.json({
       summary,
-      balanceByPaymentMethod: Object.values(balanceByPaymentMethod),
+      balanceByPaymentMethod,
     });
   } catch (error) {
     console.error("GET /transactions/balance error:", error);
