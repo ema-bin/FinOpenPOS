@@ -10,6 +10,7 @@ export interface CreateTournamentInput {
   max_teams?: number | null;
   format?: string | null;
   description?: string | null;
+  registration_fee?: number;
 }
 
 export interface CreateTournamentTeamInput {
@@ -75,6 +76,32 @@ class TournamentsService {
     });
     if (!response.ok) {
       throw new Error("Error creating tournament");
+    }
+    return response.json();
+  }
+
+  async update(
+    tournamentId: number,
+    updates: Partial<{
+      name: string;
+      description: string | null;
+      category: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      has_super_tiebreak: boolean;
+      match_duration: number;
+      registration_fee: number;
+    }>
+  ): Promise<TournamentDTO> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) {
+      throw new Error("Error al actualizar el torneo");
     }
     return response.json();
   }

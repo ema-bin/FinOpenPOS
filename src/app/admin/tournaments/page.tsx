@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2Icon, PlusIcon } from "lucide-react";
+import { Loader2Icon, PencilIcon, PlusIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { TournamentListItem } from "@/models/dto/tournament";
+import type { TournamentDTO, TournamentListItem } from "@/models/dto/tournament";
 import type { TournamentStatus } from "@/models/db/tournament";
 import { tournamentsService } from "@/services";
 
@@ -41,7 +41,11 @@ export default function TournamentsPage() {
   const [category, setCategory] = useState("");
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
+  const [registrationFee, setRegistrationFee] = useState<number>(0);
   const [creating, setCreating] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [tournamentToEdit, setTournamentToEdit] = useState<TournamentDTO | null>(null);
+  const [updating, setUpdating] = useState(false);
   const router = useRouter();
   const [statusFilter, setStatusFilter] =
     useState<StatusFilterOption>("active");
@@ -95,18 +99,58 @@ export default function TournamentsPage() {
         registration_deadline: "",
         format: category || null,
         description: null,
+        registration_fee: registrationFee,
       });
       setDialogOpen(false);
       setName("");
       setCategory("");
       setHasSuperTiebreak(false);
       setMatchDuration(60);
+      setRegistrationFee(0);
       setTournaments((prev) => [created, ...prev]);
       router.push(`/admin/tournaments/${created.id}`);
     } catch (err) {
       console.error(err);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditDialog = async (t: TournamentListItem) => {
+    try {
+      const full = await tournamentsService.getById(t.id);
+      setTournamentToEdit(full);
+      setName(full.name);
+      setCategory(full.category ?? "");
+      setMatchDuration(full.match_duration ?? 60);
+      setHasSuperTiebreak(full.has_super_tiebreak ?? false);
+      setRegistrationFee(full.registration_fee ?? 0);
+      setEditDialogOpen(true);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!tournamentToEdit || !name.trim()) return;
+    try {
+      setUpdating(true);
+      const updated = await tournamentsService.update(tournamentToEdit.id, {
+        name: name.trim(),
+        category: category.trim() || null,
+        match_duration: matchDuration,
+        has_super_tiebreak: hasSuperTiebreak,
+        registration_fee: registrationFee,
+      });
+      setTournaments((prev) =>
+        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category: updated.category } : t))
+      );
+      setEditDialogOpen(false);
+      setTournamentToEdit(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -169,18 +213,35 @@ export default function TournamentsPage() {
         ) : (
           <div className="space-y-2">
             {tournaments.map((t) => (
-              <button
+              <div
                 key={t.id}
-                className="w-full text-left border rounded-lg px-4 py-3 hover:bg-muted flex items-center justify-between"
-                onClick={() => router.push(`/admin/tournaments/${t.id}`)}
+                className="w-full text-left border rounded-lg px-4 py-3 hover:bg-muted flex items-center justify-between group"
               >
-                <div>
+                <button
+                  className="flex-1 min-w-0 text-left"
+                  onClick={() => router.push(`/admin/tournaments/${t.id}`)}
+                >
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-xs text-muted-foreground">
                     {t.category ?? "Sin categoría"} • {t.status}
                   </div>
-                </div>
-              </button>
+                </button>
+                {t.status === "draft" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 h-8 w-8 opacity-70 hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditDialog(t);
+                    }}
+                    aria-label="Editar torneo"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -222,6 +283,20 @@ export default function TournamentsPage() {
                 Duración estimada de cada partido (por defecto 60 minutos)
               </p>
             </div>
+            <div className="space-y-1">
+              <Label>Cuota de inscripción</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={registrationFee}
+                onChange={(e) => setRegistrationFee(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Monto en la moneda que uses (0 = sin cuota)
+              </p>
+            </div>
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
                 <Label htmlFor="super-tiebreak">Super Tie-Break en 3er set</Label>
@@ -245,6 +320,97 @@ export default function TournamentsPage() {
                 <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
               )}
               Crear y abrir detalle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setTournamentToEdit(null);
+            setName("");
+            setCategory("");
+            setMatchDuration(60);
+            setHasSuperTiebreak(false);
+            setRegistrationFee(0);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar torneo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Nombre</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Torneo 7ma Mixto"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Categoría (opcional)</Label>
+              <Input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Ej: 7ma, 6ta, Mixto"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Duración del partido (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="15"
+                value={matchDuration}
+                onChange={(e) => setMatchDuration(Number(e.target.value) || 90)}
+                placeholder="60"
+              />
+              <p className="text-xs text-muted-foreground">
+                Duración estimada de cada partido (por defecto 60 minutos)
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Cuota de inscripción</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={registrationFee}
+                onChange={(e) => setRegistrationFee(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Monto en la moneda que uses (0 = sin cuota)
+              </p>
+            </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-super-tiebreak">Super Tie-Break en 3er set</Label>
+                <p className="text-xs text-muted-foreground">
+                  Se aplicará a todos los matches excepto cuartos, semifinal y final
+                </p>
+              </div>
+              <Switch
+                id="edit-super-tiebreak"
+                checked={hasSuperTiebreak}
+                onCheckedChange={setHasSuperTiebreak}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleUpdate}
+              disabled={updating || !name.trim()}
+            >
+              {updating && (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
