@@ -25,6 +25,9 @@ type PlayoffPreviewMatch = PlayoffMatch & {
   start_time?: string | null;
   end_time?: string | null;
   court_id?: number | null;
+  /** Etiqueta de slot para preview (1A, 2B, …), siempre como al inicio */
+  display_team1?: string | null;
+  display_team2?: string | null;
 };
 
 type PreviewResponse = {
@@ -371,13 +374,24 @@ export async function POST(req: Request, { params }: RouteParams) {
     groupOrderMap.set(group.id, group.group_order ?? 999);
   });
 
-  const allMatches = generatePlayoffs(qualified, groupOrderMap);
+  const totalPairs = groupTeams?.length ?? 0;
+  const allMatches = generatePlayoffs(qualified, groupOrderMap, totalPairs);
+
+  const teamIdToLabel = new Map<number, string>();
+  qualified.forEach((q) => {
+    const groupOrder = groupOrderMap.get(q.from_group_id) ?? 999;
+    const letter = groupOrder >= 1 && groupOrder <= 26 ? String.fromCharCode(64 + groupOrder) : "?";
+    teamIdToLabel.set(q.team_id, `${q.pos}${letter}`);
+  });
+
   const allMatchesWithSchedule = allMatches.map((match) => ({
     ...match,
     match_date: null,
     start_time: null,
     end_time: null,
     court_id: null,
+    display_team1: match.team1_id ? (teamIdToLabel.get(match.team1_id) ?? null) : null,
+    display_team2: match.team2_id ? (teamIdToLabel.get(match.team2_id) ?? null) : null,
   })) as PlayoffPreviewMatch[];
 
   const allGroupMatchesFinished = matches.every((m) => m.status === "finished");
@@ -396,10 +410,12 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (value > minRoundValue) {
         match.team1_id = null;
         match.source_team1 = null;
+        match.display_team1 = null;
       }
       if (value > minRoundValue) {
         match.team2_id = null;
         match.source_team2 = null;
+        match.display_team2 = null;
       }
     });
   }

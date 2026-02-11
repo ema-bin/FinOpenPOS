@@ -292,7 +292,7 @@ export default function PlayoffsViewTab({ tournament }: { tournament: Pick<Tourn
                                 </div>
                               ) : (
                                 <div className="font-medium text-sm text-muted-foreground">
-                                  {r.source_team1 || "—"} vs {r.source_team2 || "—"}
+                                  {r.source_team1 ? "" : "—"} vs {r.source_team2 ? "" : "—"}
                                 </div>
                               )}
                               
