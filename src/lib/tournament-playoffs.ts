@@ -564,42 +564,11 @@ function generateFirstRoundMatches(
 }
 
 /**
- * Calcula la "fuerza del ganador esperado" de un match basándose en los seeds de los equipos.
- * Usa el mejor seed (más fuerte) de los dos equipos, ya que ese será el ganador esperado.
- * 
- * @param match Match de la primera ronda
- * @param rankedTeams Lista completa de equipos ordenados por seed (mejor primero)
- * @returns Un número que representa la fuerza (menor = mejor seed = más fuerte)
- */
-function calculateMatchStrength(
-  match: PlayoffMatch,
-  rankedTeams: QualifiedTeam[]
-): number {
-  if (!match.team1_id || !match.team2_id) {
-    return Infinity; // Matches de bye no se consideran
-  }
-  
-  // Encontrar los índices (seeds) de los equipos en el ranking global
-  const team1Index = rankedTeams.findIndex(t => t.team_id === match.team1_id);
-  const team2Index = rankedTeams.findIndex(t => t.team_id === match.team2_id);
-  
-  // Si no encontramos los equipos, retornar un valor alto (débil)
-  if (team1Index === -1 || team2Index === -1) {
-    return Infinity;
-  }
-  
-  // La "fuerza del ganador esperado" se basa en el MEJOR seed del match
-  // Un match con un mejor seed produce un ganador más fuerte
-  // Usamos el mínimo de los dos seeds (menor índice = mejor seed = más fuerte)
-  return Math.min(team1Index, team2Index);
-}
-
-/**
- * Asigna cada seed fuerte al ganador del cruce más débil posible en la siguiente ronda.
+ * Genera la siguiente ronda (ej. Cuartos) a partir de la primera (Octavos).
  * 
  * @param teamsWithBye Equipos con bye (ordenados por seed, mejor primero)
  * @param firstRoundMatches Matches de la primera ronda (solo matches reales, con ambos equipos)
- * @param rankedTeams Lista completa de equipos ordenados por seed (para calcular fuerza)
+ * @param rankedTeams Lista completa de equipos ordenados por seed
  * @param roundName Nombre de la ronda
  * @param nextRoundSize Tamaño de la siguiente ronda
  * @returns Array de matches de la siguiente ronda
@@ -618,70 +587,19 @@ function generateNextRoundWithByes(
   // Esto asegura que los mejores seeds estén en posiciones opuestas
   const seededByes = seedByeTeams(teamsWithBye, nextRoundSize);
   
-  // Ordenar los matches de la primera ronda por "fuerza del ganador esperado"
-  // El match con el mejor seed más débil produce el ganador más débil
-  // Ordenamos de más débil a más fuerte (menor fuerza = más débil)
-  const sortedMatches = [...firstRoundMatches].sort((a, b) => {
-    const strengthA = calculateMatchStrength(a, rankedTeams);
-    const strengthB = calculateMatchStrength(b, rankedTeams);
-    return strengthA - strengthB; // Menor fuerza primero (más débil primero)
-  });
-  
   // Identificar qué posiciones tienen bye y cuáles necesitan ganadores
   const positionsNeedingWinners: number[] = [];
-  const positionToByeSeed = new Map<number, number>();
-  
   for (let i = 0; i < nextRoundSize; i++) {
     if (!seededByes[i]) {
       positionsNeedingWinners.push(i);
-    } else {
-      // Guardar el seed del bye en esta posición
-      const byeTeam = seededByes[i]!;
-      const byeSeed = rankedTeams.findIndex(t => t.team_id === byeTeam.team_id);
-      positionToByeSeed.set(i, byeSeed);
     }
   }
   
-  // Crear un mapa de posición a "seed del oponente" (el bye en la posición opuesta del par)
-  // Las posiciones se emparejan: 0-1, 2-3, 4-5, etc.
-  // En cada par, necesitamos saber el seed del bye para asignar el match más débil al mejor seed
-  const positionToOpponentSeed = new Map<number, number>();
-  for (let i = 0; i < nextRoundSize; i++) {
-    if (!seededByes[i]) {
-      // Esta posición necesita un ganador, encontrar el seed de su oponente (bye)
-      const pairIndex = Math.floor(i / 2);
-      const isFirstInPair = i % 2 === 0;
-      const opponentPos = isFirstInPair ? i + 1 : i - 1;
-      
-      if (seededByes[opponentPos]) {
-        // El oponente es un bye, encontrar su seed global
-        const opponentSeed = positionToByeSeed.get(opponentPos);
-        if (opponentSeed !== undefined) {
-          positionToOpponentSeed.set(i, opponentSeed);
-        }
-      }
-    }
-  }
-  
-  // Ordenar las posiciones que necesitan ganadores por el seed de su oponente (mejor oponente primero)
-  // Esto asegura que los matches más débiles se asignen a las posiciones con mejores oponentes
-  positionsNeedingWinners.sort((a, b) => {
-    const seedA = positionToOpponentSeed.get(a) ?? Infinity;
-    const seedB = positionToOpponentSeed.get(b) ?? Infinity;
-    return seedA - seedB; // Menor seed (mejor) primero
-  });
-  
-  // Crear un mapa de posición del bracket a match de primera ronda
-  // Asignamos los matches más débiles a las posiciones con mejores oponentes
-  // Pero en orden inverso: el match más débil va a la posición con el mejor oponente
+  // Mapa posición del bracket → número de partido de la ronda anterior (1, 2, 3, …)
+  // Orden estándar: posición 0 → Octavos 1, posición 1 → Octavos 2, … (Cuartos 1 = Octavos 1 y 2, Cuartos 3 = Octavos 5 y 6)
   const positionToMatch: Map<number, number> = new Map();
-  for (let i = 0; i < positionsNeedingWinners.length; i++) {
-    const position = positionsNeedingWinners[i];
-    // Asignar en orden inverso: el match más débil (índice 0) va a la posición con el mejor oponente (última en la lista ordenada)
-    const matchIndex = positionsNeedingWinners.length - 1 - i;
-    if (matchIndex < sortedMatches.length) {
-      positionToMatch.set(position, sortedMatches[matchIndex].bracket_pos);
-    }
+  for (const position of positionsNeedingWinners) {
+    positionToMatch.set(position, position + 1);
   }
   
   // Generar los matches de la siguiente ronda
