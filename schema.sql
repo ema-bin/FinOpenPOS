@@ -218,6 +218,32 @@ RETURNS TABLE (
   ORDER BY 6 DESC NULLS LAST;
 $$ LANGUAGE SQL STABLE;
 
+-- Ranking de clientes por monto total (solo órdenes cerradas; excluye player_id = 1; evita límite de filas)
+CREATE OR REPLACE FUNCTION client_ranking_statistics(
+  p_from_date TIMESTAMPTZ DEFAULT NULL,
+  p_to_date   TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS TABLE (
+  player_id    BIGINT,
+  player_name  TEXT,
+  total_amount NUMERIC,
+  order_count  BIGINT
+) AS $$
+  SELECT
+    pl.id,
+    TRIM(pl.first_name || ' ' || pl.last_name),
+    COALESCE(SUM(o.total_amount), 0) AS total_amount,
+    COUNT(*)::BIGINT
+  FROM orders o
+  JOIN players pl ON pl.id = o.player_id
+  WHERE o.status = 'closed'
+    AND o.player_id != 1
+    AND (p_from_date IS NULL OR o.closed_at >= p_from_date)
+    AND (p_to_date   IS NULL OR o.closed_at <= p_to_date)
+  GROUP BY pl.id, pl.first_name, pl.last_name
+  ORDER BY 3 DESC NULLS LAST;
+$$ LANGUAGE SQL STABLE;
+
 -- =========================================================
 -- COURTS (canchas de pádel)
 -- =========================================================
