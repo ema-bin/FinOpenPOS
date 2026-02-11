@@ -13,13 +13,15 @@ import { TournamentBracketV2 } from "@/components/tournament-bracket-v2";
 import type { TournamentDTO } from "@/models/dto/tournament";
 
 type PreviewMatch = {
-  id: number;
+  id?: number;
   round: string;
   bracket_pos: number;
   team1_id: number | null;
   team2_id: number | null;
   source_team1: string | null;
   source_team2: string | null;
+  display_team1?: string | null;
+  display_team2?: string | null;
   match_date: string | null;
   start_time: string | null;
 };
@@ -103,9 +105,8 @@ export default function PlayoffPreviewTab({ tournament }: { tournament: Pick<Tou
     title: getRoundLabel(round),
     seeds: matchesByRound[round].map((match) => {
       const seedId = match.id ?? roundIdx * 1000 + (match.bracket_pos || 0);
-      const team1Name = match.team1_id ? match.source_team1 || `Equipo ${match.team1_id}` : (match.source_team1 ? "" : "—");
-      const team2Name = match.team2_id ? match.source_team2 || `Equipo ${match.team2_id}` : (match.source_team2 ? "" : "—");
-      const placeholderPattern = /^\d+[A-Z]$/;
+      const team1Name = match.display_team1 ?? (match.source_team1 ? "" : "—");
+      const team2Name = match.display_team2 ?? (match.source_team2 ? "" : "—");
       return {
         id: seedId,
         teams: [
