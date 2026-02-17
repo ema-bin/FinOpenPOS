@@ -397,14 +397,6 @@ export default function TournamentsPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Categoría (opcional)</Label>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Ej: 7ma, 6ta, Mixto"
-              />
-            </div>
-            <div className="space-y-1">
               <Label>Duración del partido (minutos)</Label>
               <Input
                 type="number"
