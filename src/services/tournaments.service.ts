@@ -4,12 +4,17 @@ import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, Tour
 
 export interface CreateTournamentInput {
   name: string;
-  start_date: string;
-  end_date: string;
-  registration_deadline: string;
+  start_date?: string;
+  end_date?: string;
+  registration_deadline?: string;
   max_teams?: number | null;
   format?: string | null;
   description?: string | null;
+  category_id?: number | null;
+  is_puntuable?: boolean;
+  is_category_specific?: boolean;
+  has_super_tiebreak?: boolean;
+  match_duration?: number;
   registration_fee?: number;
 }
 
@@ -85,7 +90,9 @@ class TournamentsService {
     updates: Partial<{
       name: string;
       description: string | null;
-      category: string | null;
+      category_id: number | null;
+      is_puntuable: boolean;
+      is_category_specific: boolean;
       start_date: string | null;
       end_date: string | null;
       has_super_tiebreak: boolean;

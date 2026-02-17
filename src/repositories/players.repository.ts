@@ -11,10 +11,10 @@ export class PlayersRepository extends BaseRepository {
   /**
    * Get all players with optional filters
    */
-  async findAll(options: FindPlayersOptions = {}): Promise<Player[]> {
+  async findAll(options: FindPlayersOptions = {}): Promise<(Player & { category: string | null; female_category: string | null })[]> {
     let query = this.supabase
       .from("players")
-      .select("id, first_name, last_name, phone, status, created_at");
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)");
 
     if (options.status) {
       if (options.status !== "all") {
@@ -37,16 +37,22 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to fetch players: ${error.message}`);
     }
 
-    return (data ?? []) as Player[];
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const rows = (data ?? []) as unknown as Row[];
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    return rows.map((row) => {
+      const { category: _c, female_category: _f, ...rest } = row;
+      return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
+    });
   }
 
   /**
    * Get a single player by ID
    */
-  async findById(playerId: number): Promise<Player | null> {
+  async findById(playerId: number): Promise<(Player & { category: string | null; female_category: string | null }) | null> {
     const { data, error } = await this.supabase
       .from("players")
-      .select("id, first_name, last_name, phone, status, created_at")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .eq("id", playerId)
       .single();
 
@@ -57,7 +63,11 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to fetch player: ${error.message}`);
     }
 
-    return data as Player;
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**
@@ -72,33 +82,45 @@ export class PlayersRepository extends BaseRepository {
         last_name: input.last_name.trim(),
         phone: input.phone,
         status: input.status ?? "active",
+        city: input.city ?? null,
+        category_id: input.category_id ?? null,
+        female_category_id: input.female_category_id ?? null,
+        gender: input.gender ?? null,
       })
-      .select("id, first_name, last_name, phone, status, created_at")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .single();
 
     if (error) {
       throw new Error(`Failed to create player: ${error.message}`);
     }
 
-    return data as Player;
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**
    * Update a player
    */
-  async update(playerId: number, updates: Partial<Pick<Player, "first_name" | "last_name" | "phone" | "status">>): Promise<Player> {
+  async update(playerId: number, updates: Partial<Pick<Player, "first_name" | "last_name" | "phone" | "status" | "city" | "category_id" | "female_category_id" | "gender">>): Promise<Player & { category: string | null; female_category: string | null }> {
     const { data, error } = await this.supabase
       .from("players")
       .update(updates)
       .eq("id", playerId)
-      .select("id, first_name, last_name, phone, status, created_at")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .single();
 
     if (error) {
       throw new Error(`Failed to update player: ${error.message}`);
     }
 
-    return data as Player;
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**

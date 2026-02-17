@@ -56,11 +56,25 @@ export async function PATCH(request: Request, { params }: Params) {
       updateFields.phone = body.phone;
     }
 
+    if (body.city !== undefined) {
+      updateFields.city = body.city === null || body.city === '' ? null : String(body.city).trim();
+    }
+
     if (typeof body.status === 'string') {
       if (!['active', 'inactive'].includes(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       }
       updateFields.status = body.status;
+    }
+
+    if (body.category_id !== undefined) {
+      updateFields.category_id = body.category_id === null || body.category_id === '' ? null : Number(body.category_id);
+    }
+    if (body.female_category_id !== undefined) {
+      updateFields.female_category_id = body.female_category_id === null || body.female_category_id === '' ? null : Number(body.female_category_id);
+    }
+    if (body.gender !== undefined) {
+      updateFields.gender = body.gender === null || body.gender === '' ? null : String(body.gender);
     }
 
     if (Object.keys(updateFields).length === 0) {

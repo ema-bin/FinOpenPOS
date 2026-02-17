@@ -22,10 +22,10 @@ export class TournamentsRepository extends BaseRepository {
   /**
    * Get all tournaments
    */
-  async findAll(statusFilters?: TournamentStatus[]): Promise<Tournament[]> {
+  async findAll(statusFilters?: TournamentStatus[]): Promise<(Tournament & { category: string | null })[]> {
     let query = this.supabase
       .from("tournaments")
-      .select("*")
+      .select("*, category:categories!category_id(name)")
       .order("created_at", { ascending: false });
 
     if (statusFilters && statusFilters.length > 0) {
@@ -38,16 +38,20 @@ export class TournamentsRepository extends BaseRepository {
       throw new Error(`Failed to fetch tournaments: ${error.message}`);
     }
 
-    return (data ?? []) as Tournament[];
+    const rows = (data ?? []) as Array<Tournament & { category_id: number | null; category: { name: string } | null }>;
+    return rows.map((row) => {
+      const { category: cat, ...rest } = row;
+      return { ...rest, category: cat?.name ?? null };
+    });
   }
 
   /**
    * Get a single tournament by ID
    */
-  async findById(tournamentId: number): Promise<Tournament | null> {
+  async findById(tournamentId: number): Promise<(Tournament & { category: string | null }) | null> {
     const { data, error } = await this.supabase
       .from("tournaments")
-      .select("*")
+      .select("*, category:categories!category_id(name)")
       .eq("id", tournamentId)
       .single();
 
@@ -58,7 +62,9 @@ export class TournamentsRepository extends BaseRepository {
       throw new Error(`Failed to fetch tournament: ${error.message}`);
     }
 
-    return data as Tournament;
+    const row = data as Tournament & { category: { name: string } | null };
+    const { category: cat, ...rest } = row;
+    return { ...rest, category: cat?.name ?? null };
   }
 
   /**
@@ -70,7 +76,9 @@ export class TournamentsRepository extends BaseRepository {
       .insert({
         name: input.name,
         description: input.description ?? null,
-        category: input.category ?? null,
+        category_id: input.category_id ?? null,
+        is_puntuable: input.is_puntuable ?? false,
+        is_category_specific: input.is_category_specific ?? false,
         start_date: input.start_date ?? null,
         end_date: input.end_date ?? null,
         has_super_tiebreak: input.has_super_tiebreak ?? false,
@@ -79,14 +87,16 @@ export class TournamentsRepository extends BaseRepository {
         status: "draft",
         user_uid: this.userId,
       })
-      .select("*")
+      .select("*, category:categories!category_id(name)")
       .single();
 
     if (error) {
       throw new Error(`Failed to create tournament: ${error.message}`);
     }
 
-    return data as Tournament;
+    const row = data as Tournament & { category: { name: string } | null };
+    const { category: cat, ...rest } = row;
+    return { ...rest, category: cat?.name ?? null } as Tournament & { category: string | null };
   }
 
   /**

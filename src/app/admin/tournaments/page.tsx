@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardHeader,
@@ -31,6 +32,7 @@ import {
 
 import type { TournamentDTO, TournamentListItem } from "@/models/dto/tournament";
 import type { TournamentStatus } from "@/models/db/tournament";
+import type { Category } from "@/models/db/category";
 import { tournamentsService } from "@/services";
 
 export default function TournamentsPage() {
@@ -38,7 +40,19 @@ export default function TournamentsPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [isPuntuable, setIsPuntuable] = useState(false);
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["categories", "libre"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories?type=libre");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const [isCategorySpecific, setIsCategorySpecific] = useState(false);
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
   const [registrationFee, setRegistrationFee] = useState<number>(0);
@@ -96,14 +110,19 @@ export default function TournamentsPage() {
         name,
         start_date: "",
         end_date: "",
-        registration_deadline: "",
-        format: category || null,
         description: null,
+        category_id: categoryId ?? null,
+        is_category_specific: isCategorySpecific,
+        is_puntuable: isPuntuable,
+        has_super_tiebreak: hasSuperTiebreak,
+        match_duration: matchDuration,
         registration_fee: registrationFee,
       });
       setDialogOpen(false);
       setName("");
-      setCategory("");
+      setCategoryId(null);
+      setIsPuntuable(false);
+      setIsCategorySpecific(false);
       setHasSuperTiebreak(false);
       setMatchDuration(60);
       setRegistrationFee(0);
@@ -121,7 +140,9 @@ export default function TournamentsPage() {
       const full = await tournamentsService.getById(t.id);
       setTournamentToEdit(full);
       setName(full.name);
-      setCategory(full.category ?? "");
+      setCategoryId(full.category_id ?? null);
+      setIsPuntuable(full.is_puntuable ?? false);
+      setIsCategorySpecific(full.is_category_specific ?? false);
       setMatchDuration(full.match_duration ?? 60);
       setHasSuperTiebreak(full.has_super_tiebreak ?? false);
       setRegistrationFee(full.registration_fee ?? 0);
@@ -137,13 +158,15 @@ export default function TournamentsPage() {
       setUpdating(true);
       const updated = await tournamentsService.update(tournamentToEdit.id, {
         name: name.trim(),
-        category: category.trim() || null,
+        category_id: isCategorySpecific ? categoryId : null,
+        is_puntuable: isPuntuable,
+        is_category_specific: isCategorySpecific,
         match_duration: matchDuration,
         has_super_tiebreak: hasSuperTiebreak,
         registration_fee: registrationFee,
       });
       setTournaments((prev) =>
-        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category: updated.category } : t))
+        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category_id: updated.category_id, category: updated.category, is_puntuable: updated.is_puntuable, is_category_specific: updated.is_category_specific } : t))
       );
       setEditDialogOpen(false);
       setTournamentToEdit(null);
@@ -261,14 +284,35 @@ export default function TournamentsPage() {
                 placeholder="Ej: Torneo 7ma Mixto"
               />
             </div>
-            <div className="space-y-1">
-              <Label>Categoría (opcional)</Label>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Ej: 7ma, 6ta, Mixto"
-              />
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="create-puntuable">Puntuable</Label>
+                <p className="text-xs text-muted-foreground">Si suma para ranking o puntos</p>
+              </div>
+              <Switch id="create-puntuable" checked={isPuntuable} onCheckedChange={setIsPuntuable} />
             </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="create-category-specific">De categoría específica</Label>
+                <p className="text-xs text-muted-foreground">Restringir a una categoría</p>
+              </div>
+              <Switch id="create-category-specific" checked={isCategorySpecific} onCheckedChange={setIsCategorySpecific} />
+            </div>
+            {isCategorySpecific && (
+              <div className="space-y-1">
+                <Label>Categoría</Label>
+                <Select value={categoryId != null ? String(categoryId) : "_"} onValueChange={(v) => setCategoryId(v === "_" ? null : Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Duración del partido (minutos)</Label>
               <Input
@@ -332,7 +376,9 @@ export default function TournamentsPage() {
           if (!open) {
             setTournamentToEdit(null);
             setName("");
-            setCategory("");
+            setCategoryId(null);
+            setIsPuntuable(false);
+            setIsCategorySpecific(false);
             setMatchDuration(60);
             setHasSuperTiebreak(false);
             setRegistrationFee(0);
@@ -350,14 +396,6 @@ export default function TournamentsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ej: Torneo 7ma Mixto"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Categoría (opcional)</Label>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Ej: 7ma, 6ta, Mixto"
               />
             </div>
             <div className="space-y-1">

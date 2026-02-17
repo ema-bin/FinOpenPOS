@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { PlayerDTO } from "@/models/dto/player";
 import type { PlayerStatus } from "@/models/db/player";
+import type { Category } from "@/models/db/category";
 import { playersService } from "@/services/players.service";
 
 type Player = PlayerDTO;
@@ -63,8 +64,12 @@ export default function PlayersPage() {
   const [newPlayerFirstName, setNewPlayerFirstName] = useState("");
   const [newPlayerLastName, setNewPlayerLastName] = useState("");
   const [newPlayerPhone, setNewPlayerPhone] = useState("");
+  const [newPlayerCity, setNewPlayerCity] = useState("");
   const [newPlayerStatus, setNewPlayerStatus] =
     useState<PlayerStatus>("active");
+  const [newPlayerCategoryId, setNewPlayerCategoryId] = useState<number | null>(null);
+  const [newPlayerGender, setNewPlayerGender] = useState<string>("");
+  const [newPlayerFemaleCategoryId, setNewPlayerFemaleCategoryId] = useState<number | null>(null);
   const [isEditPlayerDialogOpen, setIsEditPlayerDialogOpen] =
     useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
@@ -81,6 +86,25 @@ export default function PlayersPage() {
   );
 
   const queryClient = useQueryClient();
+
+  const { data: categoriesLibre = [] } = useQuery<Category[]>({
+    queryKey: ["categories", "libre"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories?type=libre");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: categoriesDamas = [] } = useQuery<Category[]>({
+    queryKey: ["categories", "damas"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories?type=damas");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
 
   // React Query para compartir cache con otros componentes
   const {
@@ -112,7 +136,8 @@ export default function PlayersPage() {
       return (
         player.first_name.toLowerCase().includes(term) ||
         (player.last_name ?? "").toLowerCase().includes(term) ||
-        (player.phone ?? "").includes(debouncedSearchTerm)
+        (player.phone ?? "").includes(debouncedSearchTerm) ||
+        (player.city ?? "").toLowerCase().includes(term)
       );
     });
   }, [players, filters.status, debouncedSearchTerm]);
@@ -122,7 +147,11 @@ export default function PlayersPage() {
     setNewPlayerFirstName("");
     setNewPlayerLastName("");
     setNewPlayerPhone("");
+    setNewPlayerCity("");
     setNewPlayerStatus("active");
+    setNewPlayerCategoryId(null);
+    setNewPlayerGender("");
+    setNewPlayerFemaleCategoryId(null);
   };
 
   const handleAddPlayer = useCallback(async () => {
@@ -132,6 +161,10 @@ export default function PlayersPage() {
         last_name: newPlayerLastName,
         phone: newPlayerPhone,
         status: newPlayerStatus,
+        city: newPlayerCity.trim() || null,
+        category_id: newPlayerCategoryId,
+        female_category_id: newPlayerGender === "female" ? newPlayerFemaleCategoryId : null,
+        gender: newPlayerGender || null,
       });
       setPlayers((prev) => [...prev, createdPlayer]);
       setShowNewPlayerDialog(false);
@@ -140,7 +173,7 @@ export default function PlayersPage() {
       console.error(error);
       // acá podrías setear un toast/error UI si querés
     }
-  }, [newPlayerFirstName, newPlayerLastName, newPlayerPhone, newPlayerStatus]);
+  }, [newPlayerFirstName, newPlayerLastName, newPlayerPhone, newPlayerCity, newPlayerStatus, newPlayerCategoryId, newPlayerGender, newPlayerFemaleCategoryId]);
 
   const handleEditPlayer = useCallback(async () => {
     if (!selectedPlayerId) return;
@@ -150,6 +183,10 @@ export default function PlayersPage() {
         last_name: newPlayerLastName,
         phone: newPlayerPhone,
         status: newPlayerStatus,
+        city: newPlayerCity.trim() || null,
+        category_id: newPlayerCategoryId,
+        female_category_id: newPlayerGender === "female" ? newPlayerFemaleCategoryId : null,
+        gender: newPlayerGender || null,
       });
       // Invalidar cache para refrescar players
       queryClient.invalidateQueries({ queryKey: ["players"] });
@@ -163,7 +200,11 @@ export default function PlayersPage() {
     newPlayerFirstName,
     newPlayerLastName,
     newPlayerPhone,
+    newPlayerCity,
     newPlayerStatus,
+    newPlayerCategoryId,
+    newPlayerGender,
+    newPlayerFemaleCategoryId,
     queryClient,
   ]);
 
@@ -278,7 +319,9 @@ export default function PlayersPage() {
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Apellido</TableHead>
-                <TableHead>Telefono</TableHead>
+                <TableHead>Teléfono</TableHead>
+                <TableHead>Ciudad</TableHead>
+                <TableHead>Categoría</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
@@ -289,6 +332,10 @@ export default function PlayersPage() {
                   <TableCell>{player.first_name}</TableCell>
                   <TableCell>{player.last_name}</TableCell>
                   <TableCell>{player.phone}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{player.city ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {[player.category, player.female_category].filter(Boolean).join(" · ") || "—"}
+                  </TableCell>
                   <TableCell className="capitalize">
                     {player.status}
                   </TableCell>
@@ -302,7 +349,11 @@ export default function PlayersPage() {
                           setNewPlayerFirstName(player.first_name);
                           setNewPlayerLastName(player.last_name ?? "");
                           setNewPlayerPhone(player.phone ?? "");
+                          setNewPlayerCity(player.city ?? "");
                           setNewPlayerStatus(player.status);
+                          setNewPlayerCategoryId(player.category_id ?? null);
+                          setNewPlayerGender(player.gender ?? "");
+                          setNewPlayerFemaleCategoryId(player.female_category_id ?? null);
                           setIsEditPlayerDialogOpen(true);
                         }}
                       >
@@ -326,7 +377,7 @@ export default function PlayersPage() {
               ))}
               {filteredPlayers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6">
+                  <TableCell colSpan={7} className="text-center py-6">
                     No se encontraron clientes.
                   </TableCell>
                 </TableRow>
@@ -377,7 +428,7 @@ export default function PlayersPage() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone">Telefono</Label>
+              <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={newPlayerPhone}
@@ -385,6 +436,59 @@ export default function PlayersPage() {
                 className="col-span-3"
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city">Ciudad</Label>
+              <Input
+                id="city"
+                value={newPlayerCity}
+                onChange={(e) => setNewPlayerCity(e.target.value)}
+                placeholder="Opcional"
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label>Categoría (libre)</Label>
+              <Select value={newPlayerCategoryId != null ? String(newPlayerCategoryId) : "_"} onValueChange={(v) => setNewPlayerCategoryId(v === "_" ? null : Number(v))}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Sin categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_">Sin categoría</SelectItem>
+                  {categoriesLibre.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label>Género</Label>
+              <Select value={newPlayerGender || "_"} onValueChange={(v) => { setNewPlayerGender(v === "_" ? "" : v); if (v !== "female") setNewPlayerFemaleCategoryId(null); }}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="No especificado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_">No especificado</SelectItem>
+                  <SelectItem value="male">Masculino</SelectItem>
+                  <SelectItem value="female">Femenino (damas)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newPlayerGender === "female" && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label>Categoría damas</Label>
+                <Select value={newPlayerFemaleCategoryId != null ? String(newPlayerFemaleCategoryId) : "_"} onValueChange={(v) => setNewPlayerFemaleCategoryId(v === "_" ? null : Number(v))}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Sin categoría damas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_">Sin categoría damas</SelectItem>
+                    {categoriesDamas.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="status">Estado</Label>
               <Select

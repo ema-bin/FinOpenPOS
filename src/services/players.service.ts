@@ -9,6 +9,10 @@ export interface CreatePlayerInput {
   last_name: string;
   phone: string;
   status?: PlayerStatus;
+  city?: string | null;
+  category_id?: number | null;
+  female_category_id?: number | null;
+  gender?: string | null;
 }
 
 export interface UpdatePlayerInput {
@@ -16,6 +20,10 @@ export interface UpdatePlayerInput {
   last_name?: string;
   phone?: string;
   status?: PlayerStatus;
+  city?: string | null;
+  category_id?: number | null;
+  female_category_id?: number | null;
+  gender?: string | null;
 }
 
 class PlayersService {
