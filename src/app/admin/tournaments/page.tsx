@@ -111,10 +111,9 @@ export default function TournamentsPage() {
         start_date: "",
         end_date: "",
         description: null,
-        category_id: isCategorySpecific ? categoryId : null,
-        is_puntuable: isPuntuable,
         is_category_specific: isCategorySpecific,
         registration_fee: registrationFee,
+        is_puntuable: isPuntuable,
       });
       setDialogOpen(false);
       setName("");

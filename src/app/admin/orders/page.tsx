@@ -653,6 +653,12 @@ export default function OrdersPage() {
         birth_date: null,
         notes: null,
         status: payload.status,
+        city: null,
+        category_id: null,
+        category: null,
+        female_category_id: null,
+        female_category: null,
+        gender: null
       };
 
       queryClient.setQueryData<PlayerDTO[]>(

@@ -37,12 +37,12 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to fetch players: ${error.message}`);
     }
 
-    const rows = (data ?? []) as Array<Player & { category: { name: string } | null; female_category: { name: string } | null }>;
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const rows = (data ?? []) as unknown as Row[];
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
     return rows.map((row) => {
-      const cat = row.category;
-      const fcat = row.female_category;
       const { category: _c, female_category: _f, ...rest } = row;
-      return { ...rest, category: cat?.name ?? null, female_category: fcat?.name ?? null };
+      return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
     });
   }
 
@@ -63,9 +63,11 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to fetch player: ${error.message}`);
     }
 
-    const row = data as Player & { category: { name: string } | null; female_category: { name: string } | null };
-    const { category: cat, female_category: fcat, ...rest } = row;
-    return { ...rest, category: cat?.name ?? null, female_category: fcat?.name ?? null };
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**
@@ -92,9 +94,11 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to create player: ${error.message}`);
     }
 
-    const row = data as Player & { category: { name: string } | null; female_category: { name: string } | null };
-    const { category: cat, female_category: fcat, ...rest } = row;
-    return { ...rest, category: cat?.name ?? null, female_category: fcat?.name ?? null } as Player & { category: string | null; female_category: string | null };
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**
@@ -112,9 +116,11 @@ export class PlayersRepository extends BaseRepository {
       throw new Error(`Failed to update player: ${error.message}`);
     }
 
-    const row = data as Player & { category: { name: string } | null; female_category: { name: string } | null };
-    const { category: cat, female_category: fcat, ...rest } = row;
-    return { ...rest, category: cat?.name ?? null, female_category: fcat?.name ?? null };
+    type Row = { category?: { name: string } | { name: string }[] | null; female_category?: { name: string } | { name: string }[] | null; [key: string]: unknown };
+    const row = data as unknown as Row;
+    const pickName = (v: Row["category"]): string | null => (v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null);
+    const { category: _c, female_category: _f, ...rest } = row;
+    return { ...rest, category: pickName(row.category), female_category: pickName(row.female_category) } as Player & { category: string | null; female_category: string | null };
   }
 
   /**
