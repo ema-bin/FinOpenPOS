@@ -64,6 +64,7 @@ export default function PlayersPage() {
   const [newPlayerFirstName, setNewPlayerFirstName] = useState("");
   const [newPlayerLastName, setNewPlayerLastName] = useState("");
   const [newPlayerPhone, setNewPlayerPhone] = useState("");
+  const [newPlayerCity, setNewPlayerCity] = useState("");
   const [newPlayerStatus, setNewPlayerStatus] =
     useState<PlayerStatus>("active");
   const [newPlayerCategoryId, setNewPlayerCategoryId] = useState<number | null>(null);
@@ -135,7 +136,8 @@ export default function PlayersPage() {
       return (
         player.first_name.toLowerCase().includes(term) ||
         (player.last_name ?? "").toLowerCase().includes(term) ||
-        (player.phone ?? "").includes(debouncedSearchTerm)
+        (player.phone ?? "").includes(debouncedSearchTerm) ||
+        (player.city ?? "").toLowerCase().includes(term)
       );
     });
   }, [players, filters.status, debouncedSearchTerm]);
@@ -145,6 +147,7 @@ export default function PlayersPage() {
     setNewPlayerFirstName("");
     setNewPlayerLastName("");
     setNewPlayerPhone("");
+    setNewPlayerCity("");
     setNewPlayerStatus("active");
     setNewPlayerCategoryId(null);
     setNewPlayerGender("");
@@ -158,6 +161,7 @@ export default function PlayersPage() {
         last_name: newPlayerLastName,
         phone: newPlayerPhone,
         status: newPlayerStatus,
+        city: newPlayerCity.trim() || null,
         category_id: newPlayerCategoryId,
         female_category_id: newPlayerGender === "female" ? newPlayerFemaleCategoryId : null,
         gender: newPlayerGender || null,
@@ -169,7 +173,7 @@ export default function PlayersPage() {
       console.error(error);
       // acá podrías setear un toast/error UI si querés
     }
-  }, [newPlayerFirstName, newPlayerLastName, newPlayerPhone, newPlayerStatus, newPlayerCategoryId, newPlayerGender, newPlayerFemaleCategoryId]);
+  }, [newPlayerFirstName, newPlayerLastName, newPlayerPhone, newPlayerCity, newPlayerStatus, newPlayerCategoryId, newPlayerGender, newPlayerFemaleCategoryId]);
 
   const handleEditPlayer = useCallback(async () => {
     if (!selectedPlayerId) return;
@@ -179,6 +183,7 @@ export default function PlayersPage() {
         last_name: newPlayerLastName,
         phone: newPlayerPhone,
         status: newPlayerStatus,
+        city: newPlayerCity.trim() || null,
         category_id: newPlayerCategoryId,
         female_category_id: newPlayerGender === "female" ? newPlayerFemaleCategoryId : null,
         gender: newPlayerGender || null,
@@ -195,6 +200,7 @@ export default function PlayersPage() {
     newPlayerFirstName,
     newPlayerLastName,
     newPlayerPhone,
+    newPlayerCity,
     newPlayerStatus,
     newPlayerCategoryId,
     newPlayerGender,
@@ -314,6 +320,7 @@ export default function PlayersPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Apellido</TableHead>
                 <TableHead>Teléfono</TableHead>
+                <TableHead>Ciudad</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Acciones</TableHead>
@@ -325,6 +332,7 @@ export default function PlayersPage() {
                   <TableCell>{player.first_name}</TableCell>
                   <TableCell>{player.last_name}</TableCell>
                   <TableCell>{player.phone}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{player.city ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {[player.category, player.female_category].filter(Boolean).join(" · ") || "—"}
                   </TableCell>
@@ -341,6 +349,7 @@ export default function PlayersPage() {
                           setNewPlayerFirstName(player.first_name);
                           setNewPlayerLastName(player.last_name ?? "");
                           setNewPlayerPhone(player.phone ?? "");
+                          setNewPlayerCity(player.city ?? "");
                           setNewPlayerStatus(player.status);
                           setNewPlayerCategoryId(player.category_id ?? null);
                           setNewPlayerGender(player.gender ?? "");
@@ -368,7 +377,7 @@ export default function PlayersPage() {
               ))}
               {filteredPlayers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6">
+                  <TableCell colSpan={7} className="text-center py-6">
                     No se encontraron clientes.
                   </TableCell>
                 </TableRow>
@@ -419,11 +428,21 @@ export default function PlayersPage() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone">Telefono</Label>
+              <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={newPlayerPhone}
                 onChange={(e) => setNewPlayerPhone(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city">Ciudad</Label>
+              <Input
+                id="city"
+                value={newPlayerCity}
+                onChange={(e) => setNewPlayerCity(e.target.value)}
+                placeholder="Opcional"
                 className="col-span-3"
               />
             </div>

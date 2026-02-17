@@ -14,7 +14,7 @@ export class PlayersRepository extends BaseRepository {
   async findAll(options: FindPlayersOptions = {}): Promise<(Player & { category: string | null; female_category: string | null })[]> {
     let query = this.supabase
       .from("players")
-      .select("id, first_name, last_name, phone, status, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)");
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)");
 
     if (options.status) {
       if (options.status !== "all") {
@@ -52,7 +52,7 @@ export class PlayersRepository extends BaseRepository {
   async findById(playerId: number): Promise<(Player & { category: string | null; female_category: string | null }) | null> {
     const { data, error } = await this.supabase
       .from("players")
-      .select("id, first_name, last_name, phone, status, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .eq("id", playerId)
       .single();
 
@@ -80,11 +80,12 @@ export class PlayersRepository extends BaseRepository {
         last_name: input.last_name.trim(),
         phone: input.phone,
         status: input.status ?? "active",
+        city: input.city ?? null,
         category_id: input.category_id ?? null,
         female_category_id: input.female_category_id ?? null,
         gender: input.gender ?? null,
       })
-      .select("id, first_name, last_name, phone, status, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .single();
 
     if (error) {
@@ -99,12 +100,12 @@ export class PlayersRepository extends BaseRepository {
   /**
    * Update a player
    */
-  async update(playerId: number, updates: Partial<Pick<Player, "first_name" | "last_name" | "phone" | "status" | "category_id" | "female_category_id" | "gender">>): Promise<Player & { category: string | null; female_category: string | null }> {
+  async update(playerId: number, updates: Partial<Pick<Player, "first_name" | "last_name" | "phone" | "status" | "city" | "category_id" | "female_category_id" | "gender">>): Promise<Player & { category: string | null; female_category: string | null }> {
     const { data, error } = await this.supabase
       .from("players")
       .update(updates)
       .eq("id", playerId)
-      .select("id, first_name, last_name, phone, status, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
+      .select("id, first_name, last_name, phone, status, city, category_id, female_category_id, gender, created_at, category:categories!category_id(name), female_category:categories!female_category_id(name)")
       .single();
 
     if (error) {

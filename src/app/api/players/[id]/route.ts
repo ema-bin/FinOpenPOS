@@ -56,6 +56,10 @@ export async function PATCH(request: Request, { params }: Params) {
       updateFields.phone = body.phone;
     }
 
+    if (body.city !== undefined) {
+      updateFields.city = body.city === null || body.city === '' ? null : String(body.city).trim();
+    }
+
     if (typeof body.status === 'string') {
       if (!['active', 'inactive'].includes(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });

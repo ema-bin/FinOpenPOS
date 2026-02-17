@@ -8,6 +8,7 @@ export interface PlayerDTO {
   last_name: string;
   phone: string | null;
   email: string | null;
+  city: string | null;
   birth_date: string | null;
   notes: string | null;
   status: PlayerStatus;
@@ -24,6 +25,7 @@ export interface PlayerListItem {
   last_name: string;
   phone: string | null;
   email: string | null;
+  city: string | null;
   status: PlayerStatus;
   category_id: number | null;
   category: string | null;

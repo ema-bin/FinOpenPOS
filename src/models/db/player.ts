@@ -9,6 +9,7 @@ export interface Player {
   last_name: string;
   phone: string | null;
   email: string | null;
+  city: string | null;
   birth_date: string | null; // DATE
   notes: string | null;
   status: PlayerStatus;
@@ -24,6 +25,7 @@ export interface CreatePlayerInput {
   last_name: string;
   phone: string | null;
   status?: PlayerStatus;
+  city?: string | null;
   category_id?: number | null;
   female_category_id?: number | null;
   gender?: string | null;
