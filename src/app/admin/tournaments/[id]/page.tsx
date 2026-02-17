@@ -77,7 +77,12 @@ export default function TournamentDetailPage() {
         <CardTitle>
           {tournament.name}{" "}
           <span className="text-xs text-muted-foreground">
-            {tournament.category ?? "Sin categoría"} • {tournament.status}
+            {tournament.is_category_specific && tournament.category
+              ? tournament.category
+              : tournament.category ?? "Sin categoría"}
+            {tournament.is_puntuable && " • Puntuable"}
+            {" • "}
+            {tournament.status}
           </span>
         </CardTitle>
       </CardHeader>

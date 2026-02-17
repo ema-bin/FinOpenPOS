@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS partners;
 DROP TABLE IF EXISTS players;
+DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS product_categories;
 DROP TABLE IF EXISTS payment_methods;
@@ -46,6 +47,31 @@ CREATE TABLE payment_methods (
 );
 
 -- =========================================================
+-- CATEGORIES (categorías estandarizadas: libre y damas)
+-- =========================================================
+-- Lista fija por tipo: libre (Principiantes, 8va...3ra) y damas (4ta-7ma damas)
+
+CREATE TABLE categories (
+    id            SMALLSERIAL PRIMARY KEY,
+    name          VARCHAR(50) NOT NULL UNIQUE,
+    type          VARCHAR(10) NOT NULL CHECK (type IN ('libre', 'damas')),
+    display_order SMALLINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO categories (name, type, display_order) VALUES
+  ('Principiantes', 'libre', 1),
+  ('8va', 'libre', 2),
+  ('7ma', 'libre', 3),
+  ('6ta', 'libre', 4),
+  ('5ta', 'libre', 5),
+  ('4ta', 'libre', 6),
+  ('3ra', 'libre', 7),
+  ('4ta damas', 'damas', 1),
+  ('5ta damas', 'damas', 2),
+  ('6ta damas', 'damas', 3),
+  ('7ma damas', 'damas', 4);
+
+-- =========================================================
 -- PLAYERS (jugadores / clientes del buffet / alumnos)
 -- =========================================================
 -- Versión unificada de "personas"
@@ -53,25 +79,26 @@ CREATE TABLE payment_methods (
 -- El resto opcional
 
 CREATE TABLE players (
-    id               BIGSERIAL PRIMARY KEY,
-    user_uid         UUID NOT NULL,
+    id                  BIGSERIAL PRIMARY KEY,
+    user_uid            UUID NOT NULL,
 
-    first_name       VARCHAR(255) NOT NULL,
-    last_name        VARCHAR(255) NOT NULL,
-    phone            VARCHAR(30)  NOT NULL,
+    first_name          VARCHAR(255) NOT NULL,
+    last_name           VARCHAR(255) NOT NULL,
+    phone               VARCHAR(30)  NOT NULL,
 
-    email            VARCHAR(255),
-    gender           VARCHAR(20),
-    city             VARCHAR(100),
+    email               VARCHAR(255),
+    gender              VARCHAR(20),
+    city                VARCHAR(100),
 
-    category         VARCHAR(50),   -- ej: "4ta", "5ta"
-    female_category  VARCHAR(50),   -- ej: "7ma" femenina si aplica
-    notes            TEXT,
+    category_id         SMALLINT REFERENCES categories(id),
+    female_category_id  SMALLINT REFERENCES categories(id),
 
-    status           VARCHAR(20) NOT NULL DEFAULT 'active'
-                     CHECK (status IN ('active', 'inactive')),
+    notes               TEXT,
 
-    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    status              VARCHAR(20) NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active', 'inactive')),
+
+    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =========================================================
@@ -486,7 +513,9 @@ CREATE TABLE tournaments (
     user_uid    UUID NOT NULL,
     name        VARCHAR(100) NOT NULL,
     description TEXT,
-    category    VARCHAR(50),      -- ej: "7ma", "Mixto"
+    category_id SMALLINT REFERENCES categories(id),  -- categoría del torneo si is_category_specific
+    is_puntuable        BOOLEAN NOT NULL DEFAULT FALSE,  -- si suma para ranking/puntos
+    is_category_specific BOOLEAN NOT NULL DEFAULT FALSE,  -- si el torneo es de una categoría específica
     start_date  DATE,
     end_date    DATE,
     status      VARCHAR(20) NOT NULL DEFAULT 'draft'

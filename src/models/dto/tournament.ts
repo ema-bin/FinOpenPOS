@@ -9,7 +9,10 @@ export interface TournamentDTO {
   id: number;
   name: string;
   description: string | null;
-  category: string | null;
+  category_id: number | null;
+  category: string | null; // nombre desde join, para mostrar
+  is_puntuable: boolean;
+  is_category_specific: boolean;
   status: TournamentStatus;
   has_super_tiebreak: boolean;
   match_duration: number;
@@ -23,7 +26,10 @@ export interface TournamentListItem {
   id: number;
   name: string;
   description: string | null;
+  category_id: number | null;
   category: string | null;
+  is_puntuable: boolean;
+  is_category_specific: boolean;
   status: TournamentStatus;
 }
 

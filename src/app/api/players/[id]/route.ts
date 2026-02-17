@@ -63,6 +63,16 @@ export async function PATCH(request: Request, { params }: Params) {
       updateFields.status = body.status;
     }
 
+    if (body.category_id !== undefined) {
+      updateFields.category_id = body.category_id === null || body.category_id === '' ? null : Number(body.category_id);
+    }
+    if (body.female_category_id !== undefined) {
+      updateFields.female_category_id = body.female_category_id === null || body.female_category_id === '' ? null : Number(body.female_category_id);
+    }
+    if (body.gender !== undefined) {
+      updateFields.gender = body.gender === null || body.gender === '' ? null : String(body.gender);
+    }
+
     if (Object.keys(updateFields).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }

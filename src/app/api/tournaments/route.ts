@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     const repos = await createRepositories();
     const body = await request.json();
-    const { name, description, category, start_date, end_date, has_super_tiebreak, match_duration, registration_fee } = body;
+    const { name, description, category_id, is_puntuable, is_category_specific, start_date, end_date, has_super_tiebreak, match_duration, registration_fee } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -63,7 +63,9 @@ export async function POST(request: Request) {
     const tournament = await repos.tournaments.create({
       name: name.trim(),
       description: description ?? null,
-      category: category ?? null,
+      category_id: category_id ?? null,
+      is_puntuable: is_puntuable ?? false,
+      is_category_specific: is_category_specific ?? false,
       start_date: normalizeDate(start_date),
       end_date: normalizeDate(end_date),
       has_super_tiebreak: has_super_tiebreak ?? false,

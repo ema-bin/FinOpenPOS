@@ -10,7 +10,9 @@ export interface Tournament {
   user_uid: string;
   name: string;
   description: string | null;
-  category: string | null;
+  category_id: number | null;
+  is_puntuable: boolean;
+  is_category_specific: boolean;
   start_date: string | null; // DATE
   end_date: string | null; // DATE
   status: TournamentStatus;
@@ -105,7 +107,9 @@ export interface TournamentPlayoff {
 export interface CreateTournamentInput {
   name: string;
   description?: string | null;
-  category?: string | null;
+  category_id?: number | null;
+  is_puntuable?: boolean;
+  is_category_specific?: boolean;
   start_date?: string | null;
   end_date?: string | null;
   has_super_tiebreak?: boolean;

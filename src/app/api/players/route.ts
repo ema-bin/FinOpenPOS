@@ -66,6 +66,9 @@ export async function POST(request: Request) {
       last_name,
       phone: body.phone ?? null,
       status: body.status === 'inactive' ? 'inactive' : 'active',
+      category_id: body.category_id ?? null,
+      female_category_id: body.female_category_id ?? null,
+      gender: body.gender ?? null,
     });
 
     return NextResponse.json(player, { status: 201 });

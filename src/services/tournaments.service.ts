@@ -85,7 +85,9 @@ class TournamentsService {
     updates: Partial<{
       name: string;
       description: string | null;
-      category: string | null;
+      category_id: number | null;
+      is_puntuable: boolean;
+      is_category_specific: boolean;
       start_date: string | null;
       end_date: string | null;
       has_super_tiebreak: boolean;
