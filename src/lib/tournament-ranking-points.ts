@@ -79,6 +79,13 @@ export async function computeAndSaveTournamentRankingPoints(
   if (pErr) throw new Error(`Failed to fetch playoffs: ${pErr.message}`);
   const playoffRows = playoffs ?? [];
 
+  type PlayoffMatchRow = {
+    id: number;
+    team1_id: number | null;
+    team2_id: number | null;
+    team1_sets: number;
+    team2_sets: number;
+  };
   if (playoffRows.length > 0) {
     const matchIds = playoffRows.map((r: { match_id: number }) => r.match_id);
     const { data: matches, error: mErr } = await supabase
@@ -87,10 +94,8 @@ export async function computeAndSaveTournamentRankingPoints(
       .in("id", matchIds)
       .eq("status", "finished");
     if (mErr) throw new Error(`Failed to fetch playoff matches: ${mErr.message}`);
-    const matchList = matches ?? [];
-    const matchById = new Map(
-      matchList.map((m: { id: number }) => [m.id, m])
-    );
+    const matchList = (matches ?? []) as PlayoffMatchRow[];
+    const matchById = new Map(matchList.map((m) => [m.id, m]));
 
     for (const row of playoffRows) {
       const match = matchById.get(row.match_id);

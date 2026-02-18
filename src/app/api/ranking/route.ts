@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const playerIds = [...new Set(ranking.map((r) => r.player_id))];
+    const playerIds = Array.from(new Set(ranking.map((r) => r.player_id)));
     const { data: players, error: playersError } = await supabase
       .from("players")
       .select("id, first_name, last_name")
