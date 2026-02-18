@@ -1,6 +1,6 @@
 /**
  * Cálculo de puntos de ranking al finalizar un torneo puntuable.
- * Reglas: 100 campeón, 80 final, 60 semi, 40 4tos, 20 8vos/16avos, 10 grupos (no clasificó a playoffs).
+ * Las reglas de puntos por ronda se leen de la tabla tournament_ranking_point_rules.
  * Puntos son por jugador (cada uno de la pareja); suplentes no suman.
  */
 
@@ -8,20 +8,36 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreatePlayerTournamentPointInput } from "@/models/db/player-tournament-points";
 import type { RoundReached } from "@/models/db/player-tournament-points";
 
-const ROUND_POINTS: Record<string, number> = {
-  "16avos": 20,
-  octavos: 20,
-  cuartos: 40,
-  semifinal: 60,
-  final: 80,
+const DEFAULT_POINTS: Record<string, number> = {
   champion: 100,
+  final: 80,
+  semifinal: 60,
+  cuartos: 40,
+  octavos: 20,
+  "16avos": 20,
   groups: 10,
 };
+
+async function getRoundPointsMap(
+  supabase: SupabaseClient
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("tournament_ranking_point_rules")
+    .select("round_reached, points");
+  if (error) throw new Error(`Failed to fetch ranking point rules: ${error.message}`);
+  const map: Record<string, number> = { ...DEFAULT_POINTS };
+  for (const row of data ?? []) {
+    map[row.round_reached] = row.points;
+  }
+  return map;
+}
 
 export async function computeAndSaveTournamentRankingPoints(
   supabase: SupabaseClient,
   tournamentId: number
 ): Promise<{ saved: number }> {
+  const roundPoints = await getRoundPointsMap(supabase);
+
   const { data: tournament, error: tErr } = await supabase
     .from("tournaments")
     .select("id, is_puntuable, category_id, start_date, end_date")
@@ -51,9 +67,9 @@ export async function computeAndSaveTournamentRankingPoints(
     { points: number; round_reached: RoundReached }
   >();
 
-  // Initialize all teams as "groups" (10 pts). Playoff losers will overwrite.
+  const groupsPoints = roundPoints["groups"] ?? 10;
   for (const t of teamList) {
-    teamToPoints.set(t.id, { points: 10, round_reached: "groups" });
+    teamToPoints.set(t.id, { points: groupsPoints, round_reached: "groups" });
   }
 
   const { data: playoffs, error: pErr } = await supabase
@@ -80,7 +96,7 @@ export async function computeAndSaveTournamentRankingPoints(
       const match = matchById.get(row.match_id);
       if (!match || match.team1_id == null || match.team2_id == null) continue;
       const round = row.round as string;
-      const pts = ROUND_POINTS[round] ?? 20;
+      const pts = roundPoints[round] ?? 20;
       const team1Sets = match.team1_sets ?? 0;
       const team2Sets = match.team2_sets ?? 0;
       const winnerId =
@@ -89,14 +105,16 @@ export async function computeAndSaveTournamentRankingPoints(
         team1Sets > team2Sets ? match.team2_id : match.team1_id;
 
       if (round === "final") {
+        const championPts = roundPoints["champion"] ?? 100;
+        const finalPts = roundPoints["final"] ?? 80;
         if (teamIds.has(winnerId)) {
           teamToPoints.set(winnerId, {
-            points: 100,
+            points: championPts,
             round_reached: "champion",
           });
         }
         if (teamIds.has(loserId)) {
-          teamToPoints.set(loserId, { points: 80, round_reached: "final" });
+          teamToPoints.set(loserId, { points: finalPts, round_reached: "final" });
         }
       } else {
         if (teamIds.has(loserId)) {

@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS tournament_matches;
 DROP TABLE IF EXISTS tournament_group_teams;
 DROP TABLE IF EXISTS tournament_groups;
 DROP TABLE IF EXISTS player_tournament_points;
+DROP TABLE IF EXISTS tournament_ranking_point_rules;
 DROP TABLE IF EXISTS tournament_teams;
 DROP TABLE IF EXISTS tournaments;
 
@@ -738,6 +739,28 @@ CREATE TABLE tournament_playoffs (
 
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =========================================================
+-- TOURNAMENT_RANKING_POINT_RULES (puntos por ronda, configurables)
+-- =========================================================
+
+CREATE TABLE tournament_ranking_point_rules (
+    id              SMALLSERIAL PRIMARY KEY,
+    round_reached   VARCHAR(20) NOT NULL UNIQUE
+                    CHECK (round_reached IN ('groups', '16avos', 'octavos', 'cuartos', 'semifinal', 'final', 'champion')),
+    points          SMALLINT NOT NULL CHECK (points >= 0),
+    display_order   SMALLINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO tournament_ranking_point_rules (round_reached, points, display_order) VALUES
+  ('champion',  100, 7),
+  ('final',      80, 6),
+  ('semifinal',  60, 5),
+  ('cuartos',    40, 4),
+  ('octavos',    20, 3),
+  ('16avos',     20, 2),
+  ('groups',     10, 1)
+ON CONFLICT (round_reached) DO NOTHING;
 
 -- =========================================================
 -- PLAYER_TOURNAMENT_POINTS (ranking anual puntuable por categoría)

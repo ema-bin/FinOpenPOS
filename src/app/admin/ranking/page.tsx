@@ -25,8 +25,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, MedalIcon } from "lucide-react";
+import { Loader2Icon, MedalIcon, Settings2Icon } from "lucide-react";
 import type { Category } from "@/models/db/category";
+import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
+
+const ROUND_LABELS: Record<string, string> = {
+  champion: "Campeón",
+  final: "Final",
+  semifinal: "Semifinal",
+  cuartos: "Cuartos",
+  octavos: "Octavos",
+  "16avos": "16avos",
+  groups: "Grupos (no clasifica)",
+};
 
 type RankingRow = {
   position: number;
@@ -85,6 +96,18 @@ export default function RankingPage() {
   const effectiveCategoryId = selectedCategoryId ?? categories[0]?.id ?? null;
   const categoryName =
     categories.find((c) => c.id === effectiveCategoryId)?.name ?? "Categoría";
+
+  const { data: pointRules = [], isLoading: loadingRules } = useQuery<
+    TournamentRankingPointRule[]
+  >({
+    queryKey: ["ranking-point-rules"],
+    queryFn: async () => {
+      const res = await fetch("/api/ranking-point-rules");
+      if (!res.ok) throw new Error("Failed to fetch rules");
+      return res.json();
+    },
+    staleTime: 1000 * 60,
+  });
 
   return (
     <div className="space-y-4">
@@ -164,6 +187,42 @@ export default function RankingPage() {
               No hay puntos registrados para {categoryName} en {currentYear}.
               Finalizá torneos puntuables para que se carguen aquí.
             </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings2Icon className="h-5 w-5" />
+            Puntos por ronda
+          </CardTitle>
+          <CardDescription>
+            Puntos que se asignan por ronda al finalizar un torneo puntuable (solo consulta; la configuración se gestiona desde la base de datos).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingRules ? (
+            <div className="flex justify-center py-6">
+              <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ronda</TableHead>
+                  <TableHead className="w-32 text-right">Puntos</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(pointRules as TournamentRankingPointRule[]).map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>{ROUND_LABELS[r.round_reached] ?? r.round_reached}</TableCell>
+                    <TableCell className="text-right font-medium">{r.points}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
