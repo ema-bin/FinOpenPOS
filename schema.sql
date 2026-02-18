@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS tournament_playoffs;
 DROP TABLE IF EXISTS tournament_matches;
 DROP TABLE IF EXISTS tournament_group_teams;
 DROP TABLE IF EXISTS tournament_groups;
+DROP TABLE IF EXISTS player_tournament_points;
 DROP TABLE IF EXISTS tournament_teams;
 DROP TABLE IF EXISTS tournaments;
 
@@ -737,3 +738,25 @@ CREATE TABLE tournament_playoffs (
 
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =========================================================
+-- PLAYER_TOURNAMENT_POINTS (ranking anual puntuable por categoría)
+-- =========================================================
+-- Puntos por jugador por torneo finalizado (torneos puntuables).
+-- La categoría es la del torneo; el año se toma del torneo para el ranking anual.
+
+CREATE TABLE player_tournament_points (
+    id              BIGSERIAL PRIMARY KEY,
+    tournament_id   BIGINT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    category_id     SMALLINT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    points          SMALLINT NOT NULL CHECK (points >= 0),
+    round_reached   VARCHAR(20) NOT NULL
+                    CHECK (round_reached IN ('groups', '16avos', 'octavos', 'cuartos', 'semifinal', 'final', 'champion')),
+    year            SMALLINT NOT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tournament_id, player_id)
+);
+
+CREATE INDEX idx_player_tournament_points_category_year ON player_tournament_points(category_id, year);
+CREATE INDEX idx_player_tournament_points_player_year ON player_tournament_points(player_id, year);

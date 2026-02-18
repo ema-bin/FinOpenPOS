@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { computeAndSaveTournamentRankingPoints } from "@/lib/tournament-ranking-points";
 
 type RouteParams = { params: { id: string } };
 
@@ -95,6 +96,17 @@ export async function POST(_req: Request, { params }: RouteParams) {
       console.error("Error finishing tournament:", updateError);
       return NextResponse.json(
         { error: "Failed to finish tournament" },
+        { status: 500 }
+      );
+    }
+
+    // Si el torneo es puntuable, calcular y guardar puntos de ranking por jugador (categoría del torneo, año en curso).
+    try {
+      await computeAndSaveTournamentRankingPoints(supabase, tournamentId);
+    } catch (rankErr) {
+      console.error("Error saving ranking points:", rankErr);
+      return NextResponse.json(
+        { error: "Torneo finalizado pero no se pudieron guardar los puntos de ranking. Contactá al administrador." },
         { status: 500 }
       );
     }
