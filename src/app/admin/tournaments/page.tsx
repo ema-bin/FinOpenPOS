@@ -42,6 +42,7 @@ export default function TournamentsPage() {
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isPuntuable, setIsPuntuable] = useState(false);
+  const [isSuma13Damas, setIsSuma13Damas] = useState(false);
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["categories", "libre"],
@@ -52,6 +53,17 @@ export default function TournamentsPage() {
     },
     staleTime: 1000 * 60 * 10,
   });
+  const { data: categoriesDamas = [] } = useQuery<Category[]>({
+    queryKey: ["categories", "damas"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories?type=damas");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const suma13Category = categoriesDamas.find((c) => c.name === "Suma 13 damas");
+
   const [isCategorySpecific, setIsCategorySpecific] = useState(false);
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
@@ -111,8 +123,9 @@ export default function TournamentsPage() {
         start_date: "",
         end_date: "",
         description: null,
-        category_id: categoryId ?? null,
-        is_category_specific: isCategorySpecific,
+        category_id: isSuma13Damas ? (suma13Category?.id ?? null) : (isCategorySpecific ? categoryId ?? null : null),
+        is_category_specific: isCategorySpecific && !isSuma13Damas,
+        is_suma_13_damas: isSuma13Damas,
         is_puntuable: isPuntuable,
         has_super_tiebreak: hasSuperTiebreak,
         match_duration: matchDuration,
@@ -123,6 +136,7 @@ export default function TournamentsPage() {
       setCategoryId(null);
       setIsPuntuable(false);
       setIsCategorySpecific(false);
+      setIsSuma13Damas(false);
       setHasSuperTiebreak(false);
       setMatchDuration(60);
       setRegistrationFee(0);
@@ -143,6 +157,7 @@ export default function TournamentsPage() {
       setCategoryId(full.category_id ?? null);
       setIsPuntuable(full.is_puntuable ?? false);
       setIsCategorySpecific(full.is_category_specific ?? false);
+      setIsSuma13Damas(full.is_suma_13_damas ?? false);
       setMatchDuration(full.match_duration ?? 60);
       setHasSuperTiebreak(full.has_super_tiebreak ?? false);
       setRegistrationFee(full.registration_fee ?? 0);
@@ -158,15 +173,16 @@ export default function TournamentsPage() {
       setUpdating(true);
       const updated = await tournamentsService.update(tournamentToEdit.id, {
         name: name.trim(),
-        category_id: isCategorySpecific ? categoryId : null,
+        category_id: isSuma13Damas ? (suma13Category?.id ?? null) : (isCategorySpecific ? categoryId : null),
         is_puntuable: isPuntuable,
-        is_category_specific: isCategorySpecific,
+        is_category_specific: isCategorySpecific && !isSuma13Damas,
+        is_suma_13_damas: isSuma13Damas,
         match_duration: matchDuration,
         has_super_tiebreak: hasSuperTiebreak,
         registration_fee: registrationFee,
       });
       setTournaments((prev) =>
-        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category_id: updated.category_id, category: updated.category, is_puntuable: updated.is_puntuable, is_category_specific: updated.is_category_specific } : t))
+        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category_id: updated.category_id, category: updated.category, is_puntuable: updated.is_puntuable, is_category_specific: updated.is_category_specific, is_suma_13_damas: updated.is_suma_13_damas } : t))
       );
       setEditDialogOpen(false);
       setTournamentToEdit(null);
@@ -293,12 +309,38 @@ export default function TournamentsPage() {
             </div>
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
-                <Label htmlFor="create-category-specific">De categoría específica</Label>
+                <Label htmlFor="create-suma-13">Suma 13 damas</Label>
+                <p className="text-xs text-muted-foreground">Ambas mujeres; categorías damas suman ≥ 13</p>
+              </div>
+              <Switch
+                id="create-suma-13"
+                checked={isSuma13Damas}
+                onCheckedChange={(checked) => {
+                  setIsSuma13Damas(checked);
+                  if (checked) setCategoryId(suma13Category?.id ?? null);
+                  else if (!isCategorySpecific) setCategoryId(null);
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="create-category-specific">De categoría específica (libre)</Label>
                 <p className="text-xs text-muted-foreground">Restringir a una categoría</p>
               </div>
-              <Switch id="create-category-specific" checked={isCategorySpecific} onCheckedChange={setIsCategorySpecific} />
+              <Switch
+                id="create-category-specific"
+                checked={isCategorySpecific}
+                onCheckedChange={(checked) => {
+                  setIsCategorySpecific(checked);
+                  if (!checked && !isSuma13Damas) setCategoryId(null);
+                }}
+                disabled={isSuma13Damas}
+              />
             </div>
-            {isCategorySpecific && (
+            {isSuma13Damas && (
+              <p className="text-sm text-muted-foreground">Categoría del torneo: Suma 13 damas (para ranking)</p>
+            )}
+            {isCategorySpecific && !isSuma13Damas && (
               <div className="space-y-1">
                 <Label>Categoría</Label>
                 <Select value={categoryId != null ? String(categoryId) : "_"} onValueChange={(v) => setCategoryId(v === "_" ? null : Number(v))}>
@@ -379,6 +421,7 @@ export default function TournamentsPage() {
             setCategoryId(null);
             setIsPuntuable(false);
             setIsCategorySpecific(false);
+            setIsSuma13Damas(false);
             setMatchDuration(60);
             setHasSuperTiebreak(false);
             setRegistrationFee(0);
@@ -398,6 +441,61 @@ export default function TournamentsPage() {
                 placeholder="Ej: Torneo 7ma Mixto"
               />
             </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-puntuable">Puntuable</Label>
+                <p className="text-xs text-muted-foreground">Si suma para ranking</p>
+              </div>
+              <Switch id="edit-puntuable" checked={isPuntuable} onCheckedChange={setIsPuntuable} />
+            </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-suma-13">Suma 13 damas</Label>
+                <p className="text-xs text-muted-foreground">Ambas mujeres; categorías damas suman ≥ 13</p>
+              </div>
+              <Switch
+                id="edit-suma-13"
+                checked={isSuma13Damas}
+                onCheckedChange={(checked) => {
+                  setIsSuma13Damas(checked);
+                  if (checked) setCategoryId(suma13Category?.id ?? null);
+                  else if (!isCategorySpecific) setCategoryId(null);
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between space-x-2 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-category-specific">De categoría específica (libre)</Label>
+                <p className="text-xs text-muted-foreground">Restringir a una categoría</p>
+              </div>
+              <Switch
+                id="edit-category-specific"
+                checked={isCategorySpecific}
+                onCheckedChange={(checked) => {
+                  setIsCategorySpecific(checked);
+                  if (!checked && !isSuma13Damas) setCategoryId(null);
+                }}
+                disabled={isSuma13Damas}
+              />
+            </div>
+            {isSuma13Damas && (
+              <p className="text-sm text-muted-foreground">Categoría del torneo: Suma 13 damas (para ranking)</p>
+            )}
+            {isCategorySpecific && !isSuma13Damas && (
+              <div className="space-y-1">
+                <Label>Categoría</Label>
+                <Select value={categoryId != null ? String(categoryId) : "_"} onValueChange={(v) => setCategoryId(v === "_" ? null : Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Duración del partido (minutos)</Label>
               <Input

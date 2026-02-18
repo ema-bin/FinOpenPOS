@@ -27,4 +27,24 @@ export class CategoriesRepository {
     }
     return map;
   }
+
+  /**
+   * Get sum_value for each category id (damas: 4ta=4, 5ta=5, 6ta=6, 7ma=7).
+   * Used for "suma 13 damas" eligibility. Returns a Map: categoryId -> sum_value (undefined if null).
+   */
+  async getSumValuesByIds(ids: number[]): Promise<Map<number, number>> {
+    if (ids.length === 0) return new Map();
+    const unique = Array.from(new Set(ids));
+    const { data, error } = await this.supabase
+      .from("categories")
+      .select("id, sum_value")
+      .in("id", unique);
+    if (error) throw new Error(`Failed to fetch categories: ${error.message}`);
+    const map = new Map<number, number>();
+    const rows = (data ?? []) as { id: number; sum_value: number | null }[];
+    for (const row of rows) {
+      if (row.sum_value != null) map.set(row.id, row.sum_value);
+    }
+    return map;
+  }
 }
