@@ -18,7 +18,6 @@ import {
   ShoppingCartIcon,
   CalendarIcon,
   TrophyIcon,
-  MedalIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -172,17 +171,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           >
             <TrophyIcon className="h-4 w-4" />
             Torneos
-          </Link>
-          <Link
-            href="/admin/ranking"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname?.startsWith("/admin/ranking")
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <MedalIcon className="h-4 w-4" />
-            Ranking
           </Link>
         </nav>
       </header>
