@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { validateCategoryEligibility } from "@/lib/tournament-category-eligibility";
 
 type RouteParams = { params: { id: string } };
 
@@ -54,6 +55,26 @@ export async function POST(req: Request, { params }: RouteParams) {
         { error: "Cannot add teams once registration is closed" },
         { status: 400 }
       );
+    }
+
+    const player1 = await repos.players.findById(player1_id);
+    const player2 = await repos.players.findById(player2_id);
+    if (!player1) {
+      return NextResponse.json({ error: "Jugador 1 no encontrado" }, { status: 400 });
+    }
+    if (!player2) {
+      return NextResponse.json({ error: "Jugador 2 no encontrado" }, { status: 400 });
+    }
+
+    // Puntuable + category-specific: players must have same or lower category than tournament
+    const eligibility = await validateCategoryEligibility(
+      tournament,
+      player1 ?? null,
+      player2 ?? null,
+      repos.categories
+    );
+    if (!eligibility.ok) {
+      return NextResponse.json({ error: eligibility.error }, { status: 400 });
     }
 
     // Validate players are not already in another team
