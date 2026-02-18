@@ -60,9 +60,9 @@ export default function RankingPage() {
   const { data: categories = [], isLoading: loadingCategories } = useQuery<
     Category[]
   >({
-    queryKey: ["categories", "libre"],
+    queryKey: ["categories", "all"],
     queryFn: async () => {
-      const res = await fetch("/api/categories?type=libre");
+      const res = await fetch("/api/categories");
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },

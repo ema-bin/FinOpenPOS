@@ -285,8 +285,8 @@ export default function PlayoffsTab({
                   variant="outline"
                   size="sm"
                   onClick={handleSimulateResults}
-                  disabled={true}
-                  hidden={true}
+                  disabled={false}
+                  hidden={false}
                 >
                   {simulatingResults ? (
                     <>

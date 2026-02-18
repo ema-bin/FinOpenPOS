@@ -57,21 +57,24 @@ CREATE TABLE categories (
     id            SMALLSERIAL PRIMARY KEY,
     name          VARCHAR(50) NOT NULL UNIQUE,
     type          VARCHAR(10) NOT NULL CHECK (type IN ('libre', 'damas')),
-    display_order SMALLINT NOT NULL DEFAULT 0
+    display_order SMALLINT NOT NULL DEFAULT 0,
+    sum_value     SMALLINT,  -- para damas: valor para suma 13 (4ta=4, 5ta=5, 6ta=6, 7ma=7)
+    CONSTRAINT categories_sum_value_range CHECK (sum_value IS NULL OR (sum_value >= 1 AND sum_value <= 10))
 );
 
-INSERT INTO categories (name, type, display_order) VALUES
-  ('Principiantes', 'libre', 1),
-  ('8va', 'libre', 2),
-  ('7ma', 'libre', 3),
-  ('6ta', 'libre', 4),
-  ('5ta', 'libre', 5),
-  ('4ta', 'libre', 6),
-  ('3ra', 'libre', 7),
-  ('4ta damas', 'damas', 1),
-  ('5ta damas', 'damas', 2),
-  ('6ta damas', 'damas', 3),
-  ('7ma damas', 'damas', 4);
+INSERT INTO categories (name, type, display_order, sum_value) VALUES
+  ('Principiantes', 'libre', 1, NULL),
+  ('8va', 'libre', 2, NULL),
+  ('7ma', 'libre', 3, NULL),
+  ('6ta', 'libre', 4, NULL),
+  ('5ta', 'libre', 5, NULL),
+  ('4ta', 'libre', 6, NULL),
+  ('3ra', 'libre', 7, NULL),
+  ('4ta damas', 'damas', 1, 4),
+  ('5ta damas', 'damas', 2, 5),
+  ('6ta damas', 'damas', 3, 6),
+  ('7ma damas', 'damas', 4, 7),
+  ('Suma 13 damas', 'damas', 5, NULL);
 
 -- =========================================================
 -- PLAYERS (jugadores / clientes del buffet / alumnos)
@@ -515,9 +518,10 @@ CREATE TABLE tournaments (
     user_uid    UUID NOT NULL,
     name        VARCHAR(100) NOT NULL,
     description TEXT,
-    category_id SMALLINT REFERENCES categories(id),  -- categoría del torneo si is_category_specific
+    category_id SMALLINT REFERENCES categories(id),  -- categoría del torneo si is_category_specific o is_suma_13_damas
     is_puntuable        BOOLEAN NOT NULL DEFAULT FALSE,  -- si suma para ranking/puntos
-    is_category_specific BOOLEAN NOT NULL DEFAULT FALSE,  -- si el torneo es de una categoría específica
+    is_category_specific BOOLEAN NOT NULL DEFAULT FALSE,  -- si el torneo es de una categoría específica (libre)
+    is_suma_13_damas    BOOLEAN NOT NULL DEFAULT FALSE,  -- torneo damas: ambas mujeres y categorías suman >= 13
     start_date  DATE,
     end_date    DATE,
     status      VARCHAR(20) NOT NULL DEFAULT 'draft'

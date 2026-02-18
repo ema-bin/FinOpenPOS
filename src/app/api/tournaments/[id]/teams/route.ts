@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { validateCategoryEligibility } from "@/lib/tournament-category-eligibility";
+import { validateCategoryEligibility, validateSuma13DamasEligibility } from "@/lib/tournament-category-eligibility";
 
 type RouteParams = { params: { id: string } };
 
@@ -75,6 +75,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
     if (!eligibility.ok) {
       return NextResponse.json({ error: eligibility.error }, { status: 400 });
+    }
+
+    // Suma 13 damas: both women, both with damas category, sum of categories >= 13
+    const suma13Eligibility = await validateSuma13DamasEligibility(
+      tournament,
+      player1 ?? null,
+      player2 ?? null,
+      repos.categories
+    );
+    if (!suma13Eligibility.ok) {
+      return NextResponse.json({ error: suma13Eligibility.error }, { status: 400 });
     }
 
     // Validate players are not already in another team

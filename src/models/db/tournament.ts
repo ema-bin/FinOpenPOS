@@ -13,6 +13,7 @@ export interface Tournament {
   category_id: number | null;
   is_puntuable: boolean;
   is_category_specific: boolean;
+  is_suma_13_damas: boolean;
   start_date: string | null; // DATE
   end_date: string | null; // DATE
   status: TournamentStatus;
@@ -110,6 +111,7 @@ export interface CreateTournamentInput {
   category_id?: number | null;
   is_puntuable?: boolean;
   is_category_specific?: boolean;
+  is_suma_13_damas?: boolean;
   start_date?: string | null;
   end_date?: string | null;
   has_super_tiebreak?: boolean;

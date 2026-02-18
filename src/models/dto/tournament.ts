@@ -13,6 +13,7 @@ export interface TournamentDTO {
   category: string | null; // nombre desde join, para mostrar
   is_puntuable: boolean;
   is_category_specific: boolean;
+  is_suma_13_damas: boolean;
   status: TournamentStatus;
   has_super_tiebreak: boolean;
   match_duration: number;
@@ -30,6 +31,7 @@ export interface TournamentListItem {
   category: string | null;
   is_puntuable: boolean;
   is_category_specific: boolean;
+  is_suma_13_damas: boolean;
   status: TournamentStatus;
 }
 
