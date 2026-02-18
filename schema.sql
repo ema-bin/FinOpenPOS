@@ -8,6 +8,8 @@ DROP TABLE IF EXISTS tournament_playoffs;
 DROP TABLE IF EXISTS tournament_matches;
 DROP TABLE IF EXISTS tournament_group_teams;
 DROP TABLE IF EXISTS tournament_groups;
+DROP TABLE IF EXISTS player_tournament_points;
+DROP TABLE IF EXISTS tournament_ranking_point_rules;
 DROP TABLE IF EXISTS tournament_teams;
 DROP TABLE IF EXISTS tournaments;
 
@@ -737,3 +739,47 @@ CREATE TABLE tournament_playoffs (
 
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =========================================================
+-- TOURNAMENT_RANKING_POINT_RULES (puntos por ronda, configurables)
+-- =========================================================
+
+CREATE TABLE tournament_ranking_point_rules (
+    id              SMALLSERIAL PRIMARY KEY,
+    round_reached   VARCHAR(20) NOT NULL UNIQUE
+                    CHECK (round_reached IN ('groups', '16avos', 'octavos', 'cuartos', 'semifinal', 'final', 'champion')),
+    points          SMALLINT NOT NULL CHECK (points >= 0),
+    display_order   SMALLINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO tournament_ranking_point_rules (round_reached, points, display_order) VALUES
+  ('champion',  100, 7),
+  ('final',      80, 6),
+  ('semifinal',  60, 5),
+  ('cuartos',    40, 4),
+  ('octavos',    20, 3),
+  ('16avos',     20, 2),
+  ('groups',     10, 1)
+ON CONFLICT (round_reached) DO NOTHING;
+
+-- =========================================================
+-- PLAYER_TOURNAMENT_POINTS (ranking anual puntuable por categoría)
+-- =========================================================
+-- Puntos por jugador por torneo finalizado (torneos puntuables).
+-- La categoría es la del torneo; el año se toma del torneo para el ranking anual.
+
+CREATE TABLE player_tournament_points (
+    id              BIGSERIAL PRIMARY KEY,
+    tournament_id   BIGINT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    category_id     SMALLINT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    points          SMALLINT NOT NULL CHECK (points >= 0),
+    round_reached   VARCHAR(20) NOT NULL
+                    CHECK (round_reached IN ('groups', '16avos', 'octavos', 'cuartos', 'semifinal', 'final', 'champion')),
+    year            SMALLINT NOT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tournament_id, player_id)
+);
+
+CREATE INDEX idx_player_tournament_points_category_year ON player_tournament_points(category_id, year);
+CREATE INDEX idx_player_tournament_points_player_year ON player_tournament_points(player_id, year);
