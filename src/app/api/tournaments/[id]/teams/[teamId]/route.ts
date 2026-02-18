@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { validateCategoryEligibility } from "@/lib/tournament-category-eligibility";
 
 type RouteParams = { params: { id: string; teamId: string } };
 
@@ -80,6 +81,19 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           { error: "Los jugadores deben ser diferentes" },
           { status: 400 }
         );
+      }
+
+      // Puntuable + category-specific: both players must have same or lower category than tournament
+      const finalPlayer1 = await repos.players.findById(finalPlayer1Id);
+      const finalPlayer2 = await repos.players.findById(finalPlayer2Id);
+      const eligibility = await validateCategoryEligibility(
+        tournament,
+        finalPlayer1 ?? null,
+        finalPlayer2 ?? null,
+        repos.categories
+      );
+      if (!eligibility.ok) {
+        return NextResponse.json({ error: eligibility.error }, { status: 400 });
       }
     }
 
