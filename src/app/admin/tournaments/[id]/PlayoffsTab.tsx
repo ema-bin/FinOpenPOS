@@ -460,6 +460,8 @@ export default function PlayoffsTab({
                   onSaved={() => {
                     load();
                   }}
+                  showShareWhenFinished
+                  instanceLabel={getRoundLabel(row.round)}
                 />
               ) : match.team1 || match.team2 ? (
                 // Es un bye: mostrar el equipo con bye con el mismo formato que un match real

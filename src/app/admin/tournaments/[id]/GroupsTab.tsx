@@ -143,7 +143,7 @@ async function fetchTournamentPlayoffs(tournamentId: number): Promise<any[]> {
   return tournamentsService.getPlayoffs(tournamentId);
 }
 
-export default function GroupsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "has_super_tiebreak" | "match_duration" | "status"> }) {
+export default function GroupsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "name" | "has_super_tiebreak" | "match_duration" | "status"> }) {
   const queryClient = useQueryClient();
   const [closingGroups, setClosingGroups] = useState(false);
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
@@ -724,6 +724,9 @@ export default function GroupsTab({ tournament }: { tournament: Pick<TournamentD
                       }}
                       disabled={hasPlayoffs}
                       disabledMessage="No se pueden modificar los resultados de zona una vez generados los playoffs"
+                      tournamentName={tournament.name}
+                      showShareWhenFinished
+                      instanceLabel="Grupos"
                     />
                   </div>
                 );

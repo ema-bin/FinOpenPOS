@@ -33,6 +33,31 @@ class SupabaseStorageService {
 
     return publicData.publicUrl;
   }
+
+  /**
+   * Sube una foto de partido al bucket tournament_matches dentro de la carpeta del torneo.
+   * Ruta final: tournament_matches / {tournamentId} / {timestamp}-{uuid}.{ext}
+   * La carpeta del torneo (tournamentId) se crea automáticamente al subir el primer archivo con ese path.
+   */
+  async uploadMatchPhoto(file: File, tournamentId: number): Promise<string> {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const filename = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const path = `${tournamentId}/${filename}`;
+
+    const { data, error } = await this.client.storage
+      .from("tournament_matches")
+      .upload(path, file, { cacheControl: "3600" });
+
+    if (error || !data) {
+      throw error ?? new Error("Upload failed");
+    }
+
+    const { data: publicData } = this.client.storage
+      .from("tournament_matches")
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
+  }
 }
 
 export const supabaseStorageService = new SupabaseStorageService();

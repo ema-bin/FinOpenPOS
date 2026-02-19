@@ -113,6 +113,9 @@ export default function ShareGroupScheduleTab({
     staleTime: 1000 * 60 * 5,
   });
   const adsToShow = advertisements;
+  const adsPerBlock = 10; // 2 filas × 5 por fila
+  const adsTop = adsToShow.slice(0, adsPerBlock);
+  const adsBottom = adsToShow.slice(adsPerBlock, adsPerBlock * 2);
 
   // Obtener canchas para mostrar nombres
   const { data: courts = [] } = useQuery<CourtDTO[]>({
@@ -295,7 +298,7 @@ export default function ShareGroupScheduleTab({
         className="px-0 pt-4"
         style={{ overflow: "visible", maxHeight: "none" }}
       >
-        <div className="space-y-6" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="w-full space-y-6" style={{ overflow: "visible", maxHeight: "none" }}>
           {matchesByDate.map(({ date, matches }) => (
             <div key={date} className="max-w-2xl mx-auto">
               {/* Botón de copiar fuera del área capturable */}
@@ -350,6 +353,32 @@ export default function ShareGroupScheduleTab({
                   </div>
                 </div>
 
+              {/* 2 filas de publicidades arriba (5 por fila) */}
+              {(adsTop.length > 0) && (
+                <div className="grid grid-cols-5 gap-x-1 gap-y-1 mb-1">
+                  {adsTop.map((ad: AdvertisementDTO) => (
+                    <div
+                      key={ad.id}
+                      className="aspect-[4/3] max-h-20 border rounded-lg overflow-hidden bg-white/80 dark:bg-slate-900/60 flex items-center justify-center p-2 shadow-md border-gray-200/60"
+                    >
+                      {ad.target_url && ad.target_url.startsWith("http") ? (
+                        <a
+                          href={ad.target_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full h-full flex items-center justify-center"
+                          title={ad.name}
+                        >
+                          <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                        </a>
+                      ) : (
+                        <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Schedule for this day */}
               <div className="space-y-2">
                 {matches.map(({ match, groupName, courtName }) => {
@@ -396,28 +425,31 @@ export default function ShareGroupScheduleTab({
                   );
                 })}
               </div>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                {adsToShow.map((ad: AdvertisementDTO) => (
-                  <div
-                    key={ad.id}
-                    className="w-32 h-20 border rounded-lg overflow-hidden bg-white/80 dark:bg-slate-900/60 flex items-center justify-center p-2 shadow-xl shadow-black/20 border-white/40"
-                  >
-                    {ad.target_url && ad.target_url.startsWith("http") ? (
-                      <a
-                        href={ad.target_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full h-full flex items-center justify-center"
-                        title={ad.name}
-                      >
+              {/* 2 filas de publicidades abajo (5 por fila) */}
+              {(adsBottom.length > 0) && (
+                <div className="mt-2 grid grid-cols-5 gap-x-1 gap-y-1">
+                  {adsBottom.map((ad: AdvertisementDTO) => (
+                    <div
+                      key={ad.id}
+                      className="aspect-[4/3] max-h-20 border rounded-lg overflow-hidden bg-white/80 dark:bg-slate-900/60 flex items-center justify-center p-2 shadow-md border-gray-200/60"
+                    >
+                      {ad.target_url && ad.target_url.startsWith("http") ? (
+                        <a
+                          href={ad.target_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full h-full flex items-center justify-center"
+                          title={ad.name}
+                        >
+                          <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                        </a>
+                      ) : (
                         <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
-                      </a>
-                    ) : (
-                      <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
-                    )}
-                  </div>
-                ))}
-              </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               </div>
             </div>
           ))}
