@@ -171,15 +171,16 @@ export function ShareMatchResultDialog({
           }
         }
         if (instanceLabel) {
+          const instanceUpper = instanceLabel.toUpperCase();
           ctx.font = `bold ${S(14)}px system-ui,sans-serif`;
           ctx.textAlign = "center";
           ctx.fillStyle = "rgba(0,0,0,0.5)";
-          const tw = ctx.measureText(instanceLabel).width + S(24);
+          const tw = ctx.measureText(instanceUpper).width + S(24);
           ctx.beginPath();
           ctx.roundRect((outW - tw) / 2, instanceY, tw, S(28), S(4));
           ctx.fill();
           ctx.fillStyle = "#fff";
-          ctx.fillText(instanceLabel, outW / 2, instanceY + S(20));
+          ctx.fillText(instanceUpper, outW / 2, instanceY + S(20));
         }
 
         const resultY = outH - resultH;
@@ -204,8 +205,8 @@ export function ShareMatchResultDialog({
         ctx.fillStyle = "#fff";
         const row1Y = resultY + S(24);
         const row2Y = resultY + S(48);
-        ctx.fillText(team1Apellidos, S(12), row1Y);
-        ctx.fillText(team2Apellidos, S(12), row2Y);
+        ctx.fillText(team1Apellidos.toUpperCase(), S(12), row1Y);
+        ctx.fillText(team2Apellidos.toUpperCase(), S(12), row2Y);
 
         const capR = S(7);
         const capGap = S(4);
@@ -360,7 +361,7 @@ export function ShareMatchResultDialog({
             {instanceLabel && (
               <div className="absolute left-0 right-0 flex justify-center z-10" style={{ top: "5.5rem" }}>
                 <span className="text-white font-bold text-sm uppercase tracking-wider bg-black/50 px-3 py-1 rounded">
-                  {instanceLabel}
+                  {instanceLabel?.toUpperCase()}
                 </span>
               </div>
             )}
@@ -383,7 +384,7 @@ export function ShareMatchResultDialog({
               <div className="bg-black/75 backdrop-blur-sm px-3 py-2.5 min-w-0">
               <div className="flex items-center justify-between gap-2 py-1">
                 <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
-                  {team1Apellidos}
+                  {team1Apellidos.toUpperCase()}
                 </span>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {setScores.map((set, i) => (
@@ -398,7 +399,7 @@ export function ShareMatchResultDialog({
               </div>
               <div className="flex items-center justify-between gap-2 py-1">
                 <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
-                  {team2Apellidos}
+                  {team2Apellidos.toUpperCase()}
                 </span>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {setScores.map((set, i) => (
