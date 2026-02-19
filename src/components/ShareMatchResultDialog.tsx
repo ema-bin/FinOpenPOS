@@ -330,13 +330,13 @@ export function ShareMatchResultDialog({
               className="absolute inset-0 z-10 pointer-events-none"
               style={{ width: 320, height: 480 }}
             >
-            {/* Overlay 2 filas arriba: 6 publicidades cada una */}
+            {/* Overlay 2 filas arriba: 6 publicidades cada una (tamaño alineado con imagen copiada) */}
             {adsTopRow1.length > 0 && (
-              <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1 py-1 px-2 bg-black/30 z-10">
+              <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-black/30 z-10">
                 {adsTopRow1.map((ad) => (
                   <div
                     key={ad.id}
-                    className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                    className="w-11 h-9 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                   >
                     <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                   </div>
@@ -344,11 +344,11 @@ export function ShareMatchResultDialog({
               </div>
             )}
             {adsTopRow2.length > 0 && (
-              <div className="absolute left-0 right-0 flex items-center justify-center gap-1 py-1 px-2 bg-black/30 z-10" style={{ top: "2.25rem" }}>
+              <div className="absolute left-0 right-0 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-black/30 z-10" style={{ top: "2.75rem" }}>
                 {adsTopRow2.map((ad) => (
                   <div
                     key={ad.id}
-                    className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                    className="w-11 h-9 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                   >
                     <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                   </div>
@@ -358,7 +358,7 @@ export function ShareMatchResultDialog({
 
             {/* Instancia del partido: debajo de la segunda fila de publicidades */}
             {instanceLabel && (
-              <div className="absolute left-0 right-0 flex justify-center z-10" style={{ top: "4.5rem" }}>
+              <div className="absolute left-0 right-0 flex justify-center z-10" style={{ top: "5.5rem" }}>
                 <span className="text-white font-bold text-sm uppercase tracking-wider bg-black/50 px-3 py-1 rounded">
                   {instanceLabel}
                 </span>
@@ -368,11 +368,11 @@ export function ShareMatchResultDialog({
             {/* Abajo: fila de 7 publicidades justo encima del resultado + resultado */}
             <div className="absolute bottom-0 left-0 right-0 flex flex-col z-10">
               {adsBottom.length > 0 && (
-                <div className="flex items-center justify-center gap-1 py-1.5 px-2 bg-black/30 flex-wrap">
+                <div className="flex items-center justify-center gap-1 py-2 px-2 bg-black/30 flex-nowrap min-w-0">
                   {adsBottom.map((ad) => (
                     <div
                       key={ad.id}
-                      className="w-8 h-6 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                      className="w-10 h-8 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                     >
                       <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                     </div>
