@@ -102,11 +102,21 @@ export function ShareMatchResultDialog({
         )
       );
 
+      const w = 320;
+      const h = 480;
       const dataUrl = await toPng(el, {
         quality: 1.0,
-        width: 320,
-        height: 480,
-        style: { transform: "scale(1)", transformOrigin: "top left" },
+        width: w,
+        height: h,
+        pixelRatio: 1,
+        style: {
+          transform: "none",
+          transformOrigin: "top left",
+          marginLeft: "0",
+          marginRight: "0",
+          marginTop: "0",
+          marginBottom: "0",
+        },
       });
 
       const res = await fetch(dataUrl);
@@ -147,18 +157,16 @@ export function ShareMatchResultDialog({
               Copiar imagen
             </Button>
           </div>
-          <div
-            ref={canvaRef}
-            className="relative bg-white rounded-lg border-2 border-gray-200 shadow-lg box-border overflow-hidden"
-            style={{
-              fontFamily: "system-ui, -apple-system, sans-serif",
-              width: 320,
-              height: 480,
-              minWidth: 320,
-              maxWidth: 320,
-              margin: "0 auto",
-            }}
-          >
+          <div className="flex justify-center">
+            <div
+              ref={canvaRef}
+              className="relative bg-white rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden flex-shrink-0"
+              style={{
+                fontFamily: "system-ui, -apple-system, sans-serif",
+                width: 320,
+                height: 480,
+              }}
+            >
             {/* Foto a pantalla completa con todos los overlays encima */}
             <div
               className="absolute inset-0 bg-cover bg-center"
@@ -252,6 +260,7 @@ export function ShareMatchResultDialog({
                 </div>
               </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
