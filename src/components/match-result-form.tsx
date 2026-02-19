@@ -656,7 +656,7 @@ export function MatchResultForm({
               )}
             </Button>
           )}
-          {showShareWhenFinished && hasExistingResult() && tournamentName && (
+          {showShareWhenFinished && hasExistingResult() && (
             <Button
               size="sm"
               variant="outline"
@@ -676,7 +676,6 @@ export function MatchResultForm({
       <ShareMatchResultDialog
         open={showShareDialog}
         onOpenChange={setShowShareDialog}
-        tournamentName={tournamentName ?? ""}
         team1Name={team1Name ?? ""}
         team2Name={team2Name ?? ""}
         set1={{

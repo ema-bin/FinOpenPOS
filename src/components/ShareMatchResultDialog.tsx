@@ -13,12 +13,10 @@ import { CopyIcon, Loader2Icon } from "lucide-react";
 import { advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import { toast } from "sonner";
-import { Logo } from "@/components/Logo";
 
 type ShareMatchResultDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tournamentName: string;
   team1Name: string;
   team2Name: string;
   set1: { team1: number; team2: number };
@@ -28,10 +26,16 @@ type ShareMatchResultDialogProps = {
   photoUrl: string | null;
 };
 
+function onlyLastNames(full: string): string {
+  return full
+    .split(/\s*\/\s*/)
+    .map((part) => part.trim().split(/\s+/).pop() ?? part.trim())
+    .join(" / ");
+}
+
 export function ShareMatchResultDialog({
   open,
   onOpenChange,
-  tournamentName,
   team1Name,
   team2Name,
   set1,
@@ -50,8 +54,11 @@ export function ShareMatchResultDialog({
     enabled: open,
   });
 
-  const adsTop = advertisements.slice(0, 10);
-  const adsBottom = advertisements.slice(10, 20);
+  // 3 filas: 2 arriba de 6 cada una, 1 abajo de 7 (justo encima del resultado)
+  const n = advertisements.length;
+  const adsTopRow1 = advertisements.slice(0, Math.min(6, n));
+  const adsTopRow2 = advertisements.slice(6, Math.min(12, n));
+  const adsBottom = advertisements.slice(12, Math.min(19, n));
 
   const scoreLine = [
     `${set1.team1}-${set1.team2}`,
@@ -61,6 +68,15 @@ export function ShareMatchResultDialog({
   ]
     .filter(Boolean)
     .join(" | ");
+
+  const setScores = [
+    { s: set1.team1, t: set1.team2 },
+    { s: set2.team1, t: set2.team2 },
+    set3 != null ? { s: set3.team1, t: set3.team2 } : null,
+  ];
+
+  const team1Apellidos = onlyLastNames(team1Name);
+  const team2Apellidos = onlyLastNames(team2Name);
 
   const handleCopyImage = async () => {
     const el = canvaRef.current;
@@ -86,8 +102,8 @@ export function ShareMatchResultDialog({
 
       const dataUrl = await toPng(el, {
         quality: 1.0,
-        width: el.offsetWidth + 20,
-        height: el.scrollHeight,
+        width: 320,
+        height: 480,
         style: { transform: "scale(1)", transformOrigin: "top left" },
       });
 
@@ -107,7 +123,7 @@ export function ShareMatchResultDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
+      <DialogContent className="max-w-lg p-0 overflow-visible">
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle>Compartir resultado del partido</DialogTitle>
         </DialogHeader>
@@ -131,83 +147,99 @@ export function ShareMatchResultDialog({
           </div>
           <div
             ref={canvaRef}
-            className="relative bg-white rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden"
+            className="relative bg-white rounded-lg border-2 border-gray-200 shadow-lg box-border overflow-hidden"
             style={{
               fontFamily: "system-ui, -apple-system, sans-serif",
-              aspectRatio: "4/3",
-              minHeight: 320,
-              maxWidth: 480,
+              width: 320,
+              height: 480,
+              minWidth: 320,
+              maxWidth: 320,
               margin: "0 auto",
             }}
           >
-            {/* Fondo: foto del partido o gradiente */}
+            {/* Foto a pantalla completa con todos los overlays encima */}
             <div
-              className="absolute inset-0 bg-cover bg-center rounded-lg"
+              className="absolute inset-0 bg-cover bg-center"
               style={{
                 backgroundImage: photoUrl
                   ? `url(${photoUrl})`
                   : "linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%)",
               }}
             />
-            <div className="absolute inset-0 bg-black/50" />
+            <div className="absolute inset-0 bg-black/40" />
 
-            {/* Contenido sobre la imagen */}
-            <div className="relative flex flex-col h-full p-4 text-white">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-medium opacity-90">{tournamentName}</span>
-                <div className="h-10 [filter:brightness(0)_invert(1)] opacity-90">
-                  <Logo className="h-10" />
+            {/* Overlay 2 filas arriba: 6 publicidades cada una */}
+            {adsTopRow1.length > 0 && (
+              <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1 py-1 px-2 bg-black/30 z-10">
+                {adsTopRow1.map((ad) => (
+                  <div
+                    key={ad.id}
+                    className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                  >
+                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {adsTopRow2.length > 0 && (
+              <div className="absolute left-0 right-0 flex items-center justify-center gap-1 py-1 px-2 bg-black/30 z-10" style={{ top: "2.25rem" }}>
+                {adsTopRow2.map((ad) => (
+                  <div
+                    key={ad.id}
+                    className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                  >
+                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Abajo: fila de 7 publicidades justo encima del resultado + resultado */}
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col z-10">
+              {adsBottom.length > 0 && (
+                <div className="flex items-center justify-center gap-1 py-1.5 px-2 bg-black/30 flex-wrap">
+                  {adsBottom.map((ad) => (
+                    <div
+                      key={ad.id}
+                      className="w-8 h-6 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
+                    >
+                      <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Overlay resultado: 2 filas (una por pareja) sobre la foto */}
+              <div className="bg-black/75 backdrop-blur-sm px-3 py-2.5 min-w-0">
+              <div className="flex items-center justify-between gap-2 py-1">
+                <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
+                  {team1Apellidos}
+                </span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {setScores.map((set, i) => (
+                    <div
+                      key={i}
+                      className="min-w-[1.75rem] h-7 px-1 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-[10px]"
+                    >
+                      {set ? set.s : "–"}
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              <div className="flex-1 flex flex-col justify-end">
-                {/* Resultado abajo */}
-                <div className="bg-black/70 backdrop-blur rounded-lg p-3 text-center">
-                  <div className="flex items-center justify-center gap-2 text-sm font-semibold flex-wrap">
-                    <span className="truncate max-w-[40%]">{team1Name}</span>
-                    <span className="text-white/90">vs</span>
-                    <span className="truncate max-w-[40%]">{team2Name}</span>
-                  </div>
-                  <div className="text-lg font-bold mt-1">{scoreLine}</div>
+              <div className="flex items-center justify-between gap-2 py-1">
+                <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
+                  {team2Apellidos}
+                </span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {setScores.map((set, i) => (
+                    <div
+                      key={i}
+                      className="min-w-[1.75rem] h-7 px-1 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-[10px]"
+                    >
+                      {set ? set.t : "–"}
+                    </div>
+                  ))}
                 </div>
-
-                {/* Logos sponsors - 2 filas de 5 */}
-                {(adsTop.length > 0 || adsBottom.length > 0) && (
-                  <div className="mt-2 space-y-1">
-                    {adsTop.length > 0 && (
-                      <div className="grid grid-cols-5 gap-x-1 gap-y-1">
-                        {adsTop.map((ad) => (
-                          <div
-                            key={ad.id}
-                            className="aspect-[4/3] max-h-10 border border-white/30 rounded overflow-hidden bg-white/90 flex items-center justify-center p-1"
-                          >
-                            <img
-                              src={ad.image_url}
-                              alt={ad.name}
-                              className="max-w-full max-h-full object-contain"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {adsBottom.length > 0 && (
-                      <div className="grid grid-cols-5 gap-x-1 gap-y-1">
-                        {adsBottom.map((ad) => (
-                          <div
-                            key={ad.id}
-                            className="aspect-[4/3] max-h-10 border border-white/30 rounded overflow-hidden bg-white/90 flex items-center justify-center p-1"
-                          >
-                            <img
-                              src={ad.image_url}
-                              alt={ad.name}
-                              className="max-w-full max-h-full object-contain"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+              </div>
               </div>
             </div>
           </div>
