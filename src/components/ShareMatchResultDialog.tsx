@@ -47,6 +47,7 @@ export function ShareMatchResultDialog({
   photoUrl,
 }: ShareMatchResultDialogProps) {
   const canvaRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const [copying, setCopying] = useState(false);
 
   const { data: advertisements = [] } = useQuery<AdvertisementDTO[]>({
@@ -82,48 +83,195 @@ export function ShareMatchResultDialog({
 
   const handleCopyImage = async () => {
     const el = canvaRef.current;
+    const overlayEl = overlayRef.current;
     if (!el) return;
     try {
       setCopying(true);
-      const domtoimage = await import("dom-to-image");
-      const toPng = domtoimage.default?.toPng || (domtoimage as { toPng?: typeof domtoimage.toPng }).toPng;
-      if (!toPng) throw new Error("dom-to-image no disponible");
+      const outW = 1280;
+      const outH = 1920;
 
-      const images = el.querySelectorAll("img");
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise<void>((resolve, reject) => {
-              if (img.complete) return resolve();
-              img.onload = () => resolve();
-              img.onerror = reject();
-              setTimeout(resolve, 5000);
-            })
-        )
-      );
+      if (photoUrl) {
+        // Solo la foto en alta calidad; overlays dibujados a mano en el canvas (sin captura DOM = sin corrido)
+        const photoImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Error al cargar la foto"));
+          img.src = photoUrl;
+        });
 
-      const w = 320;
-      const h = 480;
-      const dataUrl = await toPng(el, {
-        quality: 1.0,
-        width: w,
-        height: h,
-        pixelRatio: 1,
-        style: {
-          transform: "none",
-          transformOrigin: "top left",
-          marginLeft: "0",
-          marginRight: "0",
-          marginTop: "0",
-          marginBottom: "0",
-        },
-      });
+        const canvas = document.createElement("canvas");
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas no disponible");
 
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
+        const scalePhoto = Math.max(outW / photoImg.naturalWidth, outH / photoImg.naturalHeight);
+        const w = photoImg.naturalWidth * scalePhoto;
+        const h = photoImg.naturalHeight * scalePhoto;
+        const x = (outW - w) / 2;
+        const y = (outH - h) / 2;
+        ctx.drawImage(photoImg, x, y, w, h);
+
+        const S = (n: number) => Math.round(n * 4);
+        const drawLogo = async (url: string, lx: number, ly: number, lw: number, lh: number) => {
+          try {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            await new Promise<void>((res, rej) => {
+              img.onload = () => res();
+              img.onerror = () => res();
+              img.src = url;
+              setTimeout(res, 3000);
+            });
+            if (img.width) ctx.drawImage(img, lx, ly, lw, lh);
+          } catch {
+            /* ignorar logo fallido */
+          }
+        };
+
+        const pad = S(4);
+        const logoW1 = S(36);
+        const logoH1 = S(28);
+        const row1H = S(36);
+        const row2H = S(36);
+        const instanceY = S(72);
+        const resultH = S(80);
+        const adsBottomH = S(48);
+        const logoW2 = S(32);
+        const logoH2 = S(24);
+
+        const centerRow = (count: number, logoW: number) =>
+          (outW - count * logoW - (count - 1) * pad) / 2;
+
+        if (adsTopRow1.length > 0) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(0, 0, outW, row1H);
+          let startX = centerRow(adsTopRow1.length, logoW1);
+          for (let i = 0; i < adsTopRow1.length; i++) {
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.beginPath();
+            ctx.roundRect(startX, pad, logoW1, logoH1, S(4));
+            ctx.fill();
+            await drawLogo(adsTopRow1[i].image_url, startX + 2, pad + 2, logoW1 - 4, logoH1 - 4);
+            startX += logoW1 + pad;
+          }
+        }
+        if (adsTopRow2.length > 0) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(0, row1H, outW, row2H);
+          let startX = centerRow(adsTopRow2.length, logoW1);
+          for (let i = 0; i < adsTopRow2.length; i++) {
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.beginPath();
+            ctx.roundRect(startX, row1H + pad, logoW1, logoH1, S(4));
+            ctx.fill();
+            await drawLogo(adsTopRow2[i].image_url, startX + 2, row1H + pad + 2, logoW1 - 4, logoH1 - 4);
+            startX += logoW1 + pad;
+          }
+        }
+        if (instanceLabel) {
+          ctx.font = `bold ${S(14)}px system-ui,sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(0,0,0,0.5)";
+          const tw = ctx.measureText(instanceLabel).width + S(24);
+          ctx.beginPath();
+          ctx.roundRect((outW - tw) / 2, instanceY, tw, S(28), S(4));
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.fillText(instanceLabel, outW / 2, instanceY + S(20));
+        }
+
+        const resultY = outH - resultH;
+        if (adsBottom.length > 0) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(0, resultY - adsBottomH, outW, adsBottomH);
+          let startX = centerRow(adsBottom.length, logoW2);
+          for (let i = 0; i < adsBottom.length; i++) {
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            ctx.beginPath();
+            ctx.roundRect(startX, resultY - adsBottomH + pad, logoW2, logoH2, S(4));
+            ctx.fill();
+            await drawLogo(adsBottom[i].image_url, startX + 2, resultY - adsBottomH + pad + 2, logoW2 - 4, logoH2 - 4);
+            startX += logoW2 + pad;
+          }
+        }
+
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.fillRect(0, resultY, outW, resultH);
+        ctx.font = `bold ${S(12)}px system-ui,sans-serif`;
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#fff";
+        const row1Y = resultY + S(24);
+        const row2Y = resultY + S(48);
+        ctx.fillText(team1Apellidos, S(12), row1Y);
+        ctx.fillText(team2Apellidos, S(12), row2Y);
+
+        const capR = S(7);
+        const capGap = S(4);
+        const nCaps = setScores.length;
+        const capsTotal = nCaps * (capR * 2 + capGap) - capGap;
+        const capStartX = outW - S(12) - capsTotal;
+        const capCenters = Array.from({ length: nCaps }, (_, i) =>
+          capStartX + capR + (capR * 2 + capGap) * i
+        );
+        [set1.team1, set2.team1, set3?.team1].forEach((v, i) => {
+          const cx = capCenters[i];
+          ctx.fillStyle = "rgba(255,255,255,0.2)";
+          ctx.beginPath();
+          ctx.arc(cx, row1Y - S(4), capR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = `bold ${S(10)}px system-ui,sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(String(v ?? "–"), cx, row1Y);
+        });
+        [set1.team2, set2.team2, set3?.team2].forEach((v, i) => {
+          const cx = capCenters[i];
+          ctx.fillStyle = "rgba(255,255,255,0.2)";
+          ctx.beginPath();
+          ctx.arc(cx, row2Y - S(4), capR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.font = `bold ${S(10)}px system-ui,sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(String(v ?? "–"), cx, row2Y);
+        });
+
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+        );
+        if (!blob) throw new Error("Error al generar imagen");
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      } else {
+        // Sin foto: captura completa con dom-to-image (gradient)
+        const domtoimage = await import("dom-to-image");
+        const toPng = domtoimage.default?.toPng || (domtoimage as { toPng?: typeof domtoimage.toPng }).toPng;
+        if (!toPng) throw new Error("dom-to-image no disponible");
+        const images = el.querySelectorAll("img");
+        await Promise.all(
+          Array.from(images).map(
+            (img) =>
+              new Promise<void>((resolve) => {
+                if (img.complete) return resolve();
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                setTimeout(resolve, 5000);
+              })
+          )
+        );
+        const dataUrl = await toPng(el, {
+          quality: 1.0,
+          width: 320,
+          height: 480,
+          pixelRatio: 2,
+          style: { transform: "none", margin: "0" },
+        });
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      }
+
       toast.success("Imagen copiada al portapapeles");
     } catch (err) {
       console.error(err);
@@ -176,8 +324,12 @@ export function ShareMatchResultDialog({
                   : "linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%)",
               }}
             />
-            <div className="absolute inset-0 bg-black/40" />
-
+            {/* Overlays (publicidades, instancia, resultado) en un solo nodo para captura */}
+            <div
+              ref={overlayRef}
+              className="absolute inset-0 z-10 pointer-events-none"
+              style={{ width: 320, height: 480 }}
+            >
             {/* Overlay 2 filas arriba: 6 publicidades cada una */}
             {adsTopRow1.length > 0 && (
               <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1 py-1 px-2 bg-black/30 z-10">
@@ -186,7 +338,7 @@ export function ShareMatchResultDialog({
                     key={ad.id}
                     className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                   >
-                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                   </div>
                 ))}
               </div>
@@ -198,7 +350,7 @@ export function ShareMatchResultDialog({
                     key={ad.id}
                     className="w-9 h-7 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                   >
-                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                   </div>
                 ))}
               </div>
@@ -222,7 +374,7 @@ export function ShareMatchResultDialog({
                       key={ad.id}
                       className="w-8 h-6 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
                     >
-                      <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                      <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
                     </div>
                   ))}
                 </div>
@@ -260,6 +412,7 @@ export function ShareMatchResultDialog({
                 </div>
               </div>
               </div>
+            </div>
             </div>
             </div>
           </div>
