@@ -62,6 +62,7 @@ type MatchResultFormProps = {
   disabledMessage?: string; // Mensaje a mostrar cuando está deshabilitado
   tournamentName?: string; // Para el canva de compartir resultado
   showShareWhenFinished?: boolean; // Mostrar botón "Compartir resultado" cuando el partido está finalizado
+  instanceLabel?: string | null; // Instancia del partido para el canva: Grupos, Octavos, Cuartos, Semifinal, Final
 };
 
 export function MatchResultForm({
@@ -76,6 +77,7 @@ export function MatchResultForm({
   disabledMessage = "No se pueden modificar los resultados de zona una vez generados los playoffs",
   tournamentName,
   showShareWhenFinished = false,
+  instanceLabel,
 }: MatchResultFormProps) {
   // Colores por defecto si no se proporcionan
   const bgColor = groupColor?.bg || "bg-blue-50";
@@ -676,6 +678,7 @@ export function MatchResultForm({
       <ShareMatchResultDialog
         open={showShareDialog}
         onOpenChange={setShowShareDialog}
+        instanceLabel={instanceLabel ?? null}
         team1Name={team1Name ?? ""}
         team2Name={team2Name ?? ""}
         set1={{

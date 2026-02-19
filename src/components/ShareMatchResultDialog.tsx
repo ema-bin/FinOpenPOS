@@ -17,6 +17,7 @@ import { toast } from "sonner";
 type ShareMatchResultDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  instanceLabel?: string | null;
   team1Name: string;
   team2Name: string;
   set1: { team1: number; team2: number };
@@ -36,6 +37,7 @@ function onlyLastNames(full: string): string {
 export function ShareMatchResultDialog({
   open,
   onOpenChange,
+  instanceLabel,
   team1Name,
   team2Name,
   set1,
@@ -191,6 +193,15 @@ export function ShareMatchResultDialog({
                     <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Instancia del partido: debajo de la segunda fila de publicidades */}
+            {instanceLabel && (
+              <div className="absolute left-0 right-0 flex justify-center z-10" style={{ top: "4.5rem" }}>
+                <span className="text-white font-bold text-sm uppercase tracking-wider bg-black/50 px-3 py-1 rounded">
+                  {instanceLabel}
+                </span>
               </div>
             )}
 

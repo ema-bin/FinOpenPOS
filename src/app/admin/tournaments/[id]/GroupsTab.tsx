@@ -726,6 +726,7 @@ export default function GroupsTab({ tournament }: { tournament: Pick<TournamentD
                       disabledMessage="No se pueden modificar los resultados de zona una vez generados los playoffs"
                       tournamentName={tournament.name}
                       showShareWhenFinished
+                      instanceLabel="Grupos"
                     />
                   </div>
                 );
