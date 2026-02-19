@@ -130,16 +130,16 @@ export function ShareMatchResultDialog({
           }
         };
 
-        const pad = S(4);
-        const logoW1 = S(36);
-        const logoH1 = S(28);
-        const row1H = S(36);
-        const row2H = S(36);
-        const instanceY = S(72);
+        const pad = S(5);
+        const logoW1 = S(44);
+        const logoH1 = S(34);
+        const row1H = S(44);
+        const row2H = S(44);
+        const instanceY = S(92);
         const resultH = S(80);
-        const adsBottomH = S(48);
-        const logoW2 = S(32);
-        const logoH2 = S(24);
+        const adsBottomH = S(56);
+        const logoW2 = S(40);
+        const logoH2 = S(30);
 
         const centerRow = (count: number, logoW: number) =>
           (outW - count * logoW - (count - 1) * pad) / 2;
@@ -153,7 +153,7 @@ export function ShareMatchResultDialog({
             ctx.beginPath();
             ctx.roundRect(startX, pad, logoW1, logoH1, S(4));
             ctx.fill();
-            await drawLogo(adsTopRow1[i].image_url, startX + 2, pad + 2, logoW1 - 4, logoH1 - 4);
+            await drawLogo(adsTopRow1[i].image_url, startX + S(2), pad + S(2), logoW1 - S(4), logoH1 - S(4));
             startX += logoW1 + pad;
           }
         }
@@ -166,7 +166,7 @@ export function ShareMatchResultDialog({
             ctx.beginPath();
             ctx.roundRect(startX, row1H + pad, logoW1, logoH1, S(4));
             ctx.fill();
-            await drawLogo(adsTopRow2[i].image_url, startX + 2, row1H + pad + 2, logoW1 - 4, logoH1 - 4);
+            await drawLogo(adsTopRow2[i].image_url, startX + S(2), row1H + pad + S(2), logoW1 - S(4), logoH1 - S(4));
             startX += logoW1 + pad;
           }
         }
@@ -192,7 +192,7 @@ export function ShareMatchResultDialog({
             ctx.beginPath();
             ctx.roundRect(startX, resultY - adsBottomH + pad, logoW2, logoH2, S(4));
             ctx.fill();
-            await drawLogo(adsBottom[i].image_url, startX + 2, resultY - adsBottomH + pad + 2, logoW2 - 4, logoH2 - 4);
+            await drawLogo(adsBottom[i].image_url, startX + S(2), resultY - adsBottomH + pad + S(2), logoW2 - S(4), logoH2 - S(4));
             startX += logoW2 + pad;
           }
         }
