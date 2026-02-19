@@ -142,6 +142,7 @@ export interface PlayoffRow {
     start_time: string | null;
     end_time: string | null;
     court_id: number | null;
+    photo_url?: string | null;
     set1_team1_games: number | null;
     set1_team2_games: number | null;
     set2_team1_games: number | null;

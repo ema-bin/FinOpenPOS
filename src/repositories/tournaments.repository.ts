@@ -918,6 +918,7 @@ export class TournamentPlayoffsRepository extends BaseRepository {
           match_date,
           start_time,
           court_id,
+          photo_url,
           set1_team1_games,
           set1_team2_games,
           set2_team1_games,
