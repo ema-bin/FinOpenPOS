@@ -43,9 +43,10 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const body = await req.json();
-  const { sets, superTiebreak } = body as {
+  const { sets, superTiebreak, photo_url: photoUrl } = body as {
     sets: { team1: number | null; team2: number | null }[];
     superTiebreak?: { team1: number | null; team2: number | null };
+    photo_url?: string | null;
   };
 
   const [s1, s2, s3] = sets ?? [];
@@ -371,23 +372,27 @@ export async function POST(req: Request, { params }: RouteParams) {
   const winnerTeamId = team1Sets > team2Sets ? match.team1_id : match.team2_id;
 
   // Actualizar el match (has_super_tiebreak ya no es una columna en tournament_matches)
+  const updatePayload: Record<string, unknown> = {
+    set1_team1_games,
+    set1_team2_games,
+    set2_team1_games,
+    set2_team2_games,
+    set3_team1_games: finalSet3Team1Games,
+    set3_team2_games: finalSet3Team2Games,
+    super_tiebreak_team1_points: superTiebreakPointsToStore?.team1 ?? null,
+    super_tiebreak_team2_points: superTiebreakPointsToStore?.team2 ?? null,
+    team1_sets: team1Sets,
+    team2_sets: team2Sets,
+    team1_games_total: team1GamesTotal,
+    team2_games_total: team2GamesTotal,
+    status: "finished",
+  };
+  if (photoUrl !== undefined) {
+    updatePayload.photo_url = photoUrl;
+  }
   const { error: updateError } = await supabase
     .from("tournament_matches")
-    .update({
-      set1_team1_games,
-      set1_team2_games,
-      set2_team1_games,
-      set2_team2_games,
-      set3_team1_games: finalSet3Team1Games,
-      set3_team2_games: finalSet3Team2Games,
-      super_tiebreak_team1_points: superTiebreakPointsToStore?.team1 ?? null,
-      super_tiebreak_team2_points: superTiebreakPointsToStore?.team2 ?? null,
-      team1_sets: team1Sets,
-      team2_sets: team2Sets,
-      team1_games_total: team1GamesTotal,
-      team2_games_total: team2GamesTotal,
-      status: "finished",
-    })
+    .update(updatePayload)
     .eq("id", matchId);
 
   if (updateError) {
@@ -944,7 +949,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     }
   }
 
-  // Limpiar todos los resultados del match
+  // Limpiar todos los resultados del match (incl. foto)
   const { error: updateError } = await supabase
     .from("tournament_matches")
     .update({
@@ -960,6 +965,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       team2_sets: 0,
       team1_games_total: 0,
       team2_games_total: 0,
+      photo_url: null,
       status: "scheduled",
     })
     .eq("id", matchId);

@@ -106,6 +106,7 @@ export interface MatchDTO {
   super_tiebreak_team2_points: number | null;
   team1: TeamDTO | null;
   team2: TeamDTO | null;
+  photo_url?: string | null;
 }
 
 // Standing DTOs

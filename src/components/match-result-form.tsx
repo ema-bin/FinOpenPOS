@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2Icon, CheckIcon, TrashIcon } from "lucide-react";
+import { Loader2Icon, CheckIcon, TrashIcon, ImageIcon, Share2Icon } from "lucide-react";
 import { validateMatchSets, validateSuperTiebreak } from "@/lib/match-validation";
 import {
   Dialog,
@@ -14,6 +14,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { MatchDTO } from "@/models/dto/tournament";
+import { ShareMatchResultDialog } from "@/components/ShareMatchResultDialog";
+
+function MatchPhotoPreview({ file }: { file: File }) {
+  const [url, setUrl] = useState(() => URL.createObjectURL(file));
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return u;
+    });
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return <img src={url} alt="Vista previa" className="w-full h-full object-cover" />;
+}
 
 // Using Pick from MatchDTO for form data
 type MatchData = Pick<
@@ -27,6 +41,7 @@ type MatchData = Pick<
   | "set3_team2_games"
   | "super_tiebreak_team1_points"
   | "super_tiebreak_team2_points"
+  | "photo_url"
 >;
 
 type MatchResultFormProps = {
@@ -45,6 +60,8 @@ type MatchResultFormProps = {
   // Si está deshabilitado (ej: cuando ya hay playoffs generados)
   disabled?: boolean;
   disabledMessage?: string; // Mensaje a mostrar cuando está deshabilitado
+  tournamentName?: string; // Para el canva de compartir resultado
+  showShareWhenFinished?: boolean; // Mostrar botón "Compartir resultado" cuando el partido está finalizado
 };
 
 export function MatchResultForm({
@@ -57,6 +74,8 @@ export function MatchResultForm({
   layout = team1Name && team2Name ? "inline" : "compact",
   disabled = false,
   disabledMessage = "No se pueden modificar los resultados de zona una vez generados los playoffs",
+  tournamentName,
+  showShareWhenFinished = false,
 }: MatchResultFormProps) {
   // Colores por defecto si no se proporcionan
   const bgColor = groupColor?.bg || "bg-blue-50";
@@ -80,6 +99,9 @@ export function MatchResultForm({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Resetear valores cuando cambia el match
   useEffect(() => {
@@ -241,6 +263,39 @@ export function MatchResultForm({
     
     // Siempre mostrar diálogo de confirmación (igual que guardar cuando hay resultado)
     setShowClearDialog(true);
+  };
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || disabled) return;
+    setPhotoFile(file);
+    setError(null);
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/tournament-matches/${match.id}/photo/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setError(err.error || "Error al subir la foto");
+        setPhotoFile(null);
+        return;
+      }
+      setPhotoFile(null);
+      onSaved();
+    } catch (err) {
+      console.error(err);
+      setError("Error de conexión al subir la foto");
+      setPhotoFile(null);
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
   };
 
   // Layout compacto (sin nombres de equipos)
@@ -520,6 +575,43 @@ export function MatchResultForm({
         </div>
       </div>
       
+      {/* Foto del partido (solo layout inline) */}
+      <div className={`px-4 py-2 ${bgColor} border-t border-black/5`}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <ImageIcon className="h-3.5 w-3" />
+            Foto del partido
+          </span>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+            onChange={handlePhotoSelect}
+            disabled={disabled || uploadingPhoto}
+          />
+          {uploadingPhoto && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2Icon className="h-3 w-3 animate-spin" />
+              Subiendo...
+            </span>
+          )}
+          {(photoFile || match.photo_url) && (
+            <div className="w-16 h-16 rounded border bg-muted overflow-hidden flex-shrink-0">
+              {photoFile ? (
+                <MatchPhotoPreview file={photoFile} />
+              ) : match.photo_url ? (
+                <img
+                  src={match.photo_url}
+                  alt="Foto del partido"
+                  className="w-full h-full object-cover"
+                />
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Mensaje de error */}
       {error && (
         <div className="px-4 py-2 bg-red-50 border-t border-red-200">
@@ -529,7 +621,7 @@ export function MatchResultForm({
 
       {/* Botones de acción */}
       <div className={`px-4 py-3 ${bgColor} flex flex-col items-center justify-center gap-2`}>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-center">
           <Button size="sm" className="h-7 text-xs px-3" onClick={handleSave} disabled={saving || disabled}>
             {saving ? (
               <>
@@ -564,11 +656,55 @@ export function MatchResultForm({
               )}
             </Button>
           )}
+          {showShareWhenFinished && hasExistingResult() && tournamentName && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-3"
+              onClick={() => setShowShareDialog(true)}
+            >
+              <Share2Icon className="h-3 w-3 mr-1" />
+              Compartir resultado
+            </Button>
+          )}
         </div>
         {disabled && disabledMessage && (
           <p className="text-xs text-amber-600 italic text-center">{disabledMessage}</p>
         )}
       </div>
+
+      <ShareMatchResultDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        tournamentName={tournamentName ?? ""}
+        team1Name={team1Name ?? ""}
+        team2Name={team2Name ?? ""}
+        set1={{
+          team1: match.set1_team1_games ?? 0,
+          team2: match.set1_team2_games ?? 0,
+        }}
+        set2={{
+          team1: match.set2_team1_games ?? 0,
+          team2: match.set2_team2_games ?? 0,
+        }}
+        set3={
+          match.set3_team1_games != null || match.set3_team2_games != null
+            ? {
+                team1: match.set3_team1_games ?? 0,
+                team2: match.set3_team2_games ?? 0,
+              }
+            : null
+        }
+        superTiebreak={
+          match.super_tiebreak_team1_points != null || match.super_tiebreak_team2_points != null
+            ? {
+                team1: match.super_tiebreak_team1_points ?? 0,
+                team2: match.super_tiebreak_team2_points ?? 0,
+              }
+            : null
+        }
+        photoUrl={match.photo_url ?? null}
+      />
 
       {/* Diálogo de confirmación */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>

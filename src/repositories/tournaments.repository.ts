@@ -488,6 +488,7 @@ export class TournamentGroupsRepository extends BaseRepository {
           end_time,
           match_order,
           court_id,
+          photo_url,
           set1_team1_games,
           set1_team2_games,
           set2_team1_games,

@@ -78,6 +78,7 @@ export interface TournamentMatch {
   team2_sets: number;
   team1_games_total: number;
   team2_games_total: number;
+  photo_url: string | null;
 }
 
 export interface TournamentGroupStanding {
