@@ -454,8 +454,8 @@ export default function GroupsTab({ tournament }: { tournament: Pick<TournamentD
             variant="outline"
             size="sm"
             onClick={handleSimulateResults}
-            disabled={false}
-            hidden={false}
+            disabled={true}
+            hidden={true}
           >
             {simulatingResults ? (
               <>
@@ -472,8 +472,8 @@ export default function GroupsTab({ tournament }: { tournament: Pick<TournamentD
             variant="destructive"
             size="sm"
             onClick={() => setShowDeleteGroupsDialog(true)}
-            disabled={false}
-            hidden={false}
+            disabled={true}
+            hidden={true}
           >
             <XIcon className="h-3 w-3 mr-1" />
             Eliminar fase de grupos
