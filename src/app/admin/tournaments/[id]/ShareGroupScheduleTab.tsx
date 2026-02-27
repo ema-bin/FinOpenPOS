@@ -216,37 +216,54 @@ export default function ShareGroupScheduleTab({
         })
       );
 
-      // Obtener dimensiones reales del elemento
       const elementWidth = dayRef.offsetWidth;
       const elementHeight = dayRef.scrollHeight;
-      
-      // Generar la imagen usando html-to-image con un ancho ligeramente mayor para evitar cortes
+
       const dataUrl = await toPng(dayRef, {
         quality: 1.0,
-        width: elementWidth + 20, // Agregar un poco de margen para evitar cortes
+        width: elementWidth + 20,
         height: elementHeight,
         style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left',
+          transform: "scale(1)",
+          transformOrigin: "top left",
         },
         filter: (node: Node) => {
-          // Excluir el botón de copiar si existe
           if (node instanceof HTMLElement) {
-            return !node.closest('button') || !node.textContent?.includes('Copiar');
+            return !node.closest("button") || !node.textContent?.includes("Copiar");
           }
           return true;
         },
       });
 
-      // Convertir data URL a blob
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
+      const outW = 1080;
+      const outH = 1920;
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = dataUrl;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas no disponible");
+      const scale = Math.min(outW / img.width, outH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (outW - w) / 2;
+      const y = (outH - h) / 2;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, x, y, w, h);
 
-      // Copiar al portapapeles
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+      );
+      if (!blob) throw new Error("Error al generar imagen");
+
       await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': blob
-        })
+        new ClipboardItem({ "image/png": blob }),
       ]);
 
       toast.success("Imagen copiada al portapapeles");

@@ -87,11 +87,11 @@ export function ShareMatchResultDialog({
     if (!el) return;
     try {
       setCopying(true);
-      const outW = 1280;
+      const outW = 1080;
       const outH = 1920;
 
       if (photoUrl) {
-        // Solo la foto en alta calidad; overlays dibujados a mano en el canvas (sin captura DOM = sin corrido)
+        // Solo la foto en alta calidad; overlays dibujados a mano en el canvas (sin captura DOM = sin corrido). Formato 16:9 para IG.
         const photoImg = await new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = "anonymous";
@@ -113,7 +113,8 @@ export function ShareMatchResultDialog({
         const y = (outH - h) / 2;
         ctx.drawImage(photoImg, x, y, w, h);
 
-        const S = (n: number) => Math.round(n * 4);
+        const Sw = (n: number) => Math.round(n * (outW / 320));
+        const Sh = (n: number) => Math.round(n * (outH / 480));
         const drawLogo = async (url: string, lx: number, ly: number, lw: number, lh: number) => {
           try {
             const img = new Image();
@@ -130,19 +131,20 @@ export function ShareMatchResultDialog({
           }
         };
 
-        const pad = S(5);
-        const logoW1 = S(44);
-        const logoH1 = S(34);
-        const row1H = S(44);
-        const row2H = S(44);
-        const instanceY = S(92);
-        const resultH = S(80);
-        const adsBottomH = S(56);
-        const logoW2 = S(40);
-        const logoH2 = S(30);
+        const padW = Sw(5);
+        const padH = Sh(5);
+        const logoW1 = Sw(44);
+        const logoH1 = Sh(34);
+        const row1H = Sh(44);
+        const row2H = Sh(44);
+        const instanceY = Sh(92);
+        const resultH = Sh(80);
+        const adsBottomH = Sh(56);
+        const logoW2 = Sw(40);
+        const logoH2 = Sh(30);
 
         const centerRow = (count: number, logoW: number) =>
-          (outW - count * logoW - (count - 1) * pad) / 2;
+          (outW - count * logoW - (count - 1) * padW) / 2;
 
         if (adsTopRow1.length > 0) {
           ctx.fillStyle = "rgba(0,0,0,0.3)";
@@ -151,10 +153,10 @@ export function ShareMatchResultDialog({
           for (let i = 0; i < adsTopRow1.length; i++) {
             ctx.fillStyle = "rgba(255,255,255,0.95)";
             ctx.beginPath();
-            ctx.roundRect(startX, pad, logoW1, logoH1, S(4));
+            ctx.roundRect(startX, padH, logoW1, logoH1, Sw(4));
             ctx.fill();
-            await drawLogo(adsTopRow1[i].image_url, startX + S(2), pad + S(2), logoW1 - S(4), logoH1 - S(4));
-            startX += logoW1 + pad;
+            await drawLogo(adsTopRow1[i].image_url, startX + Sw(2), padH + Sh(2), logoW1 - Sw(4), logoH1 - Sh(4));
+            startX += logoW1 + padW;
           }
         }
         if (adsTopRow2.length > 0) {
@@ -164,23 +166,23 @@ export function ShareMatchResultDialog({
           for (let i = 0; i < adsTopRow2.length; i++) {
             ctx.fillStyle = "rgba(255,255,255,0.95)";
             ctx.beginPath();
-            ctx.roundRect(startX, row1H + pad, logoW1, logoH1, S(4));
+            ctx.roundRect(startX, row1H + padH, logoW1, logoH1, Sw(4));
             ctx.fill();
-            await drawLogo(adsTopRow2[i].image_url, startX + S(2), row1H + pad + S(2), logoW1 - S(4), logoH1 - S(4));
-            startX += logoW1 + pad;
+            await drawLogo(adsTopRow2[i].image_url, startX + Sw(2), row1H + padH + Sh(2), logoW1 - Sw(4), logoH1 - Sh(4));
+            startX += logoW1 + padW;
           }
         }
         if (instanceLabel) {
           const instanceUpper = instanceLabel.toUpperCase();
-          ctx.font = `bold ${S(14)}px system-ui,sans-serif`;
+          ctx.font = `bold ${Sw(14)}px system-ui,sans-serif`;
           ctx.textAlign = "center";
           ctx.fillStyle = "rgba(0,0,0,0.5)";
-          const tw = ctx.measureText(instanceUpper).width + S(24);
+          const tw = ctx.measureText(instanceUpper).width + Sw(24);
           ctx.beginPath();
-          ctx.roundRect((outW - tw) / 2, instanceY, tw, S(28), S(4));
+          ctx.roundRect((outW - tw) / 2, instanceY, tw, Sh(28), Sw(4));
           ctx.fill();
           ctx.fillStyle = "#fff";
-          ctx.fillText(instanceUpper, outW / 2, instanceY + S(20));
+          ctx.fillText(instanceUpper, outW / 2, instanceY + Sh(20));
         }
 
         const resultY = outH - resultH;
@@ -191,28 +193,28 @@ export function ShareMatchResultDialog({
           for (let i = 0; i < adsBottom.length; i++) {
             ctx.fillStyle = "rgba(255,255,255,0.95)";
             ctx.beginPath();
-            ctx.roundRect(startX, resultY - adsBottomH + pad, logoW2, logoH2, S(4));
+            ctx.roundRect(startX, resultY - adsBottomH + padH, logoW2, logoH2, Sw(4));
             ctx.fill();
-            await drawLogo(adsBottom[i].image_url, startX + S(2), resultY - adsBottomH + pad + S(2), logoW2 - S(4), logoH2 - S(4));
-            startX += logoW2 + pad;
+            await drawLogo(adsBottom[i].image_url, startX + Sw(2), resultY - adsBottomH + padH + Sh(2), logoW2 - Sw(4), logoH2 - Sh(4));
+            startX += logoW2 + padW;
           }
         }
 
         ctx.fillStyle = "rgba(0,0,0,0.75)";
         ctx.fillRect(0, resultY, outW, resultH);
-        ctx.font = `bold ${S(12)}px system-ui,sans-serif`;
+        ctx.font = `bold ${Sw(12)}px system-ui,sans-serif`;
         ctx.textAlign = "left";
         ctx.fillStyle = "#fff";
-        const row1Y = resultY + S(24);
-        const row2Y = resultY + S(48);
-        ctx.fillText(team1Apellidos.toUpperCase(), S(12), row1Y);
-        ctx.fillText(team2Apellidos.toUpperCase(), S(12), row2Y);
+        const row1Y = resultY + Sh(24);
+        const row2Y = resultY + Sh(48);
+        ctx.fillText(team1Apellidos.toUpperCase(), Sw(12), row1Y);
+        ctx.fillText(team2Apellidos.toUpperCase(), Sw(12), row2Y);
 
-        const capR = S(7);
-        const capGap = S(4);
+        const capR = Sh(7);
+        const capGap = Sw(4);
         const nCaps = setScores.length;
         const capsTotal = nCaps * (capR * 2 + capGap) - capGap;
-        const capStartX = outW - S(12) - capsTotal;
+        const capStartX = outW - Sw(12) - capsTotal;
         const capCenters = Array.from({ length: nCaps }, (_, i) =>
           capStartX + capR + (capR * 2 + capGap) * i
         );
@@ -220,10 +222,10 @@ export function ShareMatchResultDialog({
           const cx = capCenters[i];
           ctx.fillStyle = "rgba(255,255,255,0.2)";
           ctx.beginPath();
-          ctx.arc(cx, row1Y - S(4), capR, 0, Math.PI * 2);
+          ctx.arc(cx, row1Y - Sh(4), capR, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = "#fff";
-          ctx.font = `bold ${S(10)}px system-ui,sans-serif`;
+          ctx.font = `bold ${Sw(10)}px system-ui,sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(String(v ?? "–"), cx, row1Y);
         });
@@ -231,10 +233,10 @@ export function ShareMatchResultDialog({
           const cx = capCenters[i];
           ctx.fillStyle = "rgba(255,255,255,0.2)";
           ctx.beginPath();
-          ctx.arc(cx, row2Y - S(4), capR, 0, Math.PI * 2);
+          ctx.arc(cx, row2Y - Sh(4), capR, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = "#fff";
-          ctx.font = `bold ${S(10)}px system-ui,sans-serif`;
+          ctx.font = `bold ${Sw(10)}px system-ui,sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(String(v ?? "–"), cx, row2Y);
         });
@@ -264,7 +266,7 @@ export function ShareMatchResultDialog({
         const dataUrl = await toPng(el, {
           quality: 1.0,
           width: 320,
-          height: 480,
+          height: 569,
           pixelRatio: 2,
           style: { transform: "none", margin: "0" },
         });
@@ -313,7 +315,7 @@ export function ShareMatchResultDialog({
               style={{
                 fontFamily: "system-ui, -apple-system, sans-serif",
                 width: 320,
-                height: 480,
+                height: 569,
               }}
             >
             {/* Foto a pantalla completa con todos los overlays encima */}
@@ -329,7 +331,7 @@ export function ShareMatchResultDialog({
             <div
               ref={overlayRef}
               className="absolute inset-0 z-10 pointer-events-none"
-              style={{ width: 320, height: 480 }}
+              style={{ width: 320, height: 569 }}
             >
             {/* Overlay 2 filas arriba: 6 publicidades cada una (tamaño alineado con imagen copiada) */}
             {adsTopRow1.length > 0 && (
