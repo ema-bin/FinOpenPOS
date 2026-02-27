@@ -128,30 +128,48 @@ export default function ShareGroupStandingsTab({ tournament }: { tournament: Pic
         })
       );
 
-      // Obtener dimensiones reales del elemento
       const elementWidth = groupRef.offsetWidth;
       const elementHeight = groupRef.scrollHeight;
-      
-      // Generar la imagen usando dom-to-image con un ancho ligeramente mayor para evitar cortes
+
       const dataUrl = await toPng(groupRef, {
         quality: 1.0,
         width: elementWidth + 20,
         height: elementHeight,
         style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left',
+          transform: "scale(1)",
+          transformOrigin: "top left",
         },
       });
 
-      // Convertir data URL a blob
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
+      const outW = 1080;
+      const outH = 1920;
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = dataUrl;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas no disponible");
+      const scale = Math.min(outW / img.width, outH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (outW - w) / 2;
+      const y = (outH - h) / 2;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, x, y, w, h);
 
-      // Copiar al portapapeles
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+      );
+      if (!blob) throw new Error("Error al generar imagen");
+
       await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': blob
-        })
+        new ClipboardItem({ "image/png": blob }),
       ]);
 
       toast.success("Imagen copiada al portapapeles");
