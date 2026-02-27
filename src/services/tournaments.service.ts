@@ -130,6 +130,14 @@ class TournamentsService {
     return response.json();
   }
 
+  async getGroupSlots(tournamentId: number): Promise<Array<{ id: number; slot_date: string; start_time: string; end_time: string }>> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch tournament group slots");
+    }
+    return response.json();
+  }
+
   async getTeams(tournamentId: number): Promise<TeamDTO[]> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams`);
     if (!response.ok) {
@@ -218,14 +226,13 @@ class TournamentsService {
   async updateTeamRestrictions(
     tournamentId: number,
     teamId: number,
-    restrictedSchedules: Array<{ date: string; start_time: string; end_time: string }>,
+    restrictedSlotIds: number[],
     scheduleNotes?: string | null
   ): Promise<void> {
-    const body: any = { restricted_schedules: restrictedSchedules };
+    const body: { restricted_slot_ids: number[]; schedule_notes?: string | null } = { restricted_slot_ids: restrictedSlotIds };
     if (scheduleNotes !== undefined) {
       body.schedule_notes = scheduleNotes;
     }
-    
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}/restrictions`, {
       method: "PATCH",
       headers: {

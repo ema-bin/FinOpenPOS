@@ -366,23 +366,36 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           sendLog(`Creados ${matchesPayload.length} partidos`);
           sendProgress(60, "Generando horarios...");
 
-          // Obtener restricciones de equipos
+          // Obtener restricciones por slot_id y expandir a (date, start_time, end_time)
           const { data: restrictions, error: restrictionsError } = await supabase
             .from("tournament_team_schedule_restrictions")
-            .select("tournament_team_id, date, start_time, end_time")
+            .select("tournament_team_id, tournament_group_slot_id")
             .in("tournament_team_id", teamIds);
 
           const teamRestrictions = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
-          if (!restrictionsError && restrictions) {
-            restrictions.forEach((r: any) => {
-              const teamId = r.tournament_team_id;
-              if (!teamRestrictions.has(teamId)) {
-                teamRestrictions.set(teamId, []);
+          if (!restrictionsError && restrictions && restrictions.length > 0) {
+            const slotIds = [...new Set(restrictions.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id))];
+            const { data: slots } = await supabase
+              .from("tournament_group_slots")
+              .select("id, slot_date, start_time, end_time")
+              .eq("tournament_id", tournamentId)
+              .in("id", slotIds);
+
+            const slotMap = new Map<number, { slot_date: string; start_time: string; end_time: string }>();
+            (slots ?? []).forEach((s: { id: number; slot_date: string; start_time: string; end_time: string }) => {
+              slotMap.set(s.id, { slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time });
+            });
+
+            restrictions.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
+              const slot = slotMap.get(r.tournament_group_slot_id);
+              if (!slot) return;
+              if (!teamRestrictions.has(r.tournament_team_id)) {
+                teamRestrictions.set(r.tournament_team_id, []);
               }
-              teamRestrictions.get(teamId)!.push({
-                date: r.date,
-                start_time: r.start_time,
-                end_time: r.end_time,
+              teamRestrictions.get(r.tournament_team_id)!.push({
+                date: slot.slot_date,
+                start_time: slot.start_time,
+                end_time: slot.end_time,
               });
             });
           }

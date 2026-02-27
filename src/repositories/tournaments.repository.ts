@@ -239,30 +239,28 @@ export class TournamentTeamsRepository extends BaseRepository {
         
         // Procesar datos fallback con valores por defecto
         const teamIds = (fallbackData ?? []).map((t: any) => t.id);
-        const restrictedSchedulesMap = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
+        const restrictedSlotIdsMap = new Map<number, number[]>();
         
         if (teamIds.length > 0) {
           const { data: restrictions } = await this.supabase
             .from("tournament_team_schedule_restrictions")
-            .select("tournament_team_id, date, start_time, end_time")
+            .select("tournament_team_id, tournament_group_slot_id, can_play")
             .in("tournament_team_id", teamIds);
           
           if (restrictions) {
             restrictions.forEach((r: any) => {
-              const teamId = r.tournament_team_id;
-              if (!restrictedSchedulesMap.has(teamId)) {
-                restrictedSchedulesMap.set(teamId, []);
+              if (r.can_play === false) {
+                const teamId = r.tournament_team_id;
+                if (!restrictedSlotIdsMap.has(teamId)) {
+                  restrictedSlotIdsMap.set(teamId, []);
+                }
+                restrictedSlotIdsMap.get(teamId)!.push(r.tournament_group_slot_id);
               }
-              restrictedSchedulesMap.get(teamId)!.push({
-                date: r.date,
-                start_time: r.start_time,
-                end_time: r.end_time,
-              });
             });
           }
         }
         
-        const normalized = this.normalizeTeamData(fallbackData ?? [], restrictedSchedulesMap, true);
+        const normalized = this.normalizeTeamData(fallbackData ?? [], restrictedSlotIdsMap, true);
         // Ordenar por display_order (que será el index) y luego por id
         return normalized.sort((a, b) => {
           const orderA = a.display_order ?? 0;
@@ -274,32 +272,30 @@ export class TournamentTeamsRepository extends BaseRepository {
       throw new Error(`Failed to fetch tournament teams: ${error.message}`);
     }
 
-    // Obtener restricciones para cada equipo
+    // Obtener restricciones para cada equipo (slots en los que NO puede jugar)
     const teamIds = (data ?? []).map((t: any) => t.id);
-    const restrictedSchedulesMap = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
+    const restrictedSlotIdsMap = new Map<number, number[]>();
     
     if (teamIds.length > 0) {
       const { data: restrictions, error: restrictionsError } = await this.supabase
         .from("tournament_team_schedule_restrictions")
-        .select("tournament_team_id, date, start_time, end_time")
+        .select("tournament_team_id, tournament_group_slot_id, can_play")
         .in("tournament_team_id", teamIds);
 
       if (!restrictionsError && restrictions) {
         restrictions.forEach((r: any) => {
-          const teamId = r.tournament_team_id;
-          if (!restrictedSchedulesMap.has(teamId)) {
-            restrictedSchedulesMap.set(teamId, []);
+          if (r.can_play === false) {
+            const teamId = r.tournament_team_id;
+            if (!restrictedSlotIdsMap.has(teamId)) {
+              restrictedSlotIdsMap.set(teamId, []);
+            }
+            restrictedSlotIdsMap.get(teamId)!.push(r.tournament_group_slot_id);
           }
-          restrictedSchedulesMap.get(teamId)!.push({
-            date: r.date,
-            start_time: r.start_time,
-            end_time: r.end_time,
-          });
         });
       }
     }
 
-    const normalized = this.normalizeTeamData(data ?? [], restrictedSchedulesMap, false);
+    const normalized = this.normalizeTeamData(data ?? [], restrictedSlotIdsMap, false);
     // Ordenar por display_order si está disponible, luego por id
     return normalized.sort((a, b) => {
       const orderA = a.display_order ?? 0;
@@ -314,12 +310,12 @@ export class TournamentTeamsRepository extends BaseRepository {
    */
   private normalizeTeamData(
     data: any[],
-    restrictedSchedulesMap: Map<number, Array<{ date: string; start_time: string; end_time: string }>>,
+    restrictedSlotIdsMap: Map<number, number[]>,
     useDefaults: boolean
   ): Array<TournamentTeam & {
     player1?: { first_name: string; last_name: string };
     player2?: { first_name: string; last_name: string };
-    restricted_schedule_ids?: number[];
+    restricted_slot_ids?: number[];
   }> {
     return data.map((item: any, index: number) => {
       // Normalizar player1
@@ -363,12 +359,12 @@ export class TournamentTeamsRepository extends BaseRepository {
         schedule_notes: useDefaults ? null : (item.schedule_notes ?? null),
         player1,
         player2,
-        restricted_schedules: restrictedSchedulesMap.get(item.id) || [],
+        restricted_slot_ids: restrictedSlotIdsMap.get(item.id) || [],
       };
     }) as unknown as Array<TournamentTeam & {
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
-      restricted_schedule_ids?: number[];
+      restricted_slot_ids?: number[];
     }>;
   }
 
@@ -412,6 +408,30 @@ export class TournamentTeamsRepository extends BaseRepository {
     }
 
     return data as TournamentTeam;
+  }
+
+  /**
+   * Inserta filas en tournament_team_schedule_restrictions (una por slot con can_play).
+   * Usar al crear un equipo para marcar todos los slots como disponibles.
+   */
+  async insertScheduleRestrictions(
+    teamId: number,
+    slotIds: number[],
+    canPlay: boolean
+  ): Promise<void> {
+    if (slotIds.length === 0) return;
+    const rows = slotIds.map((tournament_group_slot_id) => ({
+      tournament_team_id: teamId,
+      tournament_group_slot_id,
+      can_play: canPlay,
+      user_uid: this.userId,
+    }));
+    const { error } = await this.supabase
+      .from("tournament_team_schedule_restrictions")
+      .insert(rows);
+    if (error) {
+      throw new Error(`Failed to insert schedule restrictions: ${error.message}`);
+    }
   }
 
   /**

@@ -2,6 +2,7 @@
 -- RESET (para desarrollo)
 -- =========================================================
 
+DROP TABLE IF EXISTS tournament_team_schedule_restrictions;
 DROP TABLE IF EXISTS tournament_registration_payments;
 DROP TABLE IF EXISTS tournament_group_standings;
 DROP TABLE IF EXISTS tournament_playoffs;
@@ -622,16 +623,17 @@ CREATE TRIGGER trigger_update_tournament_registration_payments_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_tournament_registration_payments_updated_at();
 
+-- Una fila por (equipo, slot): can_play indica si el equipo puede jugar en ese horario.
 CREATE TABLE tournament_team_schedule_restrictions (
     id                          BIGSERIAL PRIMARY KEY,
     tournament_team_id           BIGINT NOT NULL REFERENCES tournament_teams(id) ON DELETE CASCADE,
-    date                        DATE NOT NULL,
-    start_time                  TIME NOT NULL,
-    end_time                    TIME NOT NULL,
+    tournament_group_slot_id     BIGINT NOT NULL REFERENCES tournament_group_slots(id) ON DELETE CASCADE,
+    can_play                    BOOLEAN NOT NULL DEFAULT true,
     user_uid                    UUID NOT NULL,
     created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(tournament_team_id, date, start_time, end_time)
+    UNIQUE(tournament_team_id, tournament_group_slot_id)
 );
+CREATE INDEX idx_tournament_team_schedule_restrictions_slot ON tournament_team_schedule_restrictions(tournament_group_slot_id);
 
 -- =========================================================
 -- TOURNAMENT_GROUPS (ZONAS)

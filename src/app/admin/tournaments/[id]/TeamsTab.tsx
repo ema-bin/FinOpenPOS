@@ -55,6 +55,10 @@ async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiRes
   return tournamentsService.getGroups(tournamentId);
 }
 
+async function fetchTournamentGroupSlots(tournamentId: number) {
+  return tournamentsService.getGroupSlots(tournamentId);
+}
+
 export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "status" | "match_duration"> }) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -124,13 +128,17 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
     data: groupsData,
     isLoading: loadingGroups,
   } = useQuery({
-    queryKey: ["tournament-groups", tournament.id], // Mismo key que GroupsTab
+    queryKey: ["tournament-groups", tournament.id],
     queryFn: () => fetchTournamentGroups(tournament.id),
-    staleTime: 1000 * 30, // 30 segundos
+    staleTime: 1000 * 30,
   });
 
-  // Horarios disponibles ahora se generan on the fly durante la revisión de horarios (no se guardan)
-  const availableSchedules: any[] = []; // Array vacío para el diálogo de restricciones
+  const { data: groupSlots = [] } = useQuery({
+    queryKey: ["tournament-group-slots", tournament.id],
+    queryFn: () => fetchTournamentGroupSlots(tournament.id),
+    staleTime: 1000 * 60,
+    enabled: restrictionsDialogOpen, // Cargar slots cuando se abre el diálogo de restricciones
+  });
 
   const hasGroups = groupsData?.groups && groupsData.groups.length > 0;
   const loading = loadingTeams || loadingPlayers || loadingGroups;
@@ -292,22 +300,20 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   };
 
   const handleSaveRestrictions = async (
-    restrictedSchedules: Array<{ date: string; start_time: string; end_time: string }>,
+    restrictedSlotIds: number[],
     scheduleNotes?: string | null
   ) => {
     if (!selectedTeamForRestrictions) return;
-    
     try {
       await tournamentsService.updateTeamRestrictions(
         tournament.id,
         selectedTeamForRestrictions.id,
-        restrictedSchedules,
+        restrictedSlotIds,
         scheduleNotes
       );
-      // Invalidar cache para refrescar teams
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
       setSelectedTeamForRestrictions(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       throw err;
     }
@@ -1171,12 +1177,10 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
         open={restrictionsDialogOpen}
         onOpenChange={(open) => {
           setRestrictionsDialogOpen(open);
-          if (!open) {
-            setSelectedTeamForRestrictions(null);
-          }
+          if (!open) setSelectedTeamForRestrictions(null);
         }}
         team={selectedTeamForRestrictions}
-        availableSchedules={availableSchedules}
+        slots={groupSlots}
         onSave={handleSaveRestrictions}
       />
     </Card>

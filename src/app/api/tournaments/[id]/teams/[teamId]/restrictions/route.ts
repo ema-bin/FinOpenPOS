@@ -21,9 +21,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     const body = await req.json();
-    const { restricted_schedules, schedule_notes } = body; // Array de { date, start_time, end_time } y notas opcionales
+    const { restricted_slot_ids, schedule_notes } = body; // Array de IDs de tournament_group_slots en los que NO puede jugar
 
-    // Validar que el equipo existe y pertenece al usuario y torneo
+    // Validar que el equipo existe y pertenece al torneo
     const { data: team, error: teamError } = await supabase
       .from("tournament_teams")
       .select("id, tournament_id, user_uid")
@@ -57,34 +57,42 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Validar formato de restricted_schedules
-    if (!Array.isArray(restricted_schedules)) {
+    if (!Array.isArray(restricted_slot_ids)) {
       return NextResponse.json(
-        { error: "restricted_schedules debe ser un array" },
+        { error: "restricted_slot_ids debe ser un array" },
         { status: 400 }
       );
     }
 
-    // Validar cada restricción
-    for (const schedule of restricted_schedules) {
-      if (!schedule.date || !schedule.start_time || !schedule.end_time) {
+    const restrictedSet = new Set(
+      restricted_slot_ids.filter((id: unknown) => Number.isInteger(Number(id)) && Number(id) > 0) as number[]
+    );
+
+    // Traer todos los slots del torneo
+    const { data: allSlots, error: slotsError } = await supabase
+      .from("tournament_group_slots")
+      .select("id")
+      .eq("tournament_id", tournamentId);
+
+    if (slotsError) {
+      return NextResponse.json(
+        { error: "Error al obtener slots del torneo" },
+        { status: 500 }
+      );
+    }
+
+    const tournamentSlotIds = (allSlots ?? []).map((s: { id: number }) => s.id);
+    if (restrictedSet.size > 0) {
+      const invalid = [...restrictedSet].filter((id) => !tournamentSlotIds.includes(id));
+      if (invalid.length > 0) {
         return NextResponse.json(
-          { error: "Cada restricción debe tener date, start_time y end_time" },
-          { status: 400 }
-        );
-      }
-      
-      // Validar formato de fecha
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(schedule.date)) {
-        return NextResponse.json(
-          { error: "El formato de fecha debe ser YYYY-MM-DD" },
+          { error: "Algunos IDs de slot no pertenecen a este torneo" },
           { status: 400 }
         );
       }
     }
 
-    // Eliminar restricciones existentes
+    // Reemplazar restricciones: una fila por slot con can_play = true si NO está en restricted
     const { error: deleteError } = await supabase
       .from("tournament_team_schedule_restrictions")
       .delete()
@@ -98,19 +106,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Insertar nuevas restricciones
-    if (restricted_schedules.length > 0) {
-      const restrictionsToInsert = restricted_schedules.map((schedule: { date: string; start_time: string; end_time: string }) => ({
+    if (tournamentSlotIds.length > 0) {
+      const rows = tournamentSlotIds.map((slotId: number) => ({
         tournament_team_id: teamId,
-        date: schedule.date,
-        start_time: schedule.start_time,
-        end_time: schedule.end_time,
+        tournament_group_slot_id: slotId,
+        can_play: !restrictedSet.has(slotId),
         user_uid: user.id,
       }));
 
       const { error: insertError } = await supabase
         .from("tournament_team_schedule_restrictions")
-        .insert(restrictionsToInsert);
+        .insert(rows);
 
       if (insertError) {
         console.error("Error inserting restrictions:", insertError);
