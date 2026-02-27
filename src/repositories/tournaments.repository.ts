@@ -9,12 +9,14 @@ import type {
   TournamentMatch,
   TournamentGroupStanding,
   TournamentPlayoff,
+  TournamentGroupSlot,
   MatchPhase,
   MatchStatus,
   CreateTournamentInput,
   CreateTournamentTeamInput,
   CreateTournamentGroupInput,
   CreateTournamentMatchInput,
+  CreateTournamentGroupSlotInput,
   TournamentGroupsData,
 } from "@/models/db/tournament";
 
@@ -119,6 +121,45 @@ export class TournamentsRepository extends BaseRepository {
     }
 
     return data as Tournament;
+  }
+}
+
+export class TournamentGroupSlotsRepository extends BaseRepository {
+  async createMany(
+    tournamentId: number,
+    slots: Omit<CreateTournamentGroupSlotInput, "tournament_id">[]
+  ): Promise<TournamentGroupSlot[]> {
+    if (slots.length === 0) return [];
+    const rows = slots.map((s) => ({
+      tournament_id: tournamentId,
+      user_uid: this.userId,
+      slot_date: s.slot_date,
+      start_time: s.start_time,
+      end_time: s.end_time,
+    }));
+    const { data, error } = await this.supabase
+      .from("tournament_group_slots")
+      .insert(rows)
+      .select();
+
+    if (error) {
+      throw new Error(`Failed to create tournament group slots: ${error.message}`);
+    }
+    return (data ?? []) as TournamentGroupSlot[];
+  }
+
+  async findByTournamentId(tournamentId: number): Promise<TournamentGroupSlot[]> {
+    const { data, error } = await this.supabase
+      .from("tournament_group_slots")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("slot_date", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch tournament group slots: ${error.message}`);
+    }
+    return (data ?? []) as TournamentGroupSlot[];
   }
 }
 

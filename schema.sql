@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS tournament_playoffs;
 DROP TABLE IF EXISTS tournament_matches;
 DROP TABLE IF EXISTS tournament_group_teams;
 DROP TABLE IF EXISTS tournament_groups;
+DROP TABLE IF EXISTS tournament_group_slots;
 DROP TABLE IF EXISTS player_tournament_points;
 DROP TABLE IF EXISTS tournament_ranking_point_rules;
 DROP TABLE IF EXISTS tournament_teams;
@@ -534,6 +535,24 @@ CREATE TABLE tournaments (
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =========================================================
+-- TOURNAMENT_GROUP_SLOTS (días y slots disponibles para partidos de zona)
+-- Se definen al crear el torneo: fecha, horario inicio/fin, cancha.
+-- =========================================================
+
+CREATE TABLE tournament_group_slots (
+    id             BIGSERIAL PRIMARY KEY,
+    tournament_id  BIGINT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    user_uid      UUID NOT NULL,
+    slot_date     DATE NOT NULL,
+    start_time    TIME NOT NULL,
+    end_time      TIME NOT NULL,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_tournament_group_slots_tournament_id ON tournament_group_slots(tournament_id);
+CREATE INDEX idx_tournament_group_slots_slot_date ON tournament_group_slots(slot_date);
 
 -- =========================================================
 -- TOURNAMENT_TEAMS (parejas dentro de un torneo)

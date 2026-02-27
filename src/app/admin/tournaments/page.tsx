@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2Icon, PencilIcon, PlusIcon } from "lucide-react";
+import { Loader2Icon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -63,12 +63,12 @@ export default function TournamentsPage() {
     staleTime: 1000 * 60 * 10,
   });
   const suma13Category = categoriesDamas.find((c) => c.name === "Suma 13 damas");
-
   const [isCategorySpecific, setIsCategorySpecific] = useState(false);
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
   const [registrationFee, setRegistrationFee] = useState<number>(0);
   const [creating, setCreating] = useState(false);
+  const [groupSlots, setGroupSlots] = useState<Array<{ slot_date: string; start_time: string; end_time: string }>>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [tournamentToEdit, setTournamentToEdit] = useState<TournamentDTO | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -130,6 +130,20 @@ export default function TournamentsPage() {
         has_super_tiebreak: hasSuperTiebreak,
         match_duration: matchDuration,
         registration_fee: registrationFee,
+        group_slots:
+          groupSlots.filter(
+            (s) =>
+              s.slot_date.trim() !== "" &&
+              s.start_time.trim() !== "" &&
+              s.end_time.trim() !== ""
+          ).length > 0
+            ? groupSlots.filter(
+                (s) =>
+                  s.slot_date.trim() !== "" &&
+                  s.start_time.trim() !== "" &&
+                  s.end_time.trim() !== ""
+              )
+            : undefined,
       });
       setDialogOpen(false);
       setName("");
@@ -140,6 +154,7 @@ export default function TournamentsPage() {
       setHasSuperTiebreak(false);
       setMatchDuration(60);
       setRegistrationFee(0);
+      setGroupSlots([]);
       setTournaments((prev) => [created, ...prev]);
       router.push(`/admin/tournaments/${created.id}`);
     } catch (err) {
@@ -286,12 +301,18 @@ export default function TournamentsPage() {
         )}
       </CardContent>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setGroupSlots([]);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>Nuevo torneo</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 px-6 pb-4 overflow-y-auto min-h-0 flex-1">
             <div className="space-y-1">
               <Label>Nombre</Label>
               <Input
@@ -396,8 +417,79 @@ export default function TournamentsPage() {
                 onCheckedChange={setHasSuperTiebreak}
               />
             </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <Label>Rangos horarios para partidos de zona</Label>
+              <p className="text-xs text-muted-foreground">
+                Definí por cada día un rango (ej. 9:00 a 22:00). Se generarán automáticamente slots de {matchDuration} min (duración del partido) dentro de cada rango.
+              </p>
+              {groupSlots.map((slot, idx) => (
+                <div key={idx} className="flex flex-wrap items-end gap-2 p-2 rounded-md bg-muted/50">
+                  <div className="space-y-1 min-w-[120px]">
+                    <Label className="text-xs">Fecha</Label>
+                    <Input
+                      type="date"
+                      value={slot.slot_date}
+                      onChange={(e) =>
+                        setGroupSlots((prev) =>
+                          prev.map((s, i) => (i === idx ? { ...s, slot_date: e.target.value } : s))
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1 w-24">
+                    <Label className="text-xs">Desde</Label>
+                    <Input
+                      type="time"
+                      value={slot.start_time}
+                      onChange={(e) =>
+                        setGroupSlots((prev) =>
+                          prev.map((s, i) => (i === idx ? { ...s, start_time: e.target.value } : s))
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1 w-24">
+                    <Label className="text-xs">Hasta</Label>
+                    <Input
+                      type="time"
+                      value={slot.end_time}
+                      onChange={(e) =>
+                        setGroupSlots((prev) =>
+                          prev.map((s, i) => (i === idx ? { ...s, end_time: e.target.value } : s))
+                        )
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 h-9 w-9 text-destructive hover:text-destructive"
+                    onClick={() => setGroupSlots((prev) => prev.filter((_, i) => i !== idx))}
+                    aria-label="Quitar slot"
+                  >
+                    <Trash2Icon className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setGroupSlots((prev) => [
+                    ...prev,
+                    { slot_date: "", start_time: "09:00", end_time: "00:00" },
+                  ])
+                }
+              >
+                <PlusIcon className="h-4 w-4 mr-1" />
+                Agregar rango horario
+              </Button>
+            </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button
               onClick={handleCreate}
               disabled={creating || !name.trim()}

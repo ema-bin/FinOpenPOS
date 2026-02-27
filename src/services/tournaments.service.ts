@@ -2,6 +2,12 @@ import { TournamentPlayoff, TournamentTeam } from "@/models/db";
 import type { TournamentStatus } from "@/models/db";
 import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, TournamentDTO, AvailableSchedule, ScheduleConfig, TournamentPaymentsApiResponse, TournamentRegistrationPaymentDTO } from "@/models/dto/tournament";
 
+export interface TournamentGroupSlotInput {
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface CreateTournamentInput {
   name: string;
   start_date?: string;
@@ -17,6 +23,7 @@ export interface CreateTournamentInput {
   has_super_tiebreak?: boolean;
   match_duration?: number;
   registration_fee?: number;
+  group_slots?: TournamentGroupSlotInput[];
 }
 
 export interface CreateTournamentTeamInput {
