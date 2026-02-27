@@ -106,18 +106,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Recalcular total
-    const total = await repos.orderItems.calculateOrderTotal(orderId);
-    await repos.orders.update(orderId, { total_amount: total });
-
-    if (total <= 0) {
-      return NextResponse.json(
-        { error: "Order total is zero" },
-        { status: 400 }
-      );
-    }
-
-    // 4. Obtener supabase y usuario para operaciones directas
+    // 3. Obtener supabase y usuario (necesario para filtrar por cantina y transacción)
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = createClient();
     const {
@@ -128,7 +117,85 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 5. Validar método de pago
+    // 4. Misma lógica que pay: solo ítems de categoría cantina (quitar no cantina y recalcular)
+    const { data: fetchedItems, error: itemsError } = await supabase
+      .from("order_items")
+      .select(
+        `
+        id,
+        quantity,
+        unit_price,
+        product_id,
+        product:product_id (
+          name,
+          uses_stock,
+          category_id,
+          category:category_id (
+            id,
+            name,
+            is_cantina_revenue
+          )
+        )
+      `
+      )
+      .eq("order_id", orderId);
+
+    if (itemsError) {
+      console.error("Error fetching items for quick-sale:", itemsError);
+      return NextResponse.json(
+        { error: "Error fetching order items" },
+        { status: 500 }
+      );
+    }
+
+    const allItems = fetchedItems ?? [];
+    const nonRevenueItemIds = allItems
+      .filter(
+        (item: any) =>
+          item.product?.category?.is_cantina_revenue === false
+      )
+      .map((item: any) => item.id);
+
+    if (nonRevenueItemIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("order_items")
+        .delete()
+        .eq("order_id", orderId)
+        .in("id", nonRevenueItemIds);
+
+      if (deleteError) {
+        console.error("Error removing non-cantina items in quick-sale:", deleteError);
+        return NextResponse.json(
+          { error: "Error removing special items" },
+          { status: 500 }
+        );
+      }
+    }
+
+    const revenueItems = allItems.filter(
+      (item: any) =>
+        item.product?.category?.is_cantina_revenue !== false
+    );
+
+    if (revenueItems.length === 0) {
+      return NextResponse.json(
+        { error: "Cannot complete quick sale: no cantina items" },
+        { status: 400 }
+      );
+    }
+
+    // 5. Recalcular total solo con ítems cantina
+    const total = await repos.orderItems.calculateOrderTotal(orderId);
+    await repos.orders.update(orderId, { total_amount: total });
+
+    if (total <= 0) {
+      return NextResponse.json(
+        { error: "Order total is zero" },
+        { status: 400 }
+      );
+    }
+
+    // 6. Validar método de pago
     const { data: paymentMethod, error: pmError } = await supabase
       .from("payment_methods")
       .select("id, name")
@@ -142,7 +209,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 6. Crear transacción
+    // 7. Crear transacción
     const { error: txError } = await supabase.from("transactions").insert({
       order_id: orderId,
       payment_method_id: paymentMethodId,
@@ -161,14 +228,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 7. Crear movimientos de stock tipo 'sale'
-    const orderWithItems = await repos.orders.findByIdWithItems(orderId);
-    if (!orderWithItems || !orderWithItems.items) {
-      return NextResponse.json(
-        { error: "Error fetching order items for stock movements" },
-        { status: 500 }
-      );
-    }
+    // 8. Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina (igual que pay)
+    const normalizeProductRecord = (productField: any) => {
+      if (!productField) return null;
+      return Array.isArray(productField) ? productField[0] ?? null : productField;
+    };
 
     type StockMovementPayload = {
       product_id: number;
@@ -179,9 +243,9 @@ export async function POST(request: Request) {
       user_uid: string;
     };
 
-    const stockMovementsPayload = orderWithItems.items
+    const stockMovementsPayload = revenueItems
       .map((item: any) => {
-        const product = item.product;
+        const product = normalizeProductRecord(item.product);
         if (product && product.uses_stock === false) {
           return null;
         }
@@ -208,7 +272,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 8. Marcar orden como cerrada
+    // 9. Marcar orden como cerrada
     const { error: updateOrderError } = await supabase
       .from("orders")
       .update({
@@ -225,7 +289,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 9. Devolver la orden finalizada
+    // 10. Devolver la orden finalizada
     const finalOrder = await repos.orders.findByIdWithItems(orderId);
     if (!finalOrder) {
       return NextResponse.json(
