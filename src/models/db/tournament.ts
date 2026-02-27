@@ -105,6 +105,17 @@ export interface TournamentPlayoff {
   match_id: number | null;
 }
 
+/** Slots disponibles para partidos de zona: fecha y horario. Se crean al crear el torneo. */
+export interface TournamentGroupSlot {
+  id: number;
+  tournament_id: number;
+  user_uid: string;
+  slot_date: string; // DATE
+  start_time: string; // TIME
+  end_time: string; // TIME
+  created_at: string;
+}
+
 // Input types for creating/updating entities
 export interface CreateTournamentInput {
   name: string;
@@ -118,6 +129,13 @@ export interface CreateTournamentInput {
   has_super_tiebreak?: boolean;
   match_duration?: number;
   registration_fee?: number;
+}
+
+export interface CreateTournamentGroupSlotInput {
+  tournament_id: number;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
 }
 
 export interface CreateTournamentTeamInput {

@@ -121,6 +121,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       display_name: display_name ?? null,
     });
 
+    // Inicializar restricciones: puede jugar en todos los slots del torneo
+    const slots = await repos.tournamentGroupSlots.findByTournamentId(tournamentId);
+    if (slots.length > 0) {
+      await repos.tournamentTeams.insertScheduleRestrictions(
+        team.id,
+        slots.map((s) => s.id),
+        true
+      );
+    }
+
     // Fetch team with player details
     const teams = await repos.tournamentTeams.findByTournamentId(tournamentId);
     const createdTeam = teams.find((t) => t.id === team.id);

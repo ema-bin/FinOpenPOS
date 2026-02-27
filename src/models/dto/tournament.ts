@@ -62,8 +62,7 @@ export interface TeamDTO {
   display_order: number;
   is_substitute: boolean;
   schedule_notes: string | null;
-  restricted_schedule_ids?: number[]; // IDs de horarios disponibles que el equipo NO puede jugar
-  restricted_schedules?: Array<{ date: string; start_time: string; end_time: string }>; // Restricciones horarias del equipo
+  restricted_slot_ids?: number[]; // IDs de tournament_group_slots en los que el equipo NO puede jugar
   standings?: Array<{
     position: number;
     group?: {

@@ -14,12 +14,14 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, PlusIcon, TrashIcon, LockIcon, ChevronsUpDown, CheckIcon, CalendarIcon, EditIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, GripVerticalIcon, SaveIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2Icon, PlusIcon, TrashIcon, Trash2Icon, LockIcon, ChevronsUpDown, CheckIcon, CalendarIcon, EditIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, GripVerticalIcon, SaveIcon, ClockIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
@@ -55,6 +57,46 @@ async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiRes
   return tournamentsService.getGroups(tournamentId);
 }
 
+async function fetchTournamentGroupSlots(tournamentId: number) {
+  return tournamentsService.getGroupSlots(tournamentId);
+}
+
+/** Convierte slots individuales en rangos (fecha + desde-hasta) uniendo consecutivos el mismo día */
+function slotsToRanges(
+  slots: Array<{ slot_date: string; start_time: string; end_time: string }>
+): Array<{ slot_date: string; start_time: string; end_time: string }> {
+  if (slots.length === 0) return [];
+  const timeStr = (t: string) => String(t).trim().substring(0, 5);
+  const byDate = new Map<string, Array<{ start: string; end: string }>>();
+  for (const s of slots) {
+    const d = s.slot_date;
+    const start = timeStr(s.start_time);
+    const end = timeStr(s.end_time);
+    if (!byDate.has(d)) byDate.set(d, []);
+    byDate.get(d)!.push({ start, end });
+  }
+  const ranges: Array<{ slot_date: string; start_time: string; end_time: string }> = [];
+  Array.from(byDate.entries()).forEach(([date, intervals]) => {
+    intervals.sort((a, b) => a.start.localeCompare(b.start));
+    let current = intervals[0];
+    for (let i = 1; i < intervals.length; i++) {
+      const next = intervals[i];
+      if (next.start === current.end) {
+        current = { start: current.start, end: next.end };
+      } else {
+        ranges.push({ slot_date: date, start_time: current.start, end_time: current.end });
+        current = next;
+      }
+    }
+    ranges.push({ slot_date: date, start_time: current.start, end_time: current.end });
+  });
+  ranges.sort((a, b) => {
+    if (a.slot_date !== b.slot_date) return a.slot_date.localeCompare(b.slot_date);
+    return a.start_time.localeCompare(b.start_time);
+  });
+  return ranges;
+}
+
 export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "status" | "match_duration"> }) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,6 +115,13 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   const [restrictionsDialogOpen, setRestrictionsDialogOpen] = useState(false);
   const [selectedTeamForRestrictions, setSelectedTeamForRestrictions] = useState<TeamDTO | null>(null);
   const [closingStatus, setClosingStatus] = useState<string | null>(null);
+  const [generateSlotsDialogOpen, setGenerateSlotsDialogOpen] = useState(false);
+  const [generateSlotsRanges, setGenerateSlotsRanges] = useState<Array<{ slot_date: string; start_time: string; end_time: string }>>([
+    { slot_date: "", start_time: "09:00", end_time: "00:00" },
+  ]);
+  const [generatingSlots, setGeneratingSlots] = useState(false);
+  const [confirmReplaceSlotsOpen, setConfirmReplaceSlotsOpen] = useState(false);
+  const [initializingAllRestrictions, setInitializingAllRestrictions] = useState(false);
   
   // Estado para edición de parejas
   const [editingTeam, setEditingTeam] = useState<TeamDTO | null>(null);
@@ -124,16 +173,37 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
     data: groupsData,
     isLoading: loadingGroups,
   } = useQuery({
-    queryKey: ["tournament-groups", tournament.id], // Mismo key que GroupsTab
+    queryKey: ["tournament-groups", tournament.id],
     queryFn: () => fetchTournamentGroups(tournament.id),
-    staleTime: 1000 * 30, // 30 segundos
+    staleTime: 1000 * 30,
   });
 
-  // Horarios disponibles ahora se generan on the fly durante la revisión de horarios (no se guardan)
-  const availableSchedules: any[] = []; // Array vacío para el diálogo de restricciones
+  const { data: groupSlots = [] } = useQuery({
+    queryKey: ["tournament-group-slots", tournament.id],
+    queryFn: () => fetchTournamentGroupSlots(tournament.id),
+    staleTime: 1000 * 60,
+  });
 
   const hasGroups = groupsData?.groups && groupsData.groups.length > 0;
   const loading = loadingTeams || loadingPlayers || loadingGroups;
+
+  // Al abrir el diálogo de horarios, pre-llenar con los slots existentes (convertidos a rangos)
+  useEffect(() => {
+    if (generateSlotsDialogOpen) {
+      if (groupSlots.length > 0) {
+        const ranges = slotsToRanges(
+          groupSlots.map((s) => ({
+            slot_date: s.slot_date,
+            start_time: s.start_time.substring(0, 5),
+            end_time: s.end_time.substring(0, 5),
+          }))
+        );
+        setGenerateSlotsRanges(ranges.length > 0 ? ranges : [{ slot_date: "", start_time: "09:00", end_time: "00:00" }]);
+      } else {
+        setGenerateSlotsRanges([{ slot_date: "", start_time: "09:00", end_time: "00:00" }]);
+      }
+    }
+  }, [generateSlotsDialogOpen, groupSlots]);
 
   // Calcular clave de sincronización basada en IDs de equipos
   const teamsIdsKey = useMemo(() => teams.map(t => t.id).sort().join(','), [teams]);
@@ -292,22 +362,20 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   };
 
   const handleSaveRestrictions = async (
-    restrictedSchedules: Array<{ date: string; start_time: string; end_time: string }>,
+    restrictedSlotIds: number[],
     scheduleNotes?: string | null
   ) => {
     if (!selectedTeamForRestrictions) return;
-    
     try {
       await tournamentsService.updateTeamRestrictions(
         tournament.id,
         selectedTeamForRestrictions.id,
-        restrictedSchedules,
+        restrictedSlotIds,
         scheduleNotes
       );
-      // Invalidar cache para refrescar teams
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
       setSelectedTeamForRestrictions(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       throw err;
     }
@@ -521,6 +589,66 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
 
   // Los slots de horario se calculan on the fly durante la revisión de horarios
 
+  const handleGenerateSlots = async () => {
+    const valid = generateSlotsRanges.filter(
+      (r) => r.slot_date.trim() !== "" && r.start_time.trim() !== "" && r.end_time.trim() !== ""
+    );
+    if (valid.length === 0) {
+      toast.error("Agregá al menos un rango con fecha, desde y hasta");
+      return;
+    }
+    try {
+      setGeneratingSlots(true);
+      setConfirmReplaceSlotsOpen(false);
+      await tournamentsService.createGroupSlots(
+        tournament.id,
+        valid,
+        tournament.match_duration ?? 60
+      );
+      queryClient.invalidateQueries({ queryKey: ["tournament-group-slots", tournament.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
+      setGenerateSlotsDialogOpen(false);
+      setGenerateSlotsRanges([{ slot_date: "", start_time: "09:00", end_time: "00:00" }]);
+      toast.success("Horarios generados correctamente");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al generar horarios");
+    } finally {
+      setGeneratingSlots(false);
+    }
+  };
+
+  const handleGenerateSlotsClick = () => {
+    const valid = generateSlotsRanges.filter(
+      (r) => r.slot_date.trim() !== "" && r.start_time.trim() !== "" && r.end_time.trim() !== ""
+    );
+    if (valid.length === 0) {
+      toast.error("Agregá al menos un rango con fecha, desde y hasta");
+      return;
+    }
+    if (groupSlots.length > 0) {
+      setConfirmReplaceSlotsOpen(true);
+    } else {
+      handleGenerateSlots();
+    }
+  };
+
+  const handleInitializeAllRestrictions = async () => {
+    try {
+      setInitializingAllRestrictions(true);
+      const result = await tournamentsService.initializeAllTeamsRestrictions(tournament.id);
+      queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
+      toast.success(
+        result.totalInserted > 0
+          ? `Disponibilidad inicializada para ${result.teamsInitialized} equipos`
+          : "Todos los equipos ya tenían la disponibilidad inicializada"
+      );
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al inicializar");
+    } finally {
+      setInitializingAllRestrictions(false);
+    }
+  };
+
   const handleCloseRegistration = async () => {
     try {
       setClosing(true);
@@ -562,7 +690,22 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
             Armá las parejas del torneo. Luego cerrá la inscripción para generar
             las zonas automáticamente.
           </CardDescription>
-          
+          {groupSlots.length === 0 && tournament.status === "draft" && (
+            <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                <ClockIcon className="h-4 w-4 shrink-0" />
+                <span>No hay horarios configurados para este torneo. Generá los slots para poder definir en qué horarios puede jugar cada equipo.</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-amber-300 dark:border-amber-700"
+                onClick={() => setGenerateSlotsDialogOpen(true)}
+              >
+                Generar horarios
+              </Button>
+            </div>
+          )}
           {/* Resumen */}
           {teams.length > 0 && (
             <div className="mt-3 p-3 bg-muted/50 rounded-md space-y-3 text-sm">
@@ -609,15 +752,30 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
                 </div>
                 <div>
                   <span className="text-muted-foreground">Slots disponibles:</span>{" "}
-                  <span className="font-medium text-muted-foreground">
-                    Se configurarán durante la revisión de horarios
+                  <span className="font-medium">
+                    {groupSlots.length > 0 ? groupSlots.length : "No configurados"}
                   </span>
                 </div>
               </div>
             </div>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {groupSlots.length > 0 && teams.length > 0 && tournament.status === "draft" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleInitializeAllRestrictions}
+              disabled={initializingAllRestrictions}
+            >
+              {initializingAllRestrictions ? (
+                <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <CalendarIcon className="w-4 h-4 mr-1" />
+              )}
+              Inicializar disponibilidad de todos
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={handleCloseRegistration}
@@ -648,6 +806,16 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
                   Guardar orden{hasOrderChanges && " *"}
                 </>
               )}
+            </Button>
+          )}
+          {tournament.status === "draft" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setGenerateSlotsDialogOpen(true)}
+            >
+              <ClockIcon className="w-4 h-4 mr-1" />
+              {groupSlots.length > 0 ? "Configurar horarios" : "Generar horarios"}
             </Button>
           )}
           <Button
@@ -1166,18 +1334,143 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo para generar horarios del torneo (si no tiene slots) */}
+      <Dialog open={generateSlotsDialogOpen} onOpenChange={setGenerateSlotsDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Generar horarios del torneo</DialogTitle>
+            <DialogDescription>
+              Definí rangos de fecha y hora. Se generarán slots de {tournament.match_duration ?? 60} min (duración del partido) dentro de cada rango.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
+            <Label className="text-sm">Rangos horarios</Label>
+            {generateSlotsRanges.map((slot, idx) => (
+              <div key={idx} className="flex flex-wrap items-end gap-2 p-2 rounded-md bg-muted/50">
+                <div className="space-y-1 min-w-[120px]">
+                  <Label className="text-xs">Fecha</Label>
+                  <Input
+                    type="date"
+                    value={slot.slot_date}
+                    onChange={(e) =>
+                      setGenerateSlotsRanges((prev) =>
+                        prev.map((s, i) => (i === idx ? { ...s, slot_date: e.target.value } : s))
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-1 w-24">
+                  <Label className="text-xs">Desde</Label>
+                  <Input
+                    type="time"
+                    value={slot.start_time}
+                    onChange={(e) =>
+                      setGenerateSlotsRanges((prev) =>
+                        prev.map((s, i) => (i === idx ? { ...s, start_time: e.target.value } : s))
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-1 w-24">
+                  <Label className="text-xs">Hasta</Label>
+                  <Input
+                    type="time"
+                    value={slot.end_time}
+                    onChange={(e) =>
+                      setGenerateSlotsRanges((prev) =>
+                        prev.map((s, i) => (i === idx ? { ...s, end_time: e.target.value } : s))
+                      )
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 h-9 w-9 text-destructive hover:text-destructive"
+                  onClick={() => setGenerateSlotsRanges((prev) => prev.filter((_, i) => i !== idx))}
+                  aria-label="Quitar rango"
+                >
+                  <Trash2Icon className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setGenerateSlotsRanges((prev) => [
+                  ...prev,
+                  { slot_date: "", start_time: "09:00", end_time: "00:00" },
+                ])
+              }
+            >
+              <PlusIcon className="h-4 w-4 mr-1" />
+              Agregar rango
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerateSlotsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleGenerateSlotsClick} disabled={generatingSlots}>
+              {generatingSlots && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+              {groupSlots.length > 0 ? "Regenerar horarios" : "Generar horarios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación al regenerar: se pierden las restricciones horarias */}
+      <Dialog open={confirmReplaceSlotsOpen} onOpenChange={setConfirmReplaceSlotsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Atención</DialogTitle>
+            <DialogDescription>
+              Al regenerar los horarios del torneo se eliminarán los slots actuales y{" "}
+              <strong>todas las restricciones horarias configuradas para todos los equipos</strong>.
+              Los equipos quedarán sin disponibilidad cargada y deberás inicializarla de nuevo si la necesitás.
+              ¿Querés continuar?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmReplaceSlotsOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleGenerateSlots()}
+              disabled={generatingSlots}
+            >
+              {generatingSlots ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Sí, regenerar horarios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <TeamScheduleRestrictionsDialog
         open={restrictionsDialogOpen}
         onOpenChange={(open) => {
           setRestrictionsDialogOpen(open);
-          if (!open) {
-            setSelectedTeamForRestrictions(null);
-          }
+          if (!open) setSelectedTeamForRestrictions(null);
         }}
         team={selectedTeamForRestrictions}
-        availableSchedules={availableSchedules}
+        slots={groupSlots}
         onSave={handleSaveRestrictions}
+        onInitialize={
+          selectedTeamForRestrictions
+            ? async () => {
+                await tournamentsService.initializeTeamRestrictions(tournament.id, selectedTeamForRestrictions.id);
+                const updated = await queryClient.fetchQuery({ queryKey: ["tournament-teams", tournament.id], queryFn: () => fetchTournamentTeams(tournament.id) });
+                const updatedTeam = updated.find((t) => t.id === selectedTeamForRestrictions.id);
+                if (updatedTeam) setSelectedTeamForRestrictions(updatedTeam);
+                toast.success("Disponibilidad inicializada");
+              }
+            : undefined
+        }
       />
     </Card>
   );

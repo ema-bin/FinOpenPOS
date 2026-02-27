@@ -16,6 +16,7 @@ import {
 } from "@/repositories/purchases.repository";
 import {
   TournamentsRepository,
+  TournamentGroupSlotsRepository,
   TournamentTeamsRepository,
   TournamentGroupsRepository,
   TournamentMatchesRepository,
@@ -89,6 +90,7 @@ export async function createRepositories() {
     purchases: new PurchasesRepository(supabase, user.id),
     purchaseItems: new PurchaseItemsRepository(supabase, user.id),
     tournaments: new TournamentsRepository(supabase, user.id),
+    tournamentGroupSlots: new TournamentGroupSlotsRepository(supabase, user.id),
     tournamentTeams: new TournamentTeamsRepository(supabase, user.id),
     tournamentGroups: new TournamentGroupsRepository(supabase, user.id),
     tournamentMatches: new TournamentMatchesRepository(supabase, user.id),

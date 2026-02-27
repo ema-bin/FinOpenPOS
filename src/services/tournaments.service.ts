@@ -2,6 +2,12 @@ import { TournamentPlayoff, TournamentTeam } from "@/models/db";
 import type { TournamentStatus } from "@/models/db";
 import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, TournamentDTO, AvailableSchedule, ScheduleConfig, TournamentPaymentsApiResponse, TournamentRegistrationPaymentDTO } from "@/models/dto/tournament";
 
+export interface TournamentGroupSlotInput {
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface CreateTournamentInput {
   name: string;
   start_date?: string;
@@ -17,6 +23,7 @@ export interface CreateTournamentInput {
   has_super_tiebreak?: boolean;
   match_duration?: number;
   registration_fee?: number;
+  group_slots?: TournamentGroupSlotInput[];
 }
 
 export interface CreateTournamentTeamInput {
@@ -123,6 +130,55 @@ class TournamentsService {
     return response.json();
   }
 
+  async getGroupSlots(tournamentId: number): Promise<Array<{ id: number; slot_date: string; start_time: string; end_time: string }>> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch tournament group slots");
+    }
+    return response.json();
+  }
+
+  async createGroupSlots(
+    tournamentId: number,
+    groupSlots: Array<{ slot_date: string; start_time: string; end_time: string }>,
+    matchDuration: number
+  ): Promise<{ ok: boolean; slots: Array<{ id: number; slot_date: string; start_time: string; end_time: string }> }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_slots: groupSlots, match_duration: matchDuration }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al generar horarios");
+    }
+    return response.json();
+  }
+
+  async initializeTeamRestrictions(tournamentId: number, teamId: number): Promise<{ ok: boolean; inserted: number }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}/restrictions/initialize`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al inicializar disponibilidad");
+    }
+    return response.json();
+  }
+
+  async initializeAllTeamsRestrictions(
+    tournamentId: number
+  ): Promise<{ ok: boolean; teamsInitialized: number; totalInserted: number }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/initialize-restrictions`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al inicializar disponibilidad");
+    }
+    return response.json();
+  }
+
   async getTeams(tournamentId: number): Promise<TeamDTO[]> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams`);
     if (!response.ok) {
@@ -211,14 +267,13 @@ class TournamentsService {
   async updateTeamRestrictions(
     tournamentId: number,
     teamId: number,
-    restrictedSchedules: Array<{ date: string; start_time: string; end_time: string }>,
+    restrictedSlotIds: number[],
     scheduleNotes?: string | null
   ): Promise<void> {
-    const body: any = { restricted_schedules: restrictedSchedules };
+    const body: { restricted_slot_ids: number[]; schedule_notes?: string | null } = { restricted_slot_ids: restrictedSlotIds };
     if (scheduleNotes !== undefined) {
       body.schedule_notes = scheduleNotes;
     }
-    
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}/restrictions`, {
       method: "PATCH",
       headers: {
