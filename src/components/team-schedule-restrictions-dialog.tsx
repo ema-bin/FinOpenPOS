@@ -27,8 +27,10 @@ interface TeamScheduleRestrictionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   team: TeamDTO | null;
-  slots: TournamentGroupSlotDisplay[]; // Slots del torneo (tournament_group_slots)
+  slots: TournamentGroupSlotDisplay[];
   onSave: (restrictedSlotIds: number[], scheduleNotes?: string | null) => Promise<void>;
+  /** Si se pasa, se muestra un botón para inicializar disponibilidad (una fila por slot con puede jugar). */
+  onInitialize?: () => Promise<void>;
 }
 
 export function TeamScheduleRestrictionsDialog({
@@ -37,10 +39,12 @@ export function TeamScheduleRestrictionsDialog({
   team,
   slots,
   onSave,
+  onInitialize,
 }: TeamScheduleRestrictionsDialogProps) {
   const [restrictedSlotIds, setRestrictedSlotIds] = useState<Set<number>>(new Set());
   const [scheduleNotes, setScheduleNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [initializing, setInitializing] = useState(false);
 
   const teamRestrictedSlotIds = team?.restricted_slot_ids ?? [];
 
@@ -124,10 +128,33 @@ export function TeamScheduleRestrictionsDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+          {onInitialize && slots.length > 0 && (
+            <div className="p-3 rounded-md border bg-muted/50 flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Si este equipo aún no tiene disponibilidad cargada, inicializala para marcar en qué horarios puede jugar.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={initializing}
+                onClick={async () => {
+                  try {
+                    setInitializing(true);
+                    await onInitialize();
+                  } finally {
+                    setInitializing(false);
+                  }
+                }}
+              >
+                {initializing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : "Inicializar disponibilidad"}
+              </Button>
+            </div>
+          )}
           {slots.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p className="mb-2">No hay horarios (slots) configurados para este torneo.</p>
-              <p className="text-sm">Configurá los rangos horarios al crear el torneo.</p>
+              <p className="text-sm">Usá el botón &quot;Generar horarios&quot; en la pestaña Inscripción.</p>
             </div>
           ) : (
             <div className="space-y-4">

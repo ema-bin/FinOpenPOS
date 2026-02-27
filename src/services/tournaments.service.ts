@@ -138,6 +138,47 @@ class TournamentsService {
     return response.json();
   }
 
+  async createGroupSlots(
+    tournamentId: number,
+    groupSlots: Array<{ slot_date: string; start_time: string; end_time: string }>,
+    matchDuration: number
+  ): Promise<{ ok: boolean; slots: Array<{ id: number; slot_date: string; start_time: string; end_time: string }> }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_slots: groupSlots, match_duration: matchDuration }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al generar horarios");
+    }
+    return response.json();
+  }
+
+  async initializeTeamRestrictions(tournamentId: number, teamId: number): Promise<{ ok: boolean; inserted: number }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}/restrictions/initialize`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al inicializar disponibilidad");
+    }
+    return response.json();
+  }
+
+  async initializeAllTeamsRestrictions(
+    tournamentId: number
+  ): Promise<{ ok: boolean; teamsInitialized: number; totalInserted: number }> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/initialize-restrictions`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Error al inicializar disponibilidad");
+    }
+    return response.json();
+  }
+
   async getTeams(tournamentId: number): Promise<TeamDTO[]> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams`);
     if (!response.ok) {

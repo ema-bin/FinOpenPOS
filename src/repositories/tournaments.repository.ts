@@ -161,6 +161,16 @@ export class TournamentGroupSlotsRepository extends BaseRepository {
     }
     return (data ?? []) as TournamentGroupSlot[];
   }
+
+  async deleteByTournamentId(tournamentId: number): Promise<void> {
+    const { error } = await this.supabase
+      .from("tournament_group_slots")
+      .delete()
+      .eq("tournament_id", tournamentId);
+    if (error) {
+      throw new Error(`Failed to delete tournament group slots: ${error.message}`);
+    }
+  }
 }
 
 export class TournamentTeamsRepository extends BaseRepository {
