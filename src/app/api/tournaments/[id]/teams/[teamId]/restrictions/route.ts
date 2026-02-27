@@ -83,7 +83,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
     const tournamentSlotIds = (allSlots ?? []).map((s: { id: number }) => s.id);
     if (restrictedSet.size > 0) {
-      const invalid = [...restrictedSet].filter((id) => !tournamentSlotIds.includes(id));
+      const invalid = Array.from(restrictedSet).filter((id) => !tournamentSlotIds.includes(id));
       if (invalid.length > 0) {
         return NextResponse.json(
           { error: "Algunos IDs de slot no pertenecen a este torneo" },

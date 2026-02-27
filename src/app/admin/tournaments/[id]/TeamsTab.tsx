@@ -76,7 +76,7 @@ function slotsToRanges(
     byDate.get(d)!.push({ start, end });
   }
   const ranges: Array<{ slot_date: string; start_time: string; end_time: string }> = [];
-  for (const [date, intervals] of byDate.entries()) {
+  Array.from(byDate.entries()).forEach(([date, intervals]) => {
     intervals.sort((a, b) => a.start.localeCompare(b.start));
     let current = intervals[0];
     for (let i = 1; i < intervals.length; i++) {
@@ -89,7 +89,7 @@ function slotsToRanges(
       }
     }
     ranges.push({ slot_date: date, start_time: current.start, end_time: current.end });
-  }
+  });
   ranges.sort((a, b) => {
     if (a.slot_date !== b.slot_date) return a.slot_date.localeCompare(b.slot_date);
     return a.start_time.localeCompare(b.start_time);

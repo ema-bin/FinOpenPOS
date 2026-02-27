@@ -374,7 +374,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
           const teamRestrictions = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
           if (!restrictionsError && restrictions && restrictions.length > 0) {
-            const slotIds = [...new Set(restrictions.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id))];
+            const slotIds = Array.from(new Set(restrictions.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id)));
             const { data: slots } = await supabase
               .from("tournament_group_slots")
               .select("id, slot_date, start_time, end_time")
