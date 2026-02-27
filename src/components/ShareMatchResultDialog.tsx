@@ -125,7 +125,13 @@ export function ShareMatchResultDialog({
               img.src = url;
               setTimeout(res, 3000);
             });
-            if (img.width) ctx.drawImage(img, lx, ly, lw, lh);
+            if (!img.naturalWidth || !img.naturalHeight) return;
+            const scale = Math.min(lw / img.naturalWidth, lh / img.naturalHeight);
+            const drawW = img.naturalWidth * scale;
+            const drawH = img.naturalHeight * scale;
+            const drawX = lx + (lw - drawW) / 2;
+            const drawY = ly + (lh - drawH) / 2;
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
           } catch {
             /* ignorar logo fallido */
           }
