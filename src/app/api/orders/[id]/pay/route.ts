@@ -324,8 +324,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    // 7) Crear movimientos de stock tipo 'sale'
-    //    Usamos quantity > 0 y movement_type = 'sale'.
+    // 7) Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina
     const normalizeProductRecord = (productField: any) => {
       if (!productField) {
         return null;
