@@ -187,14 +187,18 @@ export interface TournamentGroupsData {
       display_name: string | null;
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
+      restricted_slot_ids?: number[];
     };
     team2?: {
       id: number;
       display_name: string | null;
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
+      restricted_slot_ids?: number[];
     };
   }>;
   standings: TournamentGroupStanding[];
+  /** Slots del torneo para mapear (match_date, start_time) → slot id en revisión de horarios */
+  tournamentGroupSlots?: Array<Pick<TournamentGroupSlot, "id" | "slot_date" | "start_time" | "end_time">>;
 }
 
