@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
@@ -29,22 +30,54 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Obtener configuración de horarios del body
+    // Días y horarios se obtienen de los slots del torneo (misma fuente que las restricciones)
     const body = await req.json().catch(() => ({}));
-    const scheduleConfig: ScheduleConfig | undefined = body.days
-      ? {
-          days: body.days,
-          matchDuration: body.matchDuration || 60,
-          courtIds: body.courtIds || [],
-        }
-      : undefined;
+    const courtIds = Array.isArray(body.courtIds) ? body.courtIds : [];
+    const slotIds = Array.isArray(body.slotIds) ? body.slotIds : null;
+    const matchDuration = body.matchDuration ?? 60;
 
-    if (!scheduleConfig || !scheduleConfig.days.length || !scheduleConfig.courtIds.length) {
+    if (courtIds.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Configuración de horarios inválida" }),
+        JSON.stringify({ error: "Debés seleccionar al menos una cancha" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    const { data: allSlots, error: slotsError } = await supabase
+      .from("tournament_group_slots")
+      .select("id, slot_date, start_time, end_time")
+      .eq("tournament_id", tournamentId)
+      .order("slot_date", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (slotsError || !allSlots?.length) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No hay slots del torneo. Primero generá los horarios del torneo en Equipos → Generar horarios.",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const slots =
+      slotIds && slotIds.length > 0
+        ? allSlots.filter((s: { id: number }) => slotIds.includes(s.id))
+        : allSlots;
+
+    if (slots.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Ningún slot seleccionado o no coinciden con el torneo" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const days = buildScheduleDaysFromSlots(slots);
+    const scheduleConfig: ScheduleConfig = {
+      days,
+      matchDuration,
+      courtIds,
+    };
 
     // Crear un stream de Server-Sent Events
     const stream = new ReadableStream({
@@ -238,69 +271,83 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           }));
           sendLog(`Payload construido: ${matchesPayload.length} partidos`);
 
-          // 5) Obtener restricciones de equipos
-          sendLog("Obteniendo restricciones de equipos...");
-          const teamIds = Array.from(
-            new Set(
-              matches
-                .map((m) => [m.team1_id, m.team2_id])
-                .flat()
-                .filter((id): id is number => id !== null)
-            )
-          );
-          sendLog(`Equipos únicos encontrados: ${teamIds.length}`);
+          const groupIds = Array.from(new Set(matches.map((m) => m.tournament_group_id)));
+          const { data: groupsData } = await supabase
+            .from("tournament_groups")
+            .select("id, name")
+            .eq("tournament_id", tournamentId)
+            .in("id", groupIds);
+          const groupDisplayNames = new Map<number, string>();
+          (groupsData ?? []).forEach((row: { id: number; name?: string | null }) => {
+            groupDisplayNames.set(row.id, row.name?.trim() || `Grupo ${row.id}`);
+          });
 
-          const { data: restrictions, error: restrictionsError } = await supabase
-            .from("tournament_team_schedule_restrictions")
-            .select("tournament_team_id, tournament_group_slot_id")
-            .in("tournament_team_id", teamIds.length > 0 ? teamIds : [-1]);
+          const useRestrictions = body.algorithm === "with-restrictions";
+          let teamRestrictions: Map<number, Array<{ date: string; start_time: string; end_time: string }>> | undefined;
+          let tournamentSlots: Array<{ id: number; slot_date: string; start_time: string; end_time: string }> | undefined;
+          let teamCannotPlaySlotIds: Map<number, Set<number>> | undefined;
+          let teamDisplayNames: Map<number, string> | undefined;
 
-          const teamRestrictions = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
-          if (!restrictionsError && restrictions && restrictions.length > 0) {
-            const slotIds = Array.from(new Set(restrictions.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id)));
-            const { data: slots } = await supabase
-              .from("tournament_group_slots")
-              .select("id, slot_date, start_time, end_time")
-              .eq("tournament_id", tournamentId)
-              .in("id", slotIds);
+          if (useRestrictions) {
+            tournamentSlots = slots.map((s: { id: number; slot_date: string; start_time: string; end_time: string }) => ({
+              id: s.id,
+              slot_date: s.slot_date,
+              start_time: s.start_time,
+              end_time: s.end_time,
+            }));
 
-            const slotMap = new Map<number, { slot_date: string; start_time: string; end_time: string }>();
-            (slots ?? []).forEach((s: { id: number; slot_date: string; start_time: string; end_time: string }) => {
-              slotMap.set(s.id, { slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time });
-            });
+            const teamIds = Array.from(new Set(matches.flatMap((m) => [m.team1_id, m.team2_id]).filter((id): id is number => id !== null)));
+            const { data: restrictions, error: restrictionsError } = await supabase
+              .from("tournament_team_schedule_restrictions")
+              .select("tournament_team_id, tournament_group_slot_id, can_play")
+              .in("tournament_team_id", teamIds.length > 0 ? teamIds : [-1]);
 
-            restrictions.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
-              const slot = slotMap.get(r.tournament_group_slot_id);
-              if (!slot) return;
-              if (!teamRestrictions.has(r.tournament_team_id)) {
-                teamRestrictions.set(r.tournament_team_id, []);
-              }
-              teamRestrictions.get(r.tournament_team_id)!.push({
-                date: slot.slot_date,
-                start_time: slot.start_time,
-                end_time: slot.end_time,
+            teamCannotPlaySlotIds = new Map();
+            if (!restrictionsError && restrictions?.length) {
+              const cannotPlay = restrictions.filter((r: { can_play?: boolean }) => r.can_play === false);
+              cannotPlay.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
+                if (!teamCannotPlaySlotIds!.has(r.tournament_team_id)) {
+                  teamCannotPlaySlotIds!.set(r.tournament_team_id, new Set());
+                }
+                teamCannotPlaySlotIds!.get(r.tournament_team_id)!.add(r.tournament_group_slot_id);
               });
-            });
-            sendLog(`Restricciones cargadas para ${teamRestrictions.size} equipos`);
-          } else if (restrictionsError) {
-            sendLog(`⚠️ Error al obtener restricciones: ${restrictionsError.message}`);
-          } else {
-            sendLog("No hay restricciones de equipos configuradas");
+              sendLog(`Restricciones cargadas para ${teamCannotPlaySlotIds.size} equipos (slots donde NO pueden jugar)`);
+            }
+
+            if (teamIds.length > 0) {
+              const { data: teamsData } = await supabase
+                .from("tournament_teams")
+                .select("id, display_name, player1:player1_id(last_name), player2:player2_id(last_name)")
+                .eq("tournament_id", tournamentId)
+                .in("id", teamIds);
+              teamDisplayNames = new Map();
+              (teamsData ?? []).forEach((row: Record<string, unknown>) => {
+                const id = row.id as number;
+                const displayName = row.display_name as string | null | undefined;
+                const p1 = row.player1 as { last_name?: string } | { last_name?: string }[] | null | undefined;
+                const p2 = row.player2 as { last_name?: string } | { last_name?: string }[] | null | undefined;
+                const ln1 = Array.isArray(p1) ? p1[0]?.last_name : p1?.last_name;
+                const ln2 = Array.isArray(p2) ? p2[0]?.last_name : p2?.last_name;
+                const label =
+                  displayName?.trim() ||
+                  [ln1 ?? "", ln2 ?? ""].filter(Boolean).join("-") ||
+                  `Equipo ${id}`;
+                teamDisplayNames!.set(id, label);
+              });
+            }
           }
 
-          // 6) Horarios disponibles: ahora se generan en memoria desde la configuración recibida
-          sendLog("Horarios disponibles: se generan en memoria a partir de la configuración de días/canchas");
+          sendLog("Horarios disponibles: slots del torneo");
           const availableSchedules = undefined;
 
           const matchDurationMinutes = scheduleConfig.matchDuration || 60;
           sendLog(`Duración de partidos: ${matchDurationMinutes} minutos`);
           sendLog(`Canchas seleccionadas: ${scheduleConfig.courtIds.length}`);
-          sendLog(`Días configurados: ${scheduleConfig.days.length}`);
+          sendLog(`Slots del torneo: ${scheduleConfig.days.length} (mismo conjunto que restricciones)`);
 
-          // Validar configuración antes de llamar al scheduler
           sendLog("Validando configuración...");
           if (!scheduleConfig.days || scheduleConfig.days.length === 0) {
-            sendError("No hay días configurados para generar horarios");
+            sendError("No hay slots del torneo. Generá los horarios en Equipos → Generar horarios.");
             return;
           }
           if (!scheduleConfig.courtIds || scheduleConfig.courtIds.length === 0) {
@@ -311,18 +358,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
           sendProgress(60, "Generando horarios con algoritmo inteligente...");
 
-          // 7) Llamar al scheduler con callback de logging
-          sendLog("Iniciando algoritmo de asignación de horarios...");
+          sendLog(useRestrictions ? "Iniciando algoritmo con restricciones (slots del torneo = can_play)..." : "Iniciando algoritmo de asignación (sin restricciones)...");
           sendLog(`Llamando a scheduleGroupMatches con ${matchesPayload.length} partidos...`);
           
           let schedulerResult;
           try {
-            sendLog("🔍 Verificando callback antes de llamar al scheduler...");
             if (!sendLog) {
               sendError("Error: callback de logging no está definido");
               return;
             }
-            sendLog("✅ Callback verificado, llamando al scheduler...");
             
             schedulerResult = await scheduleGroupMatches(
               matchesPayload,
@@ -331,7 +375,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               scheduleConfig.courtIds,
               availableSchedules || undefined,
               teamRestrictions,
-              sendLog // Callback para logs
+              sendLog,
+              {
+                algorithm: useRestrictions ? "with-restrictions" : "default",
+                ...(useRestrictions && tournamentSlots && teamCannotPlaySlotIds !== undefined
+                  ? { tournamentSlots, teamCannotPlaySlotIds }
+                  : {}),
+                ...(teamDisplayNames ? { teamDisplayNames } : {}),
+                ...(groupDisplayNames.size > 0 ? { groupDisplayNames } : {}),
+              }
             );
 
             sendLog(`Algoritmo completado. Resultado: ${schedulerResult.success ? "éxito completo" : "parcial"}`);

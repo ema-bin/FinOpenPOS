@@ -147,43 +147,93 @@ export function calculateEndTime(startTime: string, matchDurationMinutes: number
   return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 }
 
+function toDateOnly(dateStr: string): string {
+  const s = String(dateStr).trim();
+  if (s.includes("T")) return s.slice(0, 10);
+  return s.slice(0, 10);
+}
+
 // Verificar si un slot viola alguna restricción de un equipo
 // restrictions es un array de rangos de fecha/hora que el equipo NO puede jugar
+// Un slot viola si se solapa con alguna ventana (el partido quedaría dentro de un horario no disponible)
 export function slotViolatesRestriction(
   slot: TimeSlot,
   restrictedSchedules: Array<{ date: string; start_time: string; end_time: string }> | undefined
 ): boolean {
   if (!restrictedSchedules || restrictedSchedules.length === 0) return false;
 
-  // Verificar si el slot coincide con alguna restricción
+  const slotDate = toDateOnly(slot.date);
+  const slotStart = timeToMinutesOfDay(slot.startTime);
+  const slotEnd = timeToMinutesOfDay(slot.endTime);
+  const slotEndMinutes = slotEnd === 0 ? 24 * 60 : slotEnd;
+
   return restrictedSchedules.some((restriction) => {
-    // El slot viola la restricción si:
-    // 1. La fecha coincide
-    // 2. El slot está dentro del rango de la restricción (start_time <= slot.start < end_time)
-    if (slot.date !== restriction.date) return false;
-    
-    const slotStart = timeToMinutesOfDay(slot.startTime);
+    if (toDateOnly(restriction.date) !== slotDate) return false;
+
     const restrictionStart = timeToMinutesOfDay(restriction.start_time);
     const restrictionEnd = timeToMinutesOfDay(restriction.end_time);
-    
-    // Si end_time es 00:00, interpretarlo como 24:00 (fin del día)
     const restrictionEndMinutes = restrictionEnd === 0 ? 24 * 60 : restrictionEnd;
-    
-    return slotStart >= restrictionStart && slotStart < restrictionEndMinutes;
+
+    // Solapamiento: [slotStart, slotEnd) con [restrictionStart, restrictionEndMinutes)
+    return slotStart < restrictionEndMinutes && slotEndMinutes > restrictionStart;
   });
 }
 
-// Asigna horarios directamente sobre el arreglo de matches (modificándolo)
+export type ScheduleAlgorithm = "default" | "with-restrictions";
+
+/** Slot del torneo (tournament_group_slots): mismo conjunto que can_play en restricciones */
+export type TournamentSlotInput = {
+  id: number;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+};
+
+/**
+ * Asigna horarios a los matches.
+ * - algorithm "default": no usa restricciones horarias (dejado como está).
+ * - algorithm "with-restrictions": si se pasan tournamentSlots y teamCannotPlaySlotIds, se usa
+ *   ese conjunto único (slots del torneo = mismos que restricciones can_play). Si no, modo legacy con days + ventanas.
+ */
 export async function scheduleGroupMatches(
   matchesPayload: GroupMatchPayload[],
   days: ScheduleDay[],
   matchDurationMinutes: number,
   courtIds: number[],
   availableSchedules?: AvailableSchedule[],
-  teamRestrictions?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>, // teamId -> restrictedSchedules[]
-  onLog?: (message: string) => void // Callback para logs en tiempo real
+  teamRestrictions?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>,
+  onLog?: (message: string) => void,
+  options?: {
+    algorithm?: ScheduleAlgorithm;
+    /** Slots del torneo (tournament_group_slots); mismo conjunto que restricciones. */
+    tournamentSlots?: TournamentSlotInput[];
+    /** Por equipo, IDs de slots (tournament_group_slots.id) donde can_play = false. */
+    teamCannotPlaySlotIds?: Map<number, Set<number>>;
+    /** Por equipo, etiqueta para logs (ej. "Larralde-Stefani"). */
+    teamDisplayNames?: Map<number, string>;
+    /** Por grupo (tournament_group_id), nombre de la zona (tournament_groups.name, ej. "Zona E"). */
+    groupDisplayNames?: Map<number, string>;
+  }
 ): Promise<SchedulerResult> {
-  // Usar la heurística Beam Search (Puzzle) por defecto
+  const algorithm = options?.algorithm ?? "default";
+
+  if (algorithm === "with-restrictions") {
+    const { scheduleGroupMatchesWithRestrictions } = await import("./tournament-scheduler-with-restrictions");
+    return scheduleGroupMatchesWithRestrictions(
+      matchesPayload,
+      days,
+      matchDurationMinutes,
+      courtIds,
+      availableSchedules,
+      teamRestrictions,
+      onLog,
+      options?.tournamentSlots,
+      options?.teamCannotPlaySlotIds,
+      options?.teamDisplayNames,
+      options?.groupDisplayNames
+    );
+  }
+
   const { scheduleGroupMatchesBeamSearch } = await import("./tournament-scheduler-beam-search");
   return scheduleGroupMatchesBeamSearch(
     matchesPayload,
@@ -191,7 +241,7 @@ export async function scheduleGroupMatches(
     matchDurationMinutes,
     courtIds,
     availableSchedules,
-    teamRestrictions,
+    undefined, // sin restricciones
     onLog
   );
 }

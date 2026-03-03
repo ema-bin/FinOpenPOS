@@ -3,7 +3,7 @@
 
 import type { ScheduleDay, AvailableSchedule } from "@/models/dto/tournament";
 import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot } from "./tournament-scheduler";
-import { timeToMinutesOfDay, calculateEndTime, generateTimeSlots, slotViolatesRestriction } from "./tournament-scheduler";
+import { calculateEndTime, generateTimeSlots } from "./tournament-scheduler";
 
 // Patrones para grupos de 3 (ordenados por prioridad)
 const PATTERNS_3 = [
@@ -61,19 +61,27 @@ type BeamSearchOptions = {
   maxCandidates?: number;
 };
 
+// Normalizar hora a HH:MM para evitar Invalid Date cuando viene con segundos (ej. "16:00:00")
+function toHHMM(time: string): string {
+  const s = String(time).trim();
+  if (s.length >= 5) return s.substring(0, 5);
+  return s;
+}
+
 // Convertir TimeSlot a Slot con datetime calculado
 function timeSlotToSlot(timeSlot: TimeSlot, index: number): Slot {
-  const dateStr = typeof timeSlot.date === 'string' 
-    ? timeSlot.date 
+  const dateStr = typeof timeSlot.date === 'string'
+    ? timeSlot.date
     : String(timeSlot.date);
-  
-  const datetime = new Date(`${dateStr}T${timeSlot.startTime}:00`);
-  
+  const startNorm = toHHMM(timeSlot.startTime);
+  const endNorm = toHHMM(timeSlot.endTime);
+  const datetime = new Date(`${dateStr}T${startNorm}:00`);
+
   return {
     index,
     date: dateStr,
-    startTime: timeSlot.startTime,
-    endTime: timeSlot.endTime,
+    startTime: startNorm,
+    endTime: endNorm,
     datetime,
     slotId: String(index),
   };
@@ -255,33 +263,6 @@ function scheduleGroupsWithRestrictions(
         restrictedSlotIds
       );
 
-      // Debug: si no hay candidatos, mostrar información
-      if (candidates.length === 0) {
-        const freeSlots = slots.filter(slot => !state.usedSlots.has(slot.slotId));
-        console.log(`[Beam Search] Grupo ${group.groupId}: No hay candidatos válidos`);
-        console.log(`  Slots libres: ${freeSlots.length}`);
-        console.log(`  Slots usados: ${state.usedSlots.size}`);
-        if (freeSlots.length >= 3) {
-          // Verificar por qué no son válidos
-          for (let i = 0; i < Math.min(3, freeSlots.length); i++) {
-            console.log(`  Slot libre ${i}: ${freeSlots[i].date} ${freeSlots[i].startTime}`);
-          }
-          // Si hay exactamente 3, verificar si son válidos
-          if (freeSlots.length === 3) {
-            const sorted = [...freeSlots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-            const isValid = isValidSlotGroup(sorted, matchDurationMs, 3);
-            console.log(`  ¿Son válidos los 3 slots?: ${isValid}`);
-            if (!isValid) {
-              const slot1End = sorted[0].datetime.getTime() + matchDurationMs;
-              const slot2Start = sorted[1].datetime.getTime();
-              const gap1 = (slot2Start - slot1End) / (1000 * 60);
-              const requiredGap = (matchDurationMs * 2) / (1000 * 60);
-              console.log(`  Gap 1->2: ${gap1} minutos (necesita ${requiredGap})`);
-            }
-          }
-        }
-      }
-
       if (candidates.length === 0) {
         // No hay candidatos válidos para este grupo con este estado
         continue;
@@ -357,18 +338,21 @@ export function scheduleGroups(
   );
 }
 
-// Función wrapper para integrar con el sistema existente
+/**
+ * Algoritmo heurístico Beam Search para asignar horarios SIN restricciones.
+ * Lógica autocontenida; no usa restricciones horarias de equipos.
+ */
 export async function scheduleGroupMatchesBeamSearch(
   matchesPayload: GroupMatchPayload[],
   days: ScheduleDay[],
   matchDurationMinutes: number,
   courtIds: number[],
   availableSchedules?: AvailableSchedule[],
-  teamRestrictions?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>,
+  _unused?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>,
   onLog?: (message: string) => void
 ): Promise<SchedulerResult> {
   if (onLog) {
-    onLog("🧩 Heurística Beam Search (Puzzle): Iniciando...");
+    onLog("🧩 Heurística Beam Search (sin restricciones): Iniciando...");
     onLog("📋 Procesando grupos de 3 y 4");
   }
 
@@ -392,17 +376,14 @@ export async function scheduleGroupMatchesBeamSearch(
   // 2. Identificar grupos de 3 y 4
   const groups: Group[] = [];
   for (const [groupId, matches] of Array.from(matchesByGroup.entries())) {
-    // Extraer equipos únicos del grupo
     const teams = new Set<number>();
     for (const match of matches) {
       if (match.team1_id !== null) teams.add(match.team1_id);
       if (match.team2_id !== null) teams.add(match.team2_id);
     }
 
-    // Determinar tamaño del grupo basado en matches y match_order
     let groupSize: 3 | 4;
     if (matches.some(m => m.match_order !== undefined)) {
-      // Tiene match_order = grupo de 4
       groupSize = 4;
       if (matches.length !== 4) {
         if (onLog) {
@@ -417,7 +398,6 @@ export async function scheduleGroupMatchesBeamSearch(
         continue;
       }
     } else {
-      // No tiene match_order = grupo de 3
       groupSize = 3;
       if (matches.length !== 3) {
         if (onLog) {
@@ -476,32 +456,10 @@ export async function scheduleGroupMatchesBeamSearch(
   const slots: Slot[] = timeSlots.map((ts, idx) => timeSlotToSlot(ts, idx));
   slots.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
 
-  // 4. Preparar información de restricciones por grupo
-  // Las restricciones se validarán durante la generación de candidatos
-  const groupRestrictions = new Map<number, Set<string>>(); // groupId → Set de slotIds restringidos
-  if (teamRestrictions) {
-    for (const group of groups) {
-      const restrictedSlotIds = new Set<string>();
-      for (const slot of slots) {
-        const timeSlot: TimeSlot = {
-          date: slot.date,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-        };
-        // Verificar si algún equipo del grupo tiene restricción en este slot
-        for (const teamId of group.teams) {
-          const restrictedSchedules = teamRestrictions.get(teamId);
-          if (slotViolatesRestriction(timeSlot, restrictedSchedules)) {
-            restrictedSlotIds.add(slot.slotId);
-            break; // Solo necesitamos saber que al menos un equipo tiene restricción
-          }
-        }
-      }
-      groupRestrictions.set(group.groupId, restrictedSlotIds);
-    }
-  }
+  // 4. Sin restricciones: todos los slots permitidos para todos los grupos
+  const groupRestrictions = new Map<number, Set<string>>();
 
-  // 5. Ejecutar Beam Search con validación de restricciones por grupo
+  // 5. Ejecutar Beam Search
   const matchDurationMs = matchDurationMinutes * 60 * 1000;
   
   const result = scheduleGroupsWithRestrictions(

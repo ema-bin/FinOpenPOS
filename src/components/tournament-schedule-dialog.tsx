@@ -17,13 +17,15 @@ import type { ScheduleDay, ScheduleConfig } from "@/models/dto/tournament";
 
 export type { ScheduleDay, ScheduleConfig };
 
+type GroupSlot = { id: number; slot_date: string; start_time: string; end_time: string };
+
 type TournamentScheduleDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (config: ScheduleConfig) => void;
   matchCount: number; // cantidad de partidos a programar
   tournamentMatchDuration?: number; // duración del partido del torneo (en minutos)
-  availableSchedules?: Array<{ date: string; start_time: string; end_time: string }>; // Horarios disponibles del torneo para pre-llenar
+  availableSchedules?: Array<{ date: string; start_time: string; end_time: string }>; // Horarios disponibles del torneo para pre-llenar (modo sin stream)
   tournamentId?: number; // ID del torneo para usar con SSE
   showLogs?: boolean; // Si mostrar la bitácora de logs
   streamEndpoint?: string; // Endpoint para el stream (por defecto: close-registration-stream)
@@ -70,6 +72,10 @@ export function TournamentScheduleDialog({
   const [courts, setCourts] = useState<CourtDTO[]>([]);
   const [selectedCourtIds, setSelectedCourtIds] = useState<number[]>([]);
   const [loadingCourts, setLoadingCourts] = useState(false);
+  const [groupSlots, setGroupSlots] = useState<GroupSlot[] | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
+  const [useRestrictionsAlgorithm, setUseRestrictionsAlgorithm] = useState(true);
   const [logs, setLogs] = useState<Array<{ message: string; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -81,10 +87,32 @@ export function TournamentScheduleDialog({
   const wasOpenRef = useRef<boolean>(false);
   const isCompletedRef = useRef<boolean>(false);
 
+  const useSlotMode = Boolean(tournamentId && showLogs);
+
   // Key única para sessionStorage basada en tournamentId y streamEndpoint
   const storageKey = useMemo(() => {
     return `tournament-schedule-dialog-${tournamentId}-${streamEndpoint}`;
   }, [tournamentId, streamEndpoint]);
+
+  // Cargar slots del torneo cuando se usa el stream (misma fuente que las restricciones)
+  useEffect(() => {
+    if (!open || !tournamentId || !showLogs) {
+      setGroupSlots(null);
+      return;
+    }
+    setLoadingSlots(true);
+    fetch(`/api/tournaments/${tournamentId}/group-slots`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Error al cargar slots"))))
+      .then((data: GroupSlot[]) => {
+        setGroupSlots(Array.isArray(data) ? data : []);
+        setSelectedSlotIds(Array.isArray(data) ? data.map((s) => s.id) : []);
+      })
+      .catch(() => {
+        setGroupSlots([]);
+        setSelectedSlotIds([]);
+      })
+      .finally(() => setLoadingSlots(false));
+  }, [open, tournamentId, showLogs]);
 
   // Estabilizar availableSchedules para evitar loops infinitos
   const availableSchedulesKey = useMemo(() => {
@@ -215,61 +243,60 @@ export function TournamentScheduleDialog({
   };
 
   const handleConfirm = async () => {
-    // Validar que todos los días tengan fecha
-    if (days.some((d) => !d.date)) {
-      alert("Todos los días deben tener una fecha");
-      return;
-    }
-
-    // Validar que startTime < endTime para cada día
-    // Si endTime es 00:00, interpretarlo como 24:00 (fin del día)
-    if (days.some((d) => {
-      const [startH, startM] = d.startTime.split(":").map(Number);
-      const [endH, endM] = d.endTime.split(":").map(Number);
-      const startMinutes = startH * 60 + startM;
-      // Si la hora de fin es 00:00, interpretarla como 24:00 (fin del día)
-      const endMinutes = (endH === 0 && endM === 0) ? 24 * 60 : endH * 60 + endM;
-      return startMinutes >= endMinutes;
-    })) {
-      alert("La hora de inicio debe ser anterior a la hora de fin");
-      return;
-    }
-
-    // Validar que haya al menos una cancha seleccionada
     if (selectedCourtIds.length === 0) {
       alert("Debes seleccionar al menos una cancha");
       return;
     }
 
-    // Convertir ScheduleDayEditor[] a ScheduleDay[] para el callback
-    const scheduleDays: ScheduleDay[] = days.map((d) => ({
-      date: d.date,
-      startTime: d.startTime,
-      endTime: d.endTime,
-    }));
-    
+    if (useSlotMode) {
+      if (selectedSlotIds.length === 0) {
+        alert("Seleccioná al menos un slot del torneo");
+        return;
+      }
+    } else {
+      if (days.some((d) => !d.date)) {
+        alert("Todos los días deben tener una fecha");
+        return;
+      }
+      if (days.some((d) => {
+        const [startH, startM] = d.startTime.split(":").map(Number);
+        const [endH, endM] = d.endTime.split(":").map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = (endH === 0 && endM === 0) ? 24 * 60 : endH * 60 + endM;
+        return startMinutes >= endMinutes;
+      })) {
+        alert("La hora de inicio debe ser anterior a la hora de fin");
+        return;
+      }
+    }
+
+    const scheduleDays: ScheduleDay[] = useSlotMode
+      ? []
+      : days.map((d) => ({ date: d.date, startTime: d.startTime, endTime: d.endTime }));
     const scheduleConfig = { days: scheduleDays, matchDuration, courtIds: selectedCourtIds };
-    
-    // Si showLogs y tournamentId están disponibles, usar SSE
+
     if (showLogs && tournamentId) {
       setIsProcessing(true);
       setLogs([]);
       setProgress(0);
       setStatus("Iniciando...");
-      
-      // Crear AbortController para poder cancelar
+
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
-      
-      // Enviar la configuración usando fetch POST con stream
+
+      const body = useSlotMode
+        ? {
+            slotIds: selectedSlotIds,
+            matchDuration,
+            courtIds: selectedCourtIds,
+            algorithm: useRestrictionsAlgorithm ? "with-restrictions" : "default",
+          }
+        : { days: scheduleDays, matchDuration, courtIds: selectedCourtIds };
+
       fetch(`/api/tournaments/${tournamentId}/${streamEndpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          days: scheduleDays,
-          matchDuration,
-          courtIds: selectedCourtIds,
-        }),
+        body: JSON.stringify(body),
         signal: abortController.signal,
       })
         .then(async (response) => {
@@ -396,26 +423,51 @@ export function TournamentScheduleDialog({
     );
   };
 
-  // Calcular slots disponibles (considerando las canchas seleccionadas)
-  const calculateAvailableSlots = () => {
+  const toggleSlot = (slotId: number) => {
+    setSelectedSlotIds((prev) =>
+      prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
+    );
+  };
+
+  const timeToMinutes = (timeStr: string): number => {
+    const s = String(timeStr).trim().substring(0, 5);
+    const [h, m] = s.split(":").map((x) => parseInt(x, 10) || 0);
+    return h * 60 + m;
+  };
+
+  const calculateAvailableSlots = (): number => {
     const numCourts = selectedCourtIds.length;
     if (numCourts === 0) return 0;
+
+    if (useSlotMode && groupSlots && groupSlots.length > 0) {
+      const selected = groupSlots.filter((s) => selectedSlotIds.includes(s.id));
+      let total = 0;
+      for (const slot of selected) {
+        const startM = timeToMinutes(slot.start_time);
+        let endM = timeToMinutes(slot.end_time);
+        if (endM <= startM) endM += 24 * 60;
+        const durationMinutes = endM - startM;
+        total += Math.floor(durationMinutes / matchDuration) * numCourts;
+      }
+      return total;
+    }
 
     let totalSlots = 0;
     days.forEach((day) => {
       const [startH, startM] = day.startTime.split(":").map(Number);
       const [endH, endM] = day.endTime.split(":").map(Number);
       const startMinutes = startH * 60 + startM;
-      // Si la hora de fin es 00:00, interpretarla como 24:00 (fin del día)
       const endMinutes = (endH === 0 && endM === 0) ? 24 * 60 : endH * 60 + endM;
       const durationMinutes = endMinutes - startMinutes;
-      const slotsPerDay = Math.floor(durationMinutes / matchDuration);
-      totalSlots += slotsPerDay * numCourts;
+      totalSlots += Math.floor(durationMinutes / matchDuration) * numCourts;
     });
     return totalSlots;
   };
 
   const availableSlots = calculateAvailableSlots();
+  const canConfirmSlotMode = useSlotMode && groupSlots && groupSlots.length > 0 && selectedSlotIds.length > 0;
+  const canConfirmDaysMode = !useSlotMode && days.length > 0 && days.every((d) => d.date);
+  const canConfirm = (useSlotMode ? canConfirmSlotMode : canConfirmDaysMode) && selectedCourtIds.length > 0 && availableSlots >= matchCount && !loadingCourts && !loadingSlots;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -467,15 +519,69 @@ export function TournamentScheduleDialog({
             />
           </div>
 
-          {/* Días */}
-          <div className="space-y-3">
-            <Label>Días disponibles</Label>
-            <ScheduleDaysEditor
-              days={days}
-              onChange={handleDaysChange}
-              showDayOfWeek={false}
-            />
-          </div>
+          {/* Slots del torneo (misma fuente que las restricciones) o días libres */}
+          {useSlotMode ? (
+            <div className="space-y-3">
+              <Label>Slots del torneo a usar</Label>
+              {loadingSlots ? (
+                <p className="text-sm text-muted-foreground">Cargando slots del torneo...</p>
+              ) : !groupSlots || groupSlots.length === 0 ? (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    No hay slots del torneo. Generá los horarios en <strong>Equipos → Generar horarios</strong> y luego volvé acá.
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
+                  {groupSlots.map((slot) => {
+                    const [y, m, d] = slot.slot_date.split("-").map(Number);
+                    const dateLabel = new Date(y, m - 1, d).toLocaleDateString("es-AR", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                    });
+                    const start = slot.start_time.trim().substring(0, 5);
+                    const end = slot.end_time.trim().substring(0, 5);
+                    const checked = selectedSlotIds.includes(slot.id);
+                    return (
+                      <div key={slot.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`slot-${slot.id}`}
+                          checked={checked}
+                          onCheckedChange={() => toggleSlot(slot.id)}
+                        />
+                        <Label
+                          htmlFor={`slot-${slot.id}`}
+                          className="text-sm font-normal cursor-pointer flex-1"
+                        >
+                          {dateLabel} {start}–{end}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox
+                  id="use-restrictions"
+                  checked={useRestrictionsAlgorithm}
+                  onCheckedChange={(v) => setUseRestrictionsAlgorithm(Boolean(v))}
+                />
+                <Label htmlFor="use-restrictions" className="text-sm font-normal cursor-pointer">
+                  Usar restricciones horarias de los equipos (asignar respetando disponibilidad)
+                </Label>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Label>Días disponibles</Label>
+              <ScheduleDaysEditor
+                days={days}
+                onChange={handleDaysChange}
+                showDayOfWeek={false}
+              />
+            </div>
+          )}
 
           {/* Resumen y vista previa de slots */}
           <div className="bg-muted p-3 rounded-lg space-y-2">
@@ -483,18 +589,23 @@ export function TournamentScheduleDialog({
               <p className="text-sm font-medium">
                 Partidos a programar: <span className="font-bold">{matchCount}</span>
               </p>
+              {useSlotMode && groupSlots && selectedSlotIds.length > 0 && (
+                <p className="text-sm">
+                  Slots del torneo seleccionados: <span className="font-bold">{selectedSlotIds.length}</span>
+                </p>
+              )}
               <p className="text-sm">
                 Slots disponibles: <span className="font-bold">{availableSlots}</span>
               </p>
               {availableSlots < matchCount && (
                 <p className="text-xs text-red-600 font-medium">
-                  ⚠️ No hay suficientes slots. Agregá más días u horarios.
+                  ⚠️ No hay suficientes slots. {useSlotMode ? "Seleccioná más slots del torneo." : "Agregá más días u horarios."}
                 </p>
               )}
             </div>
 
-            {/* Vista previa de slots generados */}
-            {selectedCourtIds.length > 0 && days.some((d) => d.date) && (
+            {/* Vista previa de slots generados (solo en modo días libres) */}
+            {!useSlotMode && selectedCourtIds.length > 0 && days.some((d) => d.date) && (
               <div className="mt-3 pt-3 border-t">
                 <p className="text-xs font-medium mb-2">Vista previa de slots generados:</p>
                 <div className="max-h-48 overflow-y-auto space-y-2">
@@ -670,14 +781,7 @@ export function TournamentScheduleDialog({
               </Button>
               <Button
                 onClick={handleConfirm}
-                disabled={
-                  availableSlots < matchCount ||
-                  days.length === 0 ||
-                  selectedCourtIds.length === 0 ||
-                  loadingCourts ||
-                  isProcessing ||
-                  isLoading
-                }
+                disabled={!canConfirm || isProcessing || isLoading}
               >
                 {isLoading || isProcessing 
                   ? (streamEndpoint === "regenerate-schedule-stream" 
