@@ -75,7 +75,7 @@ export function TournamentScheduleDialog({
   const [groupSlots, setGroupSlots] = useState<GroupSlot[] | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
-  const [useRestrictionsAlgorithm, setUseRestrictionsAlgorithm] = useState(false);
+  const [useRestrictionsAlgorithm, setUseRestrictionsAlgorithm] = useState(true);
   const [logs, setLogs] = useState<Array<{ message: string; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);

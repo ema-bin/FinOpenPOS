@@ -6,24 +6,6 @@ import type { ScheduleDay, AvailableSchedule } from "@/models/dto/tournament";
 import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot } from "./tournament-scheduler";
 import { calculateEndTime, generateTimeSlots, slotViolatesRestriction } from "./tournament-scheduler";
 
-const PATTERNS_3 = [
-  [0, 2, 4],
-  [0, 2, 5],
-  [0, 3, 5],
-  [0, 3, 6],
-  [0, 2, 6],
-  [0, 4, 6],
-];
-
-const PATTERNS_4 = [
-  [0, 1, 3, 4],
-  [0, 1, 3, 5],
-  [0, 1, 3, 6],
-  [0, 1, 4, 5],
-  [0, 1, 4, 6],
-  [0, 1, 5, 6],
-];
-
 type Group = {
   groupId: number;
   matches: GroupMatchPayload[];
@@ -91,15 +73,10 @@ function isValidSlotGroup(
   return true;
 }
 
-function calculateScore(
-  patternIndex: number,
-  slots: Slot[],
-  patternsLength: number
-): number {
-  const patternScore = (patternsLength - patternIndex) * 1000;
+function scoreSlotGroup(slots: Slot[]): number {
   const sorted = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
   const spanMinutes = (sorted[sorted.length - 1].datetime.getTime() - sorted[0].datetime.getTime()) / (1000 * 60);
-  return patternScore - spanMinutes;
+  return -spanMinutes;
 }
 
 function generateCandidates(
@@ -109,8 +86,7 @@ function generateCandidates(
   matchDurationMs: number,
   maxCandidates: number,
   restrictedSlotIds?: Set<string>
-): Array<{ slots: Slot[]; patternIndex: number; score: number }> {
-  const candidates: Array<{ slots: Slot[]; patternIndex: number; score: number }> = [];
+): Array<{ slots: Slot[]; score: number }> {
   const freeSlots = availableSlots.filter((slot) => {
     if (usedSlotIds.has(slot.slotId)) return false;
     if (restrictedSlotIds?.has(slot.slotId)) return false;
@@ -119,55 +95,21 @@ function generateCandidates(
 
   if (freeSlots.length < group.size) return [];
 
-  const patterns = group.size === 3 ? PATTERNS_3 : PATTERNS_4;
-  for (let patternIdx = 0; patternIdx < patterns.length; patternIdx++) {
-    const pattern = patterns[patternIdx];
-    const maxOffset = Math.max(...pattern);
-    for (let startIdx = 0; startIdx + maxOffset < freeSlots.length; startIdx++) {
-      const candidateSlots: Slot[] = [];
-      let valid = true;
-      for (const offset of pattern) {
-        const slotIdx = startIdx + offset;
-        if (slotIdx >= freeSlots.length) {
-          valid = false;
-          break;
-        }
-        candidateSlots.push(freeSlots[slotIdx]);
+  const candidates: Array<{ slots: Slot[]; score: number }> = [];
+  const addValidCombinations = (arr: Slot[], n: number, start: number = 0, current: Slot[] = []): void => {
+    if (current.length === n) {
+      if (isValidSlotGroup(current, matchDurationMs, group.size)) {
+        candidates.push({ slots: [...current], score: scoreSlotGroup(current) });
       }
-      if (!valid) continue;
-      if (!isValidSlotGroup(candidateSlots, matchDurationMs, group.size)) continue;
-      const score = calculateScore(patternIdx, candidateSlots, patterns.length);
-      candidates.push({ slots: candidateSlots, patternIndex: patternIdx, score });
+      return;
     }
-  }
-
-  if (candidates.length === 0 && freeSlots.length === group.size) {
-    const candidateSlots = [...freeSlots];
-    if (isValidSlotGroup(candidateSlots, matchDurationMs, group.size)) {
-      candidates.push({ slots: candidateSlots, patternIndex: 0, score: calculateScore(0, candidateSlots, patterns.length) });
+    for (let i = start; i < arr.length; i++) {
+      current.push(arr[i]);
+      addValidCombinations(arr, n, i + 1, current);
+      current.pop();
     }
-  }
-
-  if (candidates.length === 0 && freeSlots.length >= group.size) {
-    const generateCombinations = (arr: Slot[], n: number, start: number = 0, current: Slot[] = []): void => {
-      if (current.length === n) {
-        if (isValidSlotGroup(current, matchDurationMs, group.size)) {
-          candidates.push({
-            slots: [...current],
-            patternIndex: patterns.length - 1,
-            score: calculateScore(patterns.length - 1, current, patterns.length),
-          });
-        }
-        return;
-      }
-      for (let i = start; i < arr.length; i++) {
-        current.push(arr[i]);
-        generateCombinations(arr, n, i + 1, current);
-        current.pop();
-      }
-    };
-    generateCombinations(freeSlots, group.size);
-  }
+  };
+  addValidCombinations(freeSlots, group.size);
 
   candidates.sort((a, b) => b.score - a.score);
   return candidates.slice(0, maxCandidates);
