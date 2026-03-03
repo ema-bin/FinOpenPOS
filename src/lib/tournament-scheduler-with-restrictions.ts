@@ -160,6 +160,24 @@ function scoreSlotGroup(slots: Slot[]): number {
   return -spanMinutes;
 }
 
+/** Bonificación cuando los slots son del mismo horario (distintas canchas). Así dejamos otros horarios libres para grupos que se asignan después. */
+function sameTimeBonus(slots: Slot[]): number {
+  const ids = new Set(slots.map((s) => s.tournamentSlotId).filter((id): id is number => id !== undefined));
+  return ids.size === 1 ? 10000 : 0;
+}
+
+/** Bonificación cuando los slots no son consecutivos (hay al menos matchDuration entre ellos). Con una sola cancha, evita dejar solo horarios seguidos para el último grupo. */
+function spreadBonus(slots: Slot[], matchDurationMs: number): number {
+  if (slots.length < 2) return 0;
+  const sorted = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+  let minGapMs = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gapMs = sorted[i + 1].datetime.getTime() - sorted[i].datetime.getTime() - matchDurationMs;
+    minGapMs = Math.min(minGapMs, gapMs);
+  }
+  return minGapMs >= 0 ? 10000 : 0;
+}
+
 /**
  * Candidatos: cada partido (2 equipos) solo puede ir en slots donde ambos pueden jugar.
  * matchRestrictions: matchIndex → set de slotIds prohibidos para ese partido (unión de los 2 equipos).
@@ -206,13 +224,19 @@ function generateCandidates(
           if (ok) {
             const slotsInMatchOrder: Slot[] = [];
             for (let j = 0; j < size; j++) slotsInMatchOrder[j] = sorted[perm.indexOf(j)];
-            candidates.push({ slots: slotsInMatchOrder, score: scoreSlotGroup(sorted) });
+            candidates.push({
+              slots: slotsInMatchOrder,
+              score: scoreSlotGroup(sorted) + sameTimeBonus(sorted) + spreadBonus(sorted, matchDurationMs),
+            });
             return;
           }
         }
         return;
       }
-      candidates.push({ slots: sorted, score: scoreSlotGroup(sorted) });
+      candidates.push({
+        slots: sorted,
+        score: scoreSlotGroup(sorted) + sameTimeBonus(sorted) + spreadBonus(sorted, matchDurationMs),
+      });
       return;
     }
     for (let i = start; i < arr.length; i++) {
@@ -225,6 +249,56 @@ function generateCandidates(
 
   candidates.sort((a, b) => b.score - a.score);
   return candidates.slice(0, maxCandidates);
+}
+
+/**
+ * Fallback solo para la última zona: asigna N slots libres aunque no respeten descanso,
+ * para que el usuario pueda editar manualmente después.
+ */
+function generateLastZoneFallback(
+  group: Group,
+  availableSlots: Slot[],
+  usedSlotIds: Set<string>,
+  matchRestrictions?: Map<number, Set<string>>
+): { slots: Slot[]; score: number } | null {
+  const isAllowedForMatch = (slotId: string, matchIdx: number): boolean =>
+    !matchRestrictions?.get(matchIdx)?.has(slotId);
+
+  const freeSlots = availableSlots
+    .filter((slot) => !usedSlotIds.has(slot.slotId))
+    .filter((slot) =>
+      !matchRestrictions ? true : group.matches.some((_, i) => isAllowedForMatch(slot.slotId, i))
+    )
+    .sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+
+  if (freeSlots.length < group.size) return null;
+
+  const n = group.size;
+  const chosen: Slot[] = [];
+  const used = new Set<number>();
+
+  for (let matchIdx = 0; matchIdx < n; matchIdx++) {
+    let idx = -1;
+    for (let i = 0; i < freeSlots.length; i++) {
+      if (used.has(i)) continue;
+      if (matchRestrictions && !isAllowedForMatch(freeSlots[i].slotId, matchIdx)) continue;
+      idx = i;
+      break;
+    }
+    if (idx === -1) {
+      for (let i = 0; i < freeSlots.length; i++) {
+        if (used.has(i)) continue;
+        idx = i;
+        break;
+      }
+    }
+    if (idx === -1) return null;
+    used.add(idx);
+    chosen.push(freeSlots[idx]);
+  }
+
+  const slotsInMatchOrder = chosen;
+  return { slots: slotsInMatchOrder, score: -1e6 };
 }
 
 function runBeamSearch(
@@ -252,8 +326,10 @@ function runBeamSearch(
     const matchRestrictions = groupMatchRestrictions.get(group.groupId);
     const groupName = groupLabel(group, groupIdx);
 
+    const isLastZone = groupIdx === groups.length - 1;
+
     for (const state of states) {
-      const candidates = generateCandidates(
+      let candidates = generateCandidates(
         group,
         slots,
         state.usedSlots,
@@ -261,6 +337,13 @@ function runBeamSearch(
         maxCandidates,
         matchRestrictions
       );
+      if (candidates.length === 0 && isLastZone) {
+        const fallback = generateLastZoneFallback(group, slots, state.usedSlots, matchRestrictions);
+        if (fallback) {
+          candidates = [fallback];
+          if (onLog) onLog(`⚠️ ${groupName} (última zona): sin combinación que respete descanso; se asignaron horarios para que puedas editar manualmente.`);
+        }
+      }
       if (candidates.length === 0) continue;
 
       for (const candidate of candidates) {
@@ -281,18 +364,27 @@ function runBeamSearch(
     }
 
     if (newStates.length === 0) {
-      const usedCount = states[0]?.usedSlots.size ?? 0;
+      const usedSlotIds = states[0]?.usedSlots ?? new Set<string>();
+      const usedCount = usedSlotIds.size;
+      const freeCount = totalSlots - usedCount;
       const reason = `No se pudo asignar slots para ${groupName} (id ${group.groupId}).`;
       if (onLog) {
         onLog(`❌ ${groupName} (id ${group.groupId}): no se pudo asignar horarios`);
-        onLog(`   Slots totales: ${totalSlots} | Usados por otros grupos: ${usedCount}`);
-        if (matchRestrictions && matchRestrictions.size > 0) {
-          const perMatch: string[] = [];
-          for (let i = 0; i < group.matches.length; i++) {
-            const r = matchRestrictions.get(i)?.size ?? 0;
-            perMatch.push(`partido ${i + 1}: ${totalSlots - r} disponibles`);
+        onLog(`   Slots totales: ${totalSlots} | Usados por otros grupos: ${usedCount} | Libres: ${freeCount}`);
+        const perMatch: string[] = [];
+        for (let i = 0; i < group.matches.length; i++) {
+          const restricted = matchRestrictions?.get(i);
+          let count = 0;
+          for (const slot of slots) {
+            if (usedSlotIds.has(slot.slotId)) continue;
+            if (restricted?.has(slot.slotId)) continue;
+            count++;
           }
-          onLog(`   Por partido (intersección 2 equipos): ${perMatch.join(", ")}`);
+          perMatch.push(`partido ${i + 1}: ${count} libres y permitidos`);
+        }
+        onLog(`   Por partido (libres y permitidos para los 2 equipos): ${perMatch.join(", ")}`);
+        if (freeCount > 0) {
+          onLog(`   → Con ${freeCount} slot(s) libre(s) puede no existir una combinación que respete el descanso entre partidos. Probá intercambiar equipos de zona o liberar más horarios.`);
         }
         // Debug adicional: para entender mejor por qué no hay solución,
         // listar para cada equipo del grupo en qué slots del torneo SÍ puede jugar.
