@@ -22,12 +22,18 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
-import type { MatchDTO, TeamDTO, GroupDTO } from "@/models/dto/tournament";
+import type { MatchDTO, TeamDTO, GroupDTO, TournamentGroupSlotSummary } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
 import { useQuery } from "@tanstack/react-query";
 import { tournamentMatchesService } from "@/services";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface GroupScheduleViewerProps {
   open: boolean;
@@ -36,6 +42,8 @@ interface GroupScheduleViewerProps {
   groups: GroupDTO[];
   tournamentId: number;
   onScheduleUpdated?: () => void;
+  /** Slots del torneo para detectar si un partido viola restricción horaria de algún equipo */
+  tournamentGroupSlots?: TournamentGroupSlotSummary[];
 }
 
 function teamLabel(team: TeamDTO | null, matchOrder?: number | null, isTeam1?: boolean) {
@@ -132,6 +140,7 @@ export function GroupScheduleViewer({
   groups,
   tournamentId,
   onScheduleUpdated,
+  tournamentGroupSlots = [],
 }: GroupScheduleViewerProps) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"matches" | "groups" | "teams">("matches");
@@ -400,6 +409,27 @@ export function GroupScheduleViewer({
     });
     return Array.from(teamMap.values());
   }, [matches]);
+
+  // ¿El partido viola la restricción horaria de algún equipo? (slot asignado en restricted_slot_ids de team1 o team2)
+  const matchSlotViolation = useMemo(() => {
+    const violation = new Map<number, { team1: boolean; team2: boolean }>();
+    if (!tournamentGroupSlots?.length) return violation;
+    const slotByDateTime = new Map<string, number>();
+    tournamentGroupSlots.forEach((s) => {
+      slotByDateTime.set(`${s.slot_date}\t${s.start_time}`, s.id);
+    });
+    scheduledMatches.forEach((match) => {
+      if (!match.match_date || !match.start_time) return;
+      const slotId = slotByDateTime.get(`${match.match_date}\t${match.start_time}`);
+      if (slotId === undefined) return;
+      const t1Restricted = match.team1?.restricted_slot_ids?.includes(slotId) ?? false;
+      const t2Restricted = match.team2?.restricted_slot_ids?.includes(slotId) ?? false;
+      if (t1Restricted || t2Restricted) {
+        violation.set(match.id, { team1: t1Restricted, team2: t2Restricted });
+      }
+    });
+    return violation;
+  }, [scheduledMatches, tournamentGroupSlots]);
 
   // Calcular si algún equipo del partido juega en días diferentes
   const matchMultiDayInfo = useMemo(() => {
@@ -758,7 +788,7 @@ export function GroupScheduleViewer({
         <DialogHeader>
           <DialogTitle>Revisar y editar horarios de partidos</DialogTitle>
           <DialogDescription>
-            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día.
+            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo.
           </DialogDescription>
         </DialogHeader>
 
@@ -857,6 +887,7 @@ export function GroupScheduleViewer({
           </TabsList>
 
           <TabsContent value="matches" className="space-y-4 mt-4">
+          <TooltipProvider>
           {/* Barra de acciones para selección */}
           {(selectedMatch1 || selectedMatch2) && (
             <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -978,11 +1009,25 @@ export function GroupScheduleViewer({
                       ? getGroupColor(groupInfo.index)
                       : { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200", badgeBg: "bg-gray-200", badgeText: "text-gray-800" };
 
-                    return (
+                    const slotViolation = matchSlotViolation.get(match.id);
+                    const violatesSlotRestriction = !!slotViolation;
+                    const restrictionTooltip =
+                      slotViolation &&
+                      (() => {
+                        const parts: string[] = [];
+                        if (slotViolation.team1) parts.push(teamLabel(match.team1, match.match_order, true));
+                        if (slotViolation.team2) parts.push(teamLabel(match.team2, match.match_order, false));
+                        return parts.length ? `${parts.join(" y ")} no pueden en este horario` : "";
+                      })();
+                    const row = (
                       <TableRow
                         key={match.id}
-                        className={`cursor-pointer hover:bg-muted/50 ${
-                          isSelected ? "bg-blue-50" : ""
+                        className={`cursor-pointer ${
+                          violatesSlotRestriction
+                            ? "bg-red-100 hover:bg-red-200"
+                            : isSelected
+                              ? "bg-blue-50 hover:bg-blue-100"
+                              : "hover:bg-muted/50"
                         }`}
                         onClick={() => handleSelectMatch(match.id)}
                       >
@@ -1090,11 +1135,20 @@ export function GroupScheduleViewer({
                         </TableCell>
                       </TableRow>
                     );
+                    return restrictionTooltip ? (
+                      <Tooltip key={match.id}>
+                        <TooltipTrigger asChild>{row}</TooltipTrigger>
+                        <TooltipContent>{restrictionTooltip}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      row
+                    );
                   })
                 )}
               </TableBody>
             </Table>
           </div>
+          </TooltipProvider>
           </TabsContent>
 
           <TabsContent value="groups" className="space-y-4 mt-4">

@@ -520,7 +520,7 @@ export class TournamentGroupsRepository extends BaseRepository {
     }
 
     if (!groups || groups.length === 0) {
-      return { groups: [], groupTeams: [], matches: [], standings: [] };
+      return { groups: [], groupTeams: [], matches: [], standings: [], tournamentGroupSlots: [] };
     }
 
     const groupIds = groups.map((g) => g.id);
@@ -631,10 +631,45 @@ export class TournamentGroupsRepository extends BaseRepository {
       team: Array.isArray(item.team) ? (item.team[0] || undefined) : item.team,
     })) as unknown as TournamentGroupsData["groupTeams"];
 
-    const normalizedMatches = (matchesResult.data ?? []).map((item: any) => ({
+    let normalizedMatches = (matchesResult.data ?? []).map((item: any) => ({
       ...item,
       team1: Array.isArray(item.team1) ? (item.team1[0] || undefined) : item.team1,
       team2: Array.isArray(item.team2) ? (item.team2[0] || undefined) : item.team2,
+    })) as unknown as TournamentGroupsData["matches"];
+
+    // Restricciones horarias por equipo y slots del torneo (para revisión de horarios)
+    const teamIds = new Set<number>();
+    normalizedMatches.forEach((m: any) => {
+      if (m.team1?.id) teamIds.add(m.team1.id);
+      if (m.team2?.id) teamIds.add(m.team2.id);
+    });
+    const restrictedSlotIdsMap = new Map<number, number[]>();
+    if (teamIds.size > 0) {
+      const { data: restrictions } = await this.supabase
+        .from("tournament_team_schedule_restrictions")
+        .select("tournament_team_id, tournament_group_slot_id, can_play")
+        .in("tournament_team_id", Array.from(teamIds));
+      if (restrictions) {
+        restrictions.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number; can_play?: boolean }) => {
+          if (r.can_play === false) {
+            const teamId = r.tournament_team_id;
+            if (!restrictedSlotIdsMap.has(teamId)) restrictedSlotIdsMap.set(teamId, []);
+            restrictedSlotIdsMap.get(teamId)!.push(r.tournament_group_slot_id);
+          }
+        });
+      }
+    }
+    const { data: tournamentGroupSlots } = await this.supabase
+      .from("tournament_group_slots")
+      .select("id, slot_date, start_time, end_time")
+      .eq("tournament_id", tournamentId)
+      .order("slot_date", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    normalizedMatches = normalizedMatches.map((m: any) => ({
+      ...m,
+      team1: m.team1 ? { ...m.team1, restricted_slot_ids: restrictedSlotIdsMap.get(m.team1.id) ?? [] } : m.team1,
+      team2: m.team2 ? { ...m.team2, restricted_slot_ids: restrictedSlotIdsMap.get(m.team2.id) ?? [] } : m.team2,
     })) as unknown as TournamentGroupsData["matches"];
 
     return {
@@ -642,6 +677,12 @@ export class TournamentGroupsRepository extends BaseRepository {
       groupTeams: normalizedGroupTeams,
       matches: normalizedMatches,
       standings: (standingsResult.data ?? []) as TournamentGroupStanding[],
+      tournamentGroupSlots: (tournamentGroupSlots ?? []).map((s: { id: number; slot_date: string; start_time: string; end_time: string }) => ({
+        id: s.id,
+        slot_date: s.slot_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      })),
     };
   }
 

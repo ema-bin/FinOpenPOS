@@ -166,11 +166,20 @@ export interface PlayoffRow {
 }
 
 // API Response DTOs
+export interface TournamentGroupSlotSummary {
+  id: number;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface GroupsApiResponse {
   groups: GroupDTO[];
   groupTeams: GroupTeamDTO[];
   matches: MatchDTO[];
   standings?: StandingDTO[];
+  /** Slots del torneo para revisión de horarios (detectar violación de restricciones) */
+  tournamentGroupSlots?: TournamentGroupSlotSummary[];
 }
 
 export interface TeamsApiResponse {
