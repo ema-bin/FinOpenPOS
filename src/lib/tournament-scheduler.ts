@@ -173,17 +173,38 @@ export function slotViolatesRestriction(
   });
 }
 
-// Asigna horarios directamente sobre el arreglo de matches (modificándolo)
+export type ScheduleAlgorithm = "default" | "with-restrictions";
+
+/**
+ * Asigna horarios a los matches.
+ * - algorithm "default": no usa restricciones horarias (dejado como está).
+ * - algorithm "with-restrictions": usa restricciones; implementación en tournament-scheduler-with-restrictions (mejorable por separado).
+ */
 export async function scheduleGroupMatches(
   matchesPayload: GroupMatchPayload[],
   days: ScheduleDay[],
   matchDurationMinutes: number,
   courtIds: number[],
   availableSchedules?: AvailableSchedule[],
-  teamRestrictions?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>, // teamId -> restrictedSchedules[]
-  onLog?: (message: string) => void // Callback para logs en tiempo real
+  teamRestrictions?: Map<number, Array<{ date: string; start_time: string; end_time: string }>>,
+  onLog?: (message: string) => void,
+  options?: { algorithm?: ScheduleAlgorithm }
 ): Promise<SchedulerResult> {
-  // Usar la heurística Beam Search (Puzzle) por defecto
+  const algorithm = options?.algorithm ?? "default";
+
+  if (algorithm === "with-restrictions") {
+    const { scheduleGroupMatchesWithRestrictions } = await import("./tournament-scheduler-with-restrictions");
+    return scheduleGroupMatchesWithRestrictions(
+      matchesPayload,
+      days,
+      matchDurationMinutes,
+      courtIds,
+      availableSchedules,
+      teamRestrictions,
+      onLog
+    );
+  }
+
   const { scheduleGroupMatchesBeamSearch } = await import("./tournament-scheduler-beam-search");
   return scheduleGroupMatchesBeamSearch(
     matchesPayload,
@@ -191,7 +212,7 @@ export async function scheduleGroupMatches(
     matchDurationMinutes,
     courtIds,
     availableSchedules,
-    teamRestrictions,
+    undefined, // sin restricciones
     onLog
   );
 }

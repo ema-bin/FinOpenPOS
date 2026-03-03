@@ -161,60 +161,58 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  // 6) Obtener restricciones horarias por slot_id y expandir a (date, start_time, end_time)
-  const teamIds = new Set<number>();
-  matches.forEach((match) => {
-    if (match.team1_id) teamIds.add(match.team1_id);
-    if (match.team2_id) teamIds.add(match.team2_id);
-  });
-
-  const teamRestrictions = new Map<number, Array<{ date: string; start_time: string; end_time: string }>>();
-  if (teamIds.size > 0) {
+  const useRestrictions = body.algorithm === "with-restrictions";
+  let teamRestrictions: Map<number, Array<{ date: string; start_time: string; end_time: string }>> | undefined;
+  if (useRestrictions) {
+    const teamIds = Array.from(new Set(matches.flatMap((m) => [m.team1_id, m.team2_id]).filter((id): id is number => id !== null)));
     const { data: restrictions, error: restrictionsError } = await supabase
       .from("tournament_team_schedule_restrictions")
-      .select("tournament_team_id, tournament_group_slot_id")
-      .in("tournament_team_id", Array.from(teamIds));
+      .select("tournament_team_id, tournament_group_slot_id, can_play")
+      .in("tournament_team_id", teamIds);
 
-    if (!restrictionsError && restrictions && restrictions.length > 0) {
-      const slotIds = Array.from(new Set(restrictions.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id)));
-      const { data: slots } = await supabase
-        .from("tournament_group_slots")
-        .select("id, slot_date, start_time, end_time")
-        .eq("tournament_id", tournamentId)
-        .in("id", slotIds);
+    teamRestrictions = new Map();
+    if (!restrictionsError && restrictions?.length) {
+      const cannotPlay = restrictions.filter((r: { can_play?: boolean }) => r.can_play === false);
+      if (cannotPlay.length > 0) {
+        const slotIdsRest = Array.from(new Set(cannotPlay.map((r: { tournament_group_slot_id: number }) => r.tournament_group_slot_id)));
+        const { data: slotsRest } = await supabase
+          .from("tournament_group_slots")
+          .select("id, slot_date, start_time, end_time")
+          .eq("tournament_id", tournamentId)
+          .in("id", slotIdsRest);
 
-      const slotMap = new Map<number, { slot_date: string; start_time: string; end_time: string }>();
-      (slots ?? []).forEach((s: { id: number; slot_date: string; start_time: string; end_time: string }) => {
-        slotMap.set(s.id, { slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time });
-      });
-
-      restrictions.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
-        const slot = slotMap.get(r.tournament_group_slot_id);
-        if (!slot) return;
-        if (!teamRestrictions.has(r.tournament_team_id)) {
-          teamRestrictions.set(r.tournament_team_id, []);
-        }
-        teamRestrictions.get(r.tournament_team_id)!.push({
-          date: slot.slot_date,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
+        const slotMap = new Map<number, { slot_date: string; start_time: string; end_time: string }>();
+        (slotsRest ?? []).forEach((s: { id: number; slot_date: string; start_time: string; end_time: string }) => {
+          slotMap.set(s.id, { slot_date: s.slot_date, start_time: s.start_time, end_time: s.end_time });
         });
-      });
+
+        cannotPlay.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
+          const slot = slotMap.get(r.tournament_group_slot_id);
+          if (!slot) return;
+          if (!teamRestrictions!.has(r.tournament_team_id)) teamRestrictions!.set(r.tournament_team_id, []);
+          teamRestrictions!.get(r.tournament_team_id)!.push({
+            date: slot.slot_date,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+          });
+        });
+      }
     }
   }
 
-  // 7) Asignar horarios usando el scheduler
   const matchDurationMinutes = t.match_duration ?? 60;
 
-  console.log(`Regenerating schedule for ${matchesPayload.length} matches with ${scheduleConfig.days.length} days and ${scheduleConfig.courtIds.length} courts`);
+  console.log(`Regenerating schedule for ${matchesPayload.length} matches with ${scheduleConfig.days.length} days and ${scheduleConfig.courtIds.length} courts (algorithm: ${useRestrictions ? "with-restrictions" : "default"})`);
 
   const schedulerResult = await scheduleGroupMatches(
     matchesPayload,
     scheduleConfig.days,
     matchDurationMinutes,
     scheduleConfig.courtIds,
-    undefined, // Horarios disponibles ahora se generan en memoria a partir de la configuración
-    teamRestrictions
+    undefined,
+    teamRestrictions,
+    undefined,
+    { algorithm: useRestrictions ? "with-restrictions" : "default" }
   );
 
   if (!schedulerResult.success) {
