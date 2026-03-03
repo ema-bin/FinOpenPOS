@@ -220,12 +220,18 @@ export async function POST(req: Request, { params }: RouteParams) {
         .eq("tournament_id", tournamentId)
         .in("id", teamIds);
       teamDisplayNames = new Map();
-      (teamsData ?? []).forEach((row: { id: number; display_name?: string | null; player1?: { last_name?: string } | null; player2?: { last_name?: string } | null }) => {
+      (teamsData ?? []).forEach((row: Record<string, unknown>) => {
+        const id = row.id as number;
+        const displayName = row.display_name as string | null | undefined;
+        const p1 = row.player1 as { last_name?: string } | { last_name?: string }[] | null | undefined;
+        const p2 = row.player2 as { last_name?: string } | { last_name?: string }[] | null | undefined;
+        const ln1 = Array.isArray(p1) ? p1[0]?.last_name : p1?.last_name;
+        const ln2 = Array.isArray(p2) ? p2[0]?.last_name : p2?.last_name;
         const label =
-          row.display_name?.trim() ||
-          [row.player1?.last_name ?? "", row.player2?.last_name ?? ""].filter(Boolean).join("-") ||
-          `Equipo ${row.id}`;
-        teamDisplayNames!.set(row.id, label);
+          displayName?.trim() ||
+          [ln1 ?? "", ln2 ?? ""].filter(Boolean).join("-") ||
+          `Equipo ${id}`;
+        teamDisplayNames!.set(id, label);
       });
     }
   }

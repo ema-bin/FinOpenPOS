@@ -375,7 +375,7 @@ export async function scheduleGroupMatchesBeamSearch(
 
   // 2. Identificar grupos de 3 y 4
   const groups: Group[] = [];
-  for (const [groupId, matches] of matchesByGroup.entries()) {
+  for (const [groupId, matches] of Array.from(matchesByGroup.entries())) {
     const teams = new Set<number>();
     for (const match of matches) {
       if (match.team1_id !== null) teams.add(match.team1_id);
