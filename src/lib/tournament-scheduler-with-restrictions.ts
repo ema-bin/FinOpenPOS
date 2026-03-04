@@ -252,24 +252,34 @@ function generateCandidates(
 }
 
 /**
- * Fallback solo para la última zona: asigna N slots libres aunque no respeten descanso,
- * para que el usuario pueda editar manualmente después.
+ * Fallback solo para la última zona: asigna N slots libres aunque no respeten descanso
+ * (y opcionalmente restricciones horarias), para que el usuario pueda editar manualmente después.
+ * @param allowAnyUnusedSlot si true, cuando no hay suficientes slots "permitidos" usa cualquier slot libre (segundo nivel de fallback).
  */
 function generateLastZoneFallback(
   group: Group,
   availableSlots: Slot[],
   usedSlotIds: Set<string>,
-  matchRestrictions?: Map<number, Set<string>>
-): { slots: Slot[]; score: number } | null {
+  matchRestrictions?: Map<number, Set<string>>,
+  allowAnyUnusedSlot = true
+): { slots: Slot[]; score: number; usedAnyUnusedSlot?: boolean } | null {
   const isAllowedForMatch = (slotId: string, matchIdx: number): boolean =>
     !matchRestrictions?.get(matchIdx)?.has(slotId);
 
-  const freeSlots = availableSlots
+  const allUnused = availableSlots
     .filter((slot) => !usedSlotIds.has(slot.slotId))
-    .filter((slot) =>
-      !matchRestrictions ? true : group.matches.some((_, i) => isAllowedForMatch(slot.slotId, i))
-    )
     .sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+
+  if (allUnused.length < group.size) return null;
+
+  const freeSlotsWithRestrictions = matchRestrictions
+    ? allUnused.filter((slot) =>
+        group.matches.some((_, i) => isAllowedForMatch(slot.slotId, i))
+      )
+    : allUnused;
+
+  const useAnyUnused = freeSlotsWithRestrictions.length < group.size && allowAnyUnusedSlot;
+  const freeSlots = useAnyUnused ? allUnused : freeSlotsWithRestrictions;
 
   if (freeSlots.length < group.size) return null;
 
@@ -297,8 +307,7 @@ function generateLastZoneFallback(
     chosen.push(freeSlots[idx]);
   }
 
-  const slotsInMatchOrder = chosen;
-  return { slots: slotsInMatchOrder, score: -1e6 };
+  return { slots: chosen, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
 }
 
 function runBeamSearch(
@@ -340,8 +349,11 @@ function runBeamSearch(
       if (candidates.length === 0 && isLastZone) {
         const fallback = generateLastZoneFallback(group, slots, state.usedSlots, matchRestrictions);
         if (fallback) {
-          candidates = [fallback];
-          if (onLog) onLog(`⚠️ ${groupName} (última zona): sin combinación que respete descanso; se asignaron horarios para que puedas editar manualmente.`);
+          candidates = [{ slots: fallback.slots, score: fallback.score }];
+          if (onLog) {
+            onLog(`⚠️ ${groupName} (última zona): sin combinación que respete descanso; se asignaron horarios para que puedas editar manualmente.`);
+            if (fallback.usedAnyUnusedSlot) onLog(`   (Se usaron slots libres aunque no cumplan restricciones horarias de algún equipo.)`);
+          }
         }
       }
       if (candidates.length === 0) continue;
