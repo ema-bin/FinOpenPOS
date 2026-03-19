@@ -25,7 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, MedalIcon, Settings2Icon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2Icon, MedalIcon, Settings2Icon, Share2Icon } from "lucide-react";
 import type { Category } from "@/models/db/category";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 
@@ -56,6 +57,8 @@ type RankingResponse = {
 
 export function RankingPuntuableSection() {
   const currentYear = new Date().getFullYear();
+  const [sharing, setSharing] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery<
     Category[]
@@ -111,6 +114,46 @@ export function RankingPuntuableSection() {
     staleTime: 1000 * 60,
   });
 
+  const handleShareRanking = async () => {
+    if (!ranking?.rows?.length) return;
+    try {
+      setSharing(true);
+      setShareMessage(null);
+      const topRows = ranking.rows.slice(0, 10);
+      const lines = [
+        `Ranking puntuable ${categoryName} - ${currentYear}`,
+        "",
+        ...topRows.map(
+          (row) =>
+            `${row.position}. ${row.first_name} ${row.last_name} - ${row.total_points} pts (${row.tournaments_played} torneos)`
+        ),
+      ];
+      const text = lines.join("\n");
+
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        await navigator.share({
+          title: `Ranking ${categoryName} ${currentYear}`,
+          text,
+        });
+        setShareMessage("Ranking compartido.");
+        return;
+      }
+
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setShareMessage("Ranking copiado al portapapeles.");
+        return;
+      }
+
+      setShareMessage("No se pudo compartir automáticamente en este dispositivo.");
+    } catch (error) {
+      console.error("Error sharing ranking:", error);
+      setShareMessage("No se pudo compartir el ranking.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
       <Card>
@@ -125,7 +168,7 @@ export function RankingPuntuableSection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2">
               <Label>Categoría</Label>
               <Select
@@ -146,7 +189,25 @@ export function RankingPuntuableSection() {
               </Select>
             </div>
             <p className="text-sm text-muted-foreground">Año {currentYear}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={handleShareRanking}
+              disabled={loadingRanking || sharing || !ranking?.rows?.length}
+            >
+              {sharing ? (
+                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Share2Icon className="h-4 w-4 mr-2" />
+              )}
+              Compartir ranking
+            </Button>
           </div>
+          {shareMessage && (
+            <p className="text-xs text-muted-foreground">{shareMessage}</p>
+          )}
 
           {loadingRanking ? (
             <div className="flex items-center justify-center py-12">
