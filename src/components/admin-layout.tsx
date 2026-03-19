@@ -36,7 +36,6 @@ const pageNames: { [key: string]: string } = {
   "/admin/court-slots": "Turnos de canchas",
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",
-  "/admin/ranking": "Ranking",
   "/admin/advertisements": "Publicidades",
 };
 

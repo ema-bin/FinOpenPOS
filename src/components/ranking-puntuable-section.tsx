@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -54,7 +54,7 @@ type RankingResponse = {
   rows: RankingRow[];
 };
 
-export default function RankingPage() {
+export function RankingPuntuableSection() {
   const currentYear = new Date().getFullYear();
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery<
@@ -81,7 +81,9 @@ export default function RankingPage() {
     {
       queryKey: ["ranking", selectedCategoryId, currentYear],
       queryFn: async () => {
-        if (selectedCategoryId == null) return { category_id: 0, year: currentYear, rows: [] };
+        if (selectedCategoryId == null) {
+          return { category_id: 0, year: currentYear, rows: [] };
+        }
         const res = await fetch(
           `/api/ranking?category_id=${selectedCategoryId}&year=${currentYear}`
         );
@@ -110,7 +112,7 @@ export default function RankingPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -119,8 +121,7 @@ export default function RankingPage() {
           </CardTitle>
           <CardDescription>
             Puntos por torneos puntuables finalizados en el año en curso. La
-            categoría es la del torneo; los puntos son individuales por
-            jugador.
+            categoría es la del torneo; los puntos son individuales por jugador.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -144,9 +145,7 @@ export default function RankingPage() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Año {currentYear}
-            </p>
+            <p className="text-sm text-muted-foreground">Año {currentYear}</p>
           </div>
 
           {loadingRanking ? (
@@ -166,15 +165,11 @@ export default function RankingPage() {
               <TableBody>
                 {ranking.rows.map((row) => (
                   <TableRow key={row.player_id}>
-                    <TableCell className="font-medium">
-                      {row.position}
-                    </TableCell>
+                    <TableCell className="font-medium">{row.position}</TableCell>
                     <TableCell>
                       {row.first_name} {row.last_name}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {row.total_points}
-                    </TableCell>
+                    <TableCell className="text-right">{row.total_points}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {row.tournaments_played}
                     </TableCell>
@@ -191,17 +186,17 @@ export default function RankingPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2Icon className="h-5 w-5" />
+      <Card className="h-fit w-full xl:max-w-[320px] xl:justify-self-end">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Settings2Icon className="h-4 w-4" />
             Puntos por ronda
           </CardTitle>
-          <CardDescription>
-            Puntos que se asignan por ronda al finalizar un torneo puntuable (solo consulta; la configuración se gestiona desde la base de datos).
+          <CardDescription className="text-xs">
+            Puntos que se asignan por ronda al finalizar un torneo puntuable.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {loadingRules ? (
             <div className="flex justify-center py-6">
               <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -210,15 +205,19 @@ export default function RankingPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Ronda</TableHead>
-                  <TableHead className="w-32 text-right">Puntos</TableHead>
+                  <TableHead className="h-8 text-xs">Ronda</TableHead>
+                  <TableHead className="h-8 w-24 text-right text-xs">Puntos</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(pointRules as TournamentRankingPointRule[]).map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>{ROUND_LABELS[r.round_reached] ?? r.round_reached}</TableCell>
-                    <TableCell className="text-right font-medium">{r.points}</TableCell>
+                    <TableCell className="py-1.5 text-sm">
+                      {ROUND_LABELS[r.round_reached] ?? r.round_reached}
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right text-sm font-medium">
+                      {r.points}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

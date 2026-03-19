@@ -34,6 +34,7 @@ import type { TournamentDTO, TournamentListItem } from "@/models/dto/tournament"
 import type { TournamentStatus } from "@/models/db/tournament";
 import type { Category } from "@/models/db/category";
 import { tournamentsService } from "@/services";
+import { RankingPuntuableSection } from "@/components/ranking-puntuable-section";
 
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<TournamentListItem[]>([]);
@@ -299,6 +300,9 @@ export default function TournamentsPage() {
             ))}
           </div>
         )}
+        <div className="pt-4 border-t">
+          <RankingPuntuableSection />
+        </div>
       </CardContent>
 
       <Dialog
