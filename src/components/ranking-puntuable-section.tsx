@@ -284,9 +284,9 @@ export function RankingPuntuableSection() {
 
         // Capa de contraste para mejorar legibilidad sobre la imagen de fondo
         const overlay = ctx.createLinearGradient(0, 0, outW, outH);
-        overlay.addColorStop(0, "rgba(0,0,0,0.70)");
-        overlay.addColorStop(0.45, "rgba(0,0,0,0.70)");
-        overlay.addColorStop(1, "rgba(0,0,0,0.70)");
+        overlay.addColorStop(0, "rgba(0,0,0,0.65)");
+        overlay.addColorStop(0.45, "rgba(0,0,0,0.65)");
+        overlay.addColorStop(1, "rgba(0,0,0,0.65)");
         ctx.fillStyle = overlay;
         ctx.fillRect(0, 0, outW, outH);
 
