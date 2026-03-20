@@ -33,7 +33,15 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { CopyIcon, Loader2Icon, MedalIcon, Settings2Icon, Share2Icon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  Loader2Icon,
+  MedalIcon,
+  Settings2Icon,
+  Share2Icon,
+} from "lucide-react";
 import type { Category } from "@/models/db/category";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { toast } from "sonner";
@@ -70,6 +78,10 @@ export function RankingPuntuableSection() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
+  const [pageBlobs, setPageBlobs] = useState<Blob[]>([]);
+  const [pageImgUrls, setPageImgUrls] = useState<string[]>([]);
   const [copying, setCopying] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -105,9 +117,22 @@ export function RankingPuntuableSection() {
     setGeneratedBlob(null);
     if (previewImgUrl) URL.revokeObjectURL(previewImgUrl);
     setPreviewImgUrl(null);
+    pageImgUrls.forEach((u) => URL.revokeObjectURL(u));
+    setPageImgUrls([]);
+    setPageBlobs([]);
+    setPageIndex(0);
+    setPageCount(1);
     setShareDialogOpen(false);
     setCopying(false);
   }, [selectedCategoryId]);
+
+  useEffect(() => {
+    const url = pageImgUrls[pageIndex] ?? null;
+    const blob = pageBlobs[pageIndex] ?? null;
+    setPreviewImgUrl(url);
+    setGeneratedBlob(blob);
+    setCanvasReady(Boolean(url));
+  }, [pageIndex, pageBlobs, pageImgUrls]);
 
   const { data: ranking, isLoading: loadingRanking } = useQuery<RankingResponse>(
     {
@@ -160,66 +185,65 @@ export function RankingPuntuableSection() {
       setGeneratedBlob(null);
       setCopying(false);
       if (previewImgUrl) URL.revokeObjectURL(previewImgUrl);
+      if (pageImgUrls.length) pageImgUrls.forEach((u) => URL.revokeObjectURL(u));
       setPreviewImgUrl(null);
+      setPageImgUrls([]);
+      setPageBlobs([]);
+      setPageIndex(0);
+      setPageCount(1);
 
-      // Importante: dejar que el Dialog pinte el canvas antes de dibujar.
+      // Importante: dejar que el Dialog pinte el popup antes de empezar.
       await new Promise<void>((resolve) => setTimeout(resolve, 60));
 
       const rows = ranking.rows;
+      const PAGE_SIZE = 20;
+      const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+
+      setPageCount(pages);
+      setPageIndex(0);
 
       const outW = 1080;
-      // Altura dinámica para mostrar todas las posiciones sin recortar
-      // (aprox: 54px por fila + cabecera + footer).
-      const perRowH = 54;
-      const headerH = 360; // incluye franja superior + título/categoria
+      const perRowH = 60;
+      const headerH = 360;
       const footerH = 140;
-      const outH = Math.max(1920, headerH + perRowH * Math.max(rows.length, 1) + footerH);
+      // Fijamos altura por página para que todas las imágenes sean consistentes.
+      const outH = Math.max(2060, headerH + perRowH * PAGE_SIZE + footerH);
       const previewCssH = Math.round((outH / outW) * 320);
       setPreviewH(previewCssH);
 
-      const canvas = document.createElement("canvas");
-      canvas.width = outW;
-      canvas.height = outH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas no disponible");
+      let bgImg: HTMLImageElement | null = null;
+      try {
+        bgImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("No se pudo cargar PCP-cartel-frente.jpeg"));
+          img.src = "/PCP-cartel-frente.jpeg";
+        });
+      } catch {
+        bgImg = null;
+      }
 
-      // Fondo
-      const grad = ctx.createLinearGradient(0, 0, outW, outH);
-      grad.addColorStop(0, "#0b3a57");
-      grad.addColorStop(1, "#1a5f2e");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, outW, outH);
-
-      // Franja superior
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      const padX = 72;
-      const headerBandH = 220;
-      ctx.fillRect(padX, 90, outW - padX * 2, headerBandH);
-
-      ctx.fillStyle = "#0d3d1f";
-      ctx.textAlign = "center";
-
-      // Tipografía (pedida): Anton para títulos, Montserrat para el resto
       const anton = "Anton, system-ui, -apple-system, Segoe UI, Roboto, Arial";
       const montserrat = "Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-
-      // Títulos
-      ctx.font = `bold 54px ${anton}`;
-      ctx.fillText(`Ranking puntuable`, outW / 2, 165);
-
-      ctx.font = `bold 40px ${anton}`;
-      ctx.fillStyle = "#1b4d2a";
-      ctx.fillText(`${categoryName} - ${currentYear}`, outW / 2, 235);
-
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#ffffff";
-
-      // Lista
-      const startY = 380;
+      const padX = 72;
+      const headerTableY = 350;
+      const startY = 405;
       const rowGap = perRowH;
-      const maxTextW = outW - padX * 2;
+      const nameX = padX + 160;
+      // Más separación entre "TORNEOS" y "PUNTOS".
+      // tournamentsX marca el borde derecho de la columna "TORNEOS"
+      const tournamentsX = outW - padX - 245;
+      // pointsX marca el borde izquierdo de la columna "PUNTOS"
+      const pointsX = outW - padX - 170;
+      const textYOffset = 8;
 
-      const truncate = (text: string, maxW: number, font: string) => {
+      const truncate = (
+        ctx: CanvasRenderingContext2D,
+        text: string,
+        maxW: number,
+        font: string
+      ) => {
         ctx.font = font;
         if (ctx.measureText(text).width <= maxW) return text;
         let s = text;
@@ -229,78 +253,128 @@ export function RankingPuntuableSection() {
         return s.length ? s + "…" : "";
       };
 
-      ctx.font = `bold 34px ${montserrat}`;
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const lineY = startY + i * rowGap;
+      const nextBlobs: Blob[] = [];
+      const nextUrls: string[] = [];
 
-        // Card por fila
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        const cardH = 46;
-        ctx.fillRect(padX, lineY - 36, outW - padX * 2, cardH);
+      for (let page = 0; page < pages; page++) {
+        const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas no disponible");
+
+        // Fondo: PCP-cartel-frente.jpeg (con fallback al gradiente).
+        if (bgImg) {
+          const scale = Math.min(outW / bgImg.naturalWidth, outH / bgImg.naturalHeight);
+          const drawW = bgImg.naturalWidth * scale;
+          const drawH = bgImg.naturalHeight * scale;
+          const dx = (outW - drawW) / 2;
+          const dy = (outH - drawH) / 2;
+          ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+        } else {
+          const grad = ctx.createLinearGradient(0, 0, outW, outH);
+          grad.addColorStop(0, "#0b3a57");
+          grad.addColorStop(1, "#1a5f2e");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, outW, outH);
+        }
+
+        // Capa de contraste para mejorar legibilidad sobre la imagen de fondo
+        const overlay = ctx.createLinearGradient(0, 0, outW, outH);
+        overlay.addColorStop(0, "rgba(0,0,0,0.70)");
+        overlay.addColorStop(0.45, "rgba(0,0,0,0.70)");
+        overlay.addColorStop(1, "rgba(0,0,0,0.70)");
+        ctx.fillStyle = overlay;
+        ctx.fillRect(0, 0, outW, outH);
+
+        // Sombra sutil solo para texto (mejor legibilidad)
+        ctx.shadowColor = "rgba(0,0,0,0.35)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 6;
+
+        // Títulos (todo en mayúscula) - más grandes y con sombra
+        ctx.font = `bold 78px ${anton}`;
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText(`RANKING PUNTUABLE`, outW / 2, 185);
+
+        ctx.font = `bold 62px ${anton}`;
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(72, 185, outW - 144, 120);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(
+          `${String(categoryName).toUpperCase()} - ${String(currentYear).toUpperCase()}`.toUpperCase(),
+          outW / 2,
+          260
+        );
+
+        ctx.textAlign = "left";
         ctx.fillStyle = "#ffffff";
 
-        const name = `${r.first_name} ${r.last_name}`.trim();
-        const nameFont = `bold 32px ${montserrat}`;
-        const nameMaxW = Math.floor(maxTextW * 0.58);
-        const safeName = truncate(name, nameMaxW, nameFont);
-
+        // Encabezados de tabla
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
         ctx.font = `bold 32px ${montserrat}`;
-        ctx.fillText(`#${r.position}`, padX + 20, lineY + 6);
+        ctx.textAlign = "left";
+        ctx.fillText("JUGADOR", nameX, headerTableY);
+        ctx.textAlign = "right";
+        ctx.fillText("TORNEOS", tournamentsX, headerTableY);
+        ctx.textAlign = "left";
+        ctx.fillText("PUNTOS", pointsX, headerTableY);
 
-        ctx.font = nameFont;
-        ctx.fillText(safeName, padX + 160, lineY + 6);
+        for (let i = 0; i < pageRows.length; i++) {
+          const r = pageRows[i];
+          const lineY = startY + i * rowGap;
 
-        ctx.font = `bold 28px ${montserrat}`;
-        ctx.fillText(`${r.total_points} pts`, outW - padX - 210, lineY + 6);
+          ctx.fillStyle = "#ffffff";
 
-        ctx.font = `bold 24px ${montserrat}`;
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.fillText(`${r.tournaments_played} torneos`, outW - padX - 420, lineY + 6);
-      }
+          const name = `${r.first_name} ${r.last_name}`.trim();
+          const nameFont = `bold 36px ${montserrat}`;
+          const nameMaxW = Math.max(40, tournamentsX - nameX - 24);
+          const safeName = truncate(ctx, name, nameMaxW, nameFont).toUpperCase();
 
-      // Foot
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.font = `bold 26px ${montserrat}`;
-      ctx.textAlign = "center";
-      
-      // Preview: dibujar en un canvas DOM con resolución chica (evita limites/memoria)
-      const domCanvas = canvasRef.current;
-      if (domCanvas) {
-        const domCtx = domCanvas.getContext("2d");
-        if (domCtx) {
-          domCanvas.width = 320;
-          domCanvas.height = previewCssH;
-          domCtx.clearRect(0, 0, domCanvas.width, domCanvas.height);
-          domCtx.drawImage(
-            canvas,
-            0,
-            0,
-            outW,
-            outH,
-            0,
-            0,
-            domCanvas.width,
-            domCanvas.height
-          );
-          setCanvasReady(true);
-        } else {
-          setCanvasReady(false);
+          ctx.font = `bold 36px ${montserrat}`;
+          ctx.fillText(`#${r.position}`, padX + 20, lineY + textYOffset);
+
+          ctx.font = nameFont;
+          ctx.fillText(safeName, nameX, lineY + textYOffset);
+
+          ctx.font = `bold 32px ${montserrat}`;
+          ctx.textAlign = "left";
+          ctx.fillText(`${r.total_points} PTS`, pointsX, lineY + textYOffset);
+
+          ctx.font = `bold 26px ${montserrat}`;
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.textAlign = "right";
+          ctx.fillText(`${r.tournaments_played}`, tournamentsX, lineY + textYOffset);
+          ctx.textAlign = "left";
         }
-      } else {
-        setCanvasReady(false);
+
+        // Foot (se mantiene igual: se preparan estilos, sin texto extra)
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.font = `bold 26px ${montserrat}`;
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.35)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 6;
+        ctx.shadowOffsetX = 0;
+
+        const blob: Blob | null = await new Promise((resolve) =>
+          canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+        );
+        if (!blob) throw new Error("Error generando la imagen");
+
+        const url = URL.createObjectURL(blob);
+        nextBlobs.push(blob);
+        nextUrls.push(url);
+        setPageBlobs([...nextBlobs]);
+        setPageImgUrls([...nextUrls]);
+
+        // Para que el loader desaparezca rápido con la primera página.
+        if (page === 0) setCanvasReady(true);
       }
 
-      const blob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/png", 1.0)
-      );
-      if (!blob) throw new Error("Error generando la imagen");
-
-      setGeneratedBlob(blob);
-      // Preview robusto: renderizamos el PNG generado usando el blob.
-      // Evita problemas de dibujar un canvas enorme dentro del popup.
-      const url = URL.createObjectURL(blob);
-      setPreviewImgUrl(url);
       setShareMessage(null);
     } catch (error) {
       console.error("Error sharing ranking PNG:", error);
@@ -395,7 +469,12 @@ export function RankingPuntuableSection() {
                 setPreviewDataUrl(null);
                 setGeneratedBlob(null);
                 if (previewImgUrl) URL.revokeObjectURL(previewImgUrl);
+                pageImgUrls.forEach((u) => URL.revokeObjectURL(u));
                 setPreviewImgUrl(null);
+                setPageImgUrls([]);
+                setPageBlobs([]);
+                setPageIndex(0);
+                setPageCount(1);
                 setShareMessage(null);
                 setCopying(false);
               }
@@ -429,6 +508,48 @@ export function RankingPuntuableSection() {
                     )}
                   </Button>
                 </div>
+
+                {pageCount > 1 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
+                      disabled={
+                        copying ||
+                        sharing ||
+                        pageIndex <= 0 ||
+                        !pageBlobs[pageIndex - 1]
+                      }
+                    >
+                      <ChevronLeftIcon className="h-4 w-4 mr-1" />
+                      Anterior
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      Página {pageIndex + 1} / {pageCount}
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPageIndex((i) => Math.min(pageCount - 1, i + 1))
+                      }
+                      disabled={
+                        copying ||
+                        sharing ||
+                        pageIndex >= pageCount - 1 ||
+                        !pageBlobs[pageIndex + 1]
+                      }
+                    >
+                      Siguiente
+                      <ChevronRightIcon className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                )}
 
                 <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden">
                   <div className="relative">
@@ -479,21 +600,27 @@ export function RankingPuntuableSection() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">#</TableHead>
-                  <TableHead>Jugador</TableHead>
-                  <TableHead className="text-right">Puntos</TableHead>
-                  <TableHead className="text-right">Torneos</TableHead>
+                  <TableHead className="w-16 text-base">#</TableHead>
+                  <TableHead className="text-base">Jugador</TableHead>
+                  <TableHead className="text-right text-base w-24 pr-2">Puntos</TableHead>
+                  <TableHead className="text-right text-base w-28 pr-2 pl-0">
+                    Torneos
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {ranking.rows.map((row) => (
                   <TableRow key={row.player_id}>
-                    <TableCell className="font-medium">{row.position}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium text-base">
+                      {row.position}
+                    </TableCell>
+                    <TableCell className="text-base">
                       {row.first_name} {row.last_name}
                     </TableCell>
-                    <TableCell className="text-right">{row.total_points}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
+                    <TableCell className="text-right text-base w-24 pr-2">
+                      {row.total_points}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground text-base w-28 pr-2 pl-0">
                       {row.tournaments_played}
                     </TableCell>
                   </TableRow>
