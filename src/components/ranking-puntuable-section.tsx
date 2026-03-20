@@ -230,7 +230,8 @@ export function RankingPuntuableSection() {
       const headerTableY = 350;
       const startY = 405;
       const rowGap = perRowH;
-      const nameX = padX + 160;
+      // Columna "Jugador" un poco mas ancha para que el nombre tenga mas espacio.
+      const nameX = padX + 110;
       // Más separación entre "TORNEOS" y "PUNTOS".
       // tournamentsX marca el borde derecho de la columna "TORNEOS"
       const tournamentsX = outW - padX - 245;
@@ -601,7 +602,7 @@ export function RankingPuntuableSection() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16 text-base">#</TableHead>
-                  <TableHead className="text-base">Jugador</TableHead>
+                  <TableHead className="text-base min-w-[300px]">Jugador</TableHead>
                   <TableHead className="text-right text-base w-24 pr-2">Puntos</TableHead>
                   <TableHead className="text-right text-base w-28 pr-2 pl-0">
                     Torneos
@@ -614,7 +615,7 @@ export function RankingPuntuableSection() {
                     <TableCell className="font-medium text-base">
                       {row.position}
                     </TableCell>
-                    <TableCell className="text-base">
+                    <TableCell className="text-base min-w-[300px]">
                       {row.first_name} {row.last_name}
                     </TableCell>
                     <TableCell className="text-right text-base w-24 pr-2">
