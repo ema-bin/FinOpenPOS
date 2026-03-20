@@ -36,7 +36,6 @@ import type {
 } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentsService, tournamentMatchesService } from "@/services";
-import { tr } from "date-fns/locale";
 
 // Using TournamentDetailDTO from models
 
