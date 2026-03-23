@@ -29,9 +29,14 @@ export async function POST(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
     }
 
-    if (purchase.status === "cancelled") {
+    if (purchase.status !== "pending") {
       return NextResponse.json(
-        { error: "Cannot add items to a cancelled purchase" },
+        {
+          error:
+            purchase.status === "completed"
+              ? "Cannot add items to a completed purchase"
+              : "Cannot add items to a cancelled purchase",
+        },
         { status: 400 }
       );
     }
