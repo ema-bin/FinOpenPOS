@@ -30,9 +30,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
     }
 
-    if (purchase.status === "cancelled") {
+    if (purchase.status !== "pending") {
       return NextResponse.json(
-        { error: "Cannot update items in a cancelled purchase" },
+        {
+          error:
+            purchase.status === "completed"
+              ? "Cannot update items in a completed purchase"
+              : "Cannot update items in a cancelled purchase",
+        },
         { status: 400 }
       );
     }
@@ -96,9 +101,14 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
     }
 
-    if (purchase.status === "cancelled") {
+    if (purchase.status !== "pending") {
       return NextResponse.json(
-        { error: "Cannot delete items from a cancelled purchase" },
+        {
+          error:
+            purchase.status === "completed"
+              ? "Cannot delete items from a completed purchase"
+              : "Cannot delete items from a cancelled purchase",
+        },
         { status: 400 }
       );
     }

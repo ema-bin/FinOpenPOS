@@ -46,6 +46,7 @@ import type { ProductDTO } from "@/models/dto/product";
 import type { SupplierDTO } from "@/models/dto/supplier";
 import { purchasesService, paymentMethodsService, productsService, suppliersService } from "@/services";
 import { PaymentMethodSelector } from "@/components/payment-method-selector/PaymentMethodSelector";
+import { ProductSearchSelect } from "@/components/product-search-select/ProductSearchSelect";
 import { formatDateTime } from "@/lib/date-utils";
 import {
   Dialog,
@@ -173,7 +174,15 @@ export default function PurchaseDetailPage() {
     if (pmError) toast.error("Error al cargar los métodos de pago.");
   }, [pmError]);
 
-  const isPurchaseCancelled = purchase?.status === "cancelled";
+  /** Solo las compras pendientes se pueden editar (nueva compra siempre editable). */
+  const isPurchaseReadOnly =
+    !isNewPurchase &&
+    purchase != null &&
+    purchase.status !== "pending";
+
+  /** Compra completada: no se edita, pero sí se puede cancelar para revertir stock y pago. */
+  const canCancelCompletedPurchase =
+    !isNewPurchase && purchase?.status === "completed";
 
   // Helper functions for lines
   const addLine = () => {
@@ -396,10 +405,24 @@ export default function PurchaseDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {!isNewPurchase && purchase && (
-              <div>
-                <Label className="text-sm font-semibold">Proveedor</Label>
-                <p className="text-sm">{purchase.supplier?.name ?? "N/A"}</p>
-              </div>
+              <>
+                <div>
+                  <Label className="text-sm font-semibold">Proveedor</Label>
+                  <p className="text-sm">{purchase.supplier?.name ?? "N/A"}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">Método de pago</Label>
+                  <p className="text-sm">
+                    {purchase.payment_method?.name ?? "—"}
+                  </p>
+                </div>
+                {purchase.notes ? (
+                  <div>
+                    <Label className="text-sm font-semibold">Notas</Label>
+                    <p className="text-sm whitespace-pre-wrap">{purchase.notes}</p>
+                  </div>
+                ) : null}
+              </>
             )}
             <div>
               <Label className="text-sm font-semibold">Total</Label>
@@ -410,8 +433,8 @@ export default function PurchaseDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Edición (solo si no está cancelada) */}
-        {!isPurchaseCancelled && (
+        {/* Edición solo si la compra está pendiente (completadas/canceladas: solo lectura) */}
+        {!isPurchaseReadOnly && (
           <Card>
             <CardHeader>
               <CardTitle>{isNewPurchase ? "Configuración" : "Editar compra"}</CardTitle>
@@ -520,6 +543,39 @@ export default function PurchaseDetailPage() {
             </CardFooter>
           </Card>
         )}
+
+        {/* Compra completada: sin edición, pero se puede cancelar (revertir stock y pago) */}
+        {canCancelCompletedPurchase && (
+          <Card className="border-amber-200 dark:border-amber-900">
+            <CardHeader>
+              <CardTitle>Acciones</CardTitle>
+              <CardDescription>
+                La compra está completada y no se puede editar. Podés cancelarla para revertir el
+                ingreso de stock y el registro de pago asociado.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="destructive"
+                className="w-full sm:w-auto"
+                onClick={() => setIsCancelDialogOpen(true)}
+                disabled={cancelPurchaseMutation.isPending}
+              >
+                {cancelPurchaseMutation.isPending ? (
+                  <>
+                    <Loader2Icon className="mr-2 h-5 w-5 animate-spin" />
+                    Cancelando...
+                  </>
+                ) : (
+                  <>
+                    <XCircleIcon className="mr-2 h-5 w-5" />
+                    Cancelar compra
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
       </div>
 
       {/* Items de la compra */}
@@ -530,9 +586,16 @@ export default function PurchaseDetailPage() {
               <CardTitle>Items</CardTitle>
               <CardDescription>
                 {lines.length} producto(s) en esta compra
+                {isPurchaseReadOnly && purchase && (
+                  <span className="mt-1 block text-amber-700 dark:text-amber-600">
+                    {purchase.status === "completed"
+                      ? "Compra completada: solo lectura. Para revertir stock y pago, cancelá la compra desde Acciones."
+                      : "Compra cancelada: no se puede editar."}
+                  </span>
+                )}
               </CardDescription>
             </div>
-            {!isPurchaseCancelled && (
+            {!isPurchaseReadOnly && (
               <Button variant="outline" size="sm" onClick={addLine}>
                 <PlusIcon className="w-4 h-4 mr-1" />
                 Agregar línea
@@ -549,13 +612,13 @@ export default function PurchaseDetailPage() {
                   <TableHead>Cantidad</TableHead>
                   <TableHead>Costo unitario</TableHead>
                   <TableHead>Subtotal</TableHead>
-                  {!isPurchaseCancelled && <TableHead className="w-[60px]" />}
+                  {!isPurchaseReadOnly && <TableHead className="w-[60px]" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isPurchaseCancelled ? 4 : 5} className="text-center">
+                    <TableCell colSpan={isPurchaseReadOnly ? 4 : 5} className="text-center">
                       No hay items en esta compra.
                     </TableCell>
                   </TableRow>
@@ -574,46 +637,25 @@ export default function PurchaseDetailPage() {
                     return (
                       <TableRow key={line.id}>
                         <TableCell className="min-w-[200px]">
-                          {isPurchaseCancelled ? (
+                          {isPurchaseReadOnly ? (
                             <span>
                               {products.find((p) => p.id === line.productId)?.name ?? "Producto"}
                             </span>
                           ) : (
-                            <Select
-                              value={
-                                line.productId === "none"
-                                  ? "none"
-                                  : String(line.productId)
+                            <ProductSearchSelect
+                              products={products}
+                              value={line.productId}
+                              onValueChange={(productId) =>
+                                updateLine(line.id, { productId })
                               }
-                              onValueChange={(value) => {
-                                if (value === "none") {
-                                  updateLine(line.id, { productId: "none" });
-                                } else {
-                                  updateLine(line.id, {
-                                    productId: Number(value),
-                                  });
-                                }
-                              }}
                               disabled={savePurchaseMutation.isPending}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar producto" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">
-                                  Seleccionar...
-                                </SelectItem>
-                                {products.map((p) => (
-                                  <SelectItem key={p.id} value={String(p.id)}>
-                                    {p.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              placeholder="Seleccionar producto"
+                              searchPlaceholder="Buscar producto..."
+                            />
                           )}
                         </TableCell>
                         <TableCell className="w-[120px]">
-                          {isPurchaseCancelled ? (
+                          {isPurchaseReadOnly ? (
                             <span>{line.quantity}</span>
                           ) : (
                             <Input
@@ -633,7 +675,7 @@ export default function PurchaseDetailPage() {
                           )}
                         </TableCell>
                         <TableCell className="w-[140px]">
-                          {isPurchaseCancelled ? (
+                          {isPurchaseReadOnly ? (
                             <span>${typeof line.unitCost === "number" ? line.unitCost.toFixed(2) : line.unitCost}</span>
                           ) : (
                             <Input
@@ -656,7 +698,7 @@ export default function PurchaseDetailPage() {
                         <TableCell className="w-[140px]">
                           ${subtotal.toFixed(2)}
                         </TableCell>
-                        {!isPurchaseCancelled && (
+                        {!isPurchaseReadOnly && (
                           <TableCell className="w-[60px] text-right">
                             <Button
                               size="icon"
@@ -688,7 +730,17 @@ export default function PurchaseDetailPage() {
           <DialogHeader>
             <DialogTitle>¿Cancelar compra?</DialogTitle>
             <DialogDescription>
-              Esta acción marcará la compra como cancelada. Si hay una transacción asociada, será eliminada.
+              {purchase?.status === "completed" ? (
+                <>
+                  Se anulará el ingreso de stock de esta compra y se eliminará el registro de pago
+                  (transacción) si existe. La compra quedará como cancelada.
+                </>
+              ) : (
+                <>
+                  Esta acción marcará la compra como cancelada. Si hay una transacción asociada, será
+                  eliminada. Se revertirán los movimientos de stock vinculados a esta compra.
+                </>
+              )}{" "}
               Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
