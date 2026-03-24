@@ -9,6 +9,14 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, CheckIcon, RefreshCwIcon, TrashIcon, ArrowLeftRightIcon } from "lucide-react";
 import { GroupScheduleViewer } from "@/components/group-schedule-viewer";
@@ -33,6 +41,12 @@ function teamLabelShort(team: TeamDTO | null): string {
 }
 
 type SwapEntry = { teamId: number; groupId: number; groupName: string; label: string };
+type TeamAvailability = {
+  teamId: number;
+  label: string;
+  groupId: number;
+  availableSlotIds: Set<number>;
+};
 
 async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiResponse> {
   return tournamentsService.getGroups(tournamentId);
@@ -78,6 +92,79 @@ export default function ScheduleReviewTab({
       teams: data.groupTeams.filter((gt: GroupTeamDTO) => gt.tournament_group_id === group.id),
     }));
   }, [data?.groups, data?.groupTeams]);
+
+  const scheduleCompatibilityByGroup = useMemo(() => {
+    const allSlots = data?.tournamentGroupSlots ?? [];
+    if (!allSlots.length || !data?.matches?.length) return [];
+
+    const allSlotIds = new Set(allSlots.map((s) => s.id));
+
+    // Tomamos una sola instancia de cada equipo desde los partidos de grupos.
+    const teamsById = new Map<number, TeamAvailability>();
+    for (const match of data.matches) {
+      const groupId = match.tournament_group_id;
+      if (!groupId) continue;
+
+      for (const t of [match.team1, match.team2]) {
+        if (!t?.id) continue;
+        if (teamsById.has(t.id)) continue;
+
+        const restricted = new Set(t.restricted_slot_ids ?? []);
+        const available = new Set<number>();
+        allSlotIds.forEach((slotId) => {
+          if (!restricted.has(slotId)) available.add(slotId);
+        });
+
+        teamsById.set(t.id, {
+          teamId: t.id,
+          label: teamLabelShort(t),
+          groupId,
+          availableSlotIds: available,
+        });
+      }
+    }
+
+    return groupsWithTeams
+      .map(({ group, teams }) => {
+        const groupTeams = teams
+          .map((gt) => gt.team?.id ? teamsById.get(gt.team.id) : null)
+          .filter((x): x is TeamAvailability => Boolean(x));
+
+        const rows: Array<{
+          teamA: string;
+          teamB: string;
+          availableA: number;
+          availableB: number;
+          overlap: number;
+          compatibilityPct: number;
+        }> = [];
+
+        for (let i = 0; i < groupTeams.length; i++) {
+          for (let j = i + 1; j < groupTeams.length; j++) {
+            const a = groupTeams[i];
+            const b = groupTeams[j];
+            let overlap = 0;
+            a.availableSlotIds.forEach((slotId) => {
+              if (b.availableSlotIds.has(slotId)) overlap++;
+            });
+            const base = Math.min(a.availableSlotIds.size, b.availableSlotIds.size);
+            const compatibilityPct = base > 0 ? Math.round((overlap / base) * 100) : 0;
+            rows.push({
+              teamA: a.label,
+              teamB: b.label,
+              availableA: a.availableSlotIds.size,
+              availableB: b.availableSlotIds.size,
+              overlap,
+              compatibilityPct,
+            });
+          }
+        }
+
+        rows.sort((x, y) => x.compatibilityPct - y.compatibilityPct || x.overlap - y.overlap);
+        return { groupId: group.id, groupName: group.name, rows };
+      })
+      .filter((g) => g.rows.length > 0);
+  }, [data?.matches, data?.tournamentGroupSlots, groupsWithTeams]);
 
   const load = () => {
     queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournament.id] });
@@ -253,6 +340,60 @@ export default function ScheduleReviewTab({
                   </div>
                 ))}
               </div>
+
+              {scheduleCompatibilityByGroup.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Compatibilidad horaria por zona (segun slots disponibles de cada equipo).
+                    Se muestra el cruce de disponibilidad por pares; menor % implica mayor riesgo.
+                  </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {scheduleCompatibilityByGroup.map((groupComp) => (
+                      <div key={groupComp.groupId} className="rounded-md border bg-background p-3">
+                        <div className="text-sm font-semibold mb-2">{groupComp.groupName}</div>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Equipo A</TableHead>
+                                <TableHead>Equipo B</TableHead>
+                                <TableHead className="text-right">Disp. A/B</TableHead>
+                                <TableHead className="text-right">Comunes</TableHead>
+                                <TableHead className="text-right">Compat.</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {groupComp.rows.map((row, idx) => {
+                                const badgeClass =
+                                  row.compatibilityPct < 40
+                                    ? "bg-red-100 text-red-800"
+                                    : row.compatibilityPct < 70
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-green-100 text-green-800";
+                                return (
+                                  <TableRow key={`${groupComp.groupId}-${idx}`}>
+                                    <TableCell className="text-xs">{row.teamA}</TableCell>
+                                    <TableCell className="text-xs">{row.teamB}</TableCell>
+                                    <TableCell className="text-right text-xs">
+                                      {row.availableA}/{row.availableB}
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs">{row.overlap}</TableCell>
+                                    <TableCell className="text-right">
+                                      <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                        {row.compatibilityPct}%
+                                      </span>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
