@@ -89,9 +89,26 @@ export default function ScheduleReviewTab({
     const sorted = [...data.groups].sort((a, b) => (a.group_order ?? 0) - (b.group_order ?? 0));
     return sorted.map((group) => ({
       group,
-      teams: data.groupTeams.filter((gt: GroupTeamDTO) => gt.tournament_group_id === group.id),
+      teams: data.groupTeams
+        .filter((gt: GroupTeamDTO) => gt.tournament_group_id === group.id)
+        .sort((a, b) => {
+          const orderA = a.team?.display_order ?? Number.MAX_SAFE_INTEGER;
+          const orderB = b.team?.display_order ?? Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.team?.id ?? 0) - (b.team?.id ?? 0);
+        }),
     }));
   }, [data?.groups, data?.groupTeams]);
+
+  // Cabezas de zona fijados: primer equipo por display_order dentro de cada zona.
+  const fixedHeadTeamIds = useMemo(() => {
+    const fixed = new Set<number>();
+    groupsWithTeams.forEach(({ teams }) => {
+      const headTeamId = teams[0]?.team?.id;
+      if (headTeamId) fixed.add(headTeamId);
+    });
+    return fixed;
+  }, [groupsWithTeams]);
 
   const scheduleCompatibilityByGroup = useMemo(() => {
     const allSlots = data?.tournamentGroupSlots ?? [];
@@ -257,6 +274,11 @@ export default function ScheduleReviewTab({
     team2Id: number,
     group2Id: number
   ) => {
+    if (fixedHeadTeamIds.has(team1Id) || fixedHeadTeamIds.has(team2Id)) {
+      alert("Los cabeza de zona están fijados y no pueden intercambiarse.");
+      return;
+    }
+
     try {
       setSwapping(true);
       const res = await fetch(`/api/tournaments/${tournament.id}/swap-teams`, {
@@ -331,9 +353,14 @@ export default function ScheduleReviewTab({
                       {group.name}
                     </div>
                     <ul className="space-y-1 text-sm">
-                      {teams.map((gt: GroupTeamDTO) => (
-                        <li key={gt.id}>
-                          {gt.team ? teamLabelShort(gt.team) : `Equipo #${gt.id}`}
+                      {teams.map((gt: GroupTeamDTO, idx) => (
+                        <li key={gt.id} className="flex items-center gap-2">
+                          <span>{gt.team ? teamLabelShort(gt.team) : `Equipo #${gt.id}`}</span>
+                          {idx === 0 && (
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              cabeza
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -648,6 +675,9 @@ export default function ScheduleReviewTab({
                     ? "Hacé clic en un equipo de otra zona para elegirlo como segundo."
                     : "Podés hacer clic en otro equipo para cambiar la selección."}
               </p>
+              <p className="text-xs text-amber-700">
+                Los cabeza de zona (primer equipo por orden de inscripción en cada zona) están fijados y no pueden intercambiarse.
+              </p>
               <div className="flex flex-wrap gap-3 max-h-[280px] overflow-y-auto">
                 {groupsWithTeams.map(({ group, teams }) => (
                   <div
@@ -660,6 +690,7 @@ export default function ScheduleReviewTab({
                     <ul className="space-y-1">
                       {teams.map((gt: GroupTeamDTO) => {
                         if (!gt.team) return null;
+                        const isFixedHead = fixedHeadTeamIds.has(gt.team.id);
                         const entry: SwapEntry = {
                           teamId: gt.team.id,
                           groupId: group.id,
@@ -696,9 +727,15 @@ export default function ScheduleReviewTab({
                               variant={selected ? "default" : "ghost"}
                               size="sm"
                               className="w-full justify-start text-xs font-normal h-8"
+                              disabled={isFixedHead}
                               onClick={handleClick}
                             >
                               {teamLabelShort(gt.team)}
+                              {isFixedHead && (
+                                <span className="ml-1 text-[10px] opacity-80">
+                                  (cabeza fijo)
+                                </span>
+                              )}
                               {(isFirst || isSecond) && (
                                 <span className="ml-1 text-[10px] opacity-80">
                                   {isFirst ? "(1)" : "(2)"}

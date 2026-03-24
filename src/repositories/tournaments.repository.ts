@@ -538,6 +538,7 @@ export class TournamentGroupsRepository extends BaseRepository {
             id,
             display_name,
             seed_number,
+            display_order,
             player1:player1_id ( first_name, last_name ),
             player2:player2_id ( first_name, last_name )
           )
@@ -573,12 +574,14 @@ export class TournamentGroupsRepository extends BaseRepository {
           team1:team1_id (
             id,
             display_name,
+            display_order,
             player1:player1_id ( first_name, last_name ),
             player2:player2_id ( first_name, last_name )
           ),
           team2:team2_id (
             id,
             display_name,
+            display_order,
             player1:player1_id ( first_name, last_name ),
             player2:player2_id ( first_name, last_name )
           )

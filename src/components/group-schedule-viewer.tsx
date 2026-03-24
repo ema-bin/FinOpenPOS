@@ -410,6 +410,31 @@ export function GroupScheduleViewer({
     return Array.from(teamMap.values());
   }, [matches]);
 
+  // Cabezas de zona fijados: menor display_order por grupo.
+  const fixedHeadTeamIds = useMemo(() => {
+    const byGroup = new Map<number, { teamId: number; displayOrder: number; tieId: number }>();
+    matches.forEach((match) => {
+      if (!match.tournament_group_id) return;
+      [match.team1, match.team2].forEach((team) => {
+        if (!team?.id || team.display_order == null) return;
+        const current = byGroup.get(match.tournament_group_id!);
+        const candidate = {
+          teamId: team.id,
+          displayOrder: team.display_order,
+          tieId: team.id,
+        };
+        if (
+          !current ||
+          candidate.displayOrder < current.displayOrder ||
+          (candidate.displayOrder === current.displayOrder && candidate.tieId < current.tieId)
+        ) {
+          byGroup.set(match.tournament_group_id!, candidate);
+        }
+      });
+    });
+    return new Set(Array.from(byGroup.values()).map((x) => x.teamId));
+  }, [matches]);
+
   // ¿El partido viola la restricción horaria de algún equipo? (slot asignado en restricted_slot_ids de team1 o team2)
   const matchSlotViolation = useMemo(() => {
     const violation = new Map<number, { team1: boolean; team2: boolean }>();
@@ -739,6 +764,13 @@ export function GroupScheduleViewer({
 
   const handleSwapTeams = async () => {
     if (!selectedTeam1 || !selectedTeam2) return;
+    if (
+      fixedHeadTeamIds.has(selectedTeam1.teamId) ||
+      fixedHeadTeamIds.has(selectedTeam2.teamId)
+    ) {
+      alert("Los cabeza de zona están fijados y no pueden intercambiarse.");
+      return;
+    }
 
     try {
       setSwapping(true);
@@ -1267,8 +1299,10 @@ export function GroupScheduleViewer({
                               <SelectItem
                                 key={team.id}
                                 value={`${group.id}-${team.id}`}
+                                disabled={fixedHeadTeamIds.has(team.id)}
                               >
                                 {teamLabel(team)}
+                                {fixedHeadTeamIds.has(team.id) ? " (cabeza fijo)" : ""}
                               </SelectItem>
                             ))}
                           </div>
@@ -1308,8 +1342,10 @@ export function GroupScheduleViewer({
                               <SelectItem
                                 key={team.id}
                                 value={`${group.id}-${team.id}`}
+                                disabled={fixedHeadTeamIds.has(team.id)}
                               >
                                 {teamLabel(team)}
+                                {fixedHeadTeamIds.has(team.id) ? " (cabeza fijo)" : ""}
                               </SelectItem>
                             ))}
                           </div>
@@ -1358,6 +1394,9 @@ export function GroupScheduleViewer({
               <div className="text-sm text-muted-foreground">
                 <p>Seleccioná 2 equipos para intercambiar sus horarios y zonas.</p>
                 <p className="mt-1">Ambos equipos deben tener la misma cantidad de partidos.</p>
+                <p className="mt-1 text-amber-700">
+                  Los cabeza de zona (primer orden de inscripcion por zona) están fijados y no pueden intercambiarse.
+                </p>
               </div>
             </div>
           </TabsContent>
