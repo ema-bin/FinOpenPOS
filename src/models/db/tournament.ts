@@ -177,6 +177,7 @@ export interface TournamentGroupsData {
       id: number;
       display_name: string | null;
       seed_number: number | null;
+      display_order: number;
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
     };
@@ -185,6 +186,7 @@ export interface TournamentGroupsData {
     team1?: {
       id: number;
       display_name: string | null;
+      display_order: number;
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
       restricted_slot_ids?: number[];
@@ -192,6 +194,7 @@ export interface TournamentGroupsData {
     team2?: {
       id: number;
       display_name: string | null;
+      display_order: number;
       player1?: { first_name: string; last_name: string };
       player2?: { first_name: string; last_name: string };
       restricted_slot_ids?: number[];

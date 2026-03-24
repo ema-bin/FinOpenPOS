@@ -9,6 +9,14 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, CheckIcon, RefreshCwIcon, TrashIcon, ArrowLeftRightIcon } from "lucide-react";
 import { GroupScheduleViewer } from "@/components/group-schedule-viewer";
@@ -33,6 +41,12 @@ function teamLabelShort(team: TeamDTO | null): string {
 }
 
 type SwapEntry = { teamId: number; groupId: number; groupName: string; label: string };
+type TeamAvailability = {
+  teamId: number;
+  label: string;
+  groupId: number;
+  availableSlotIds: Set<number>;
+};
 
 async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiResponse> {
   return tournamentsService.getGroups(tournamentId);
@@ -75,9 +89,99 @@ export default function ScheduleReviewTab({
     const sorted = [...data.groups].sort((a, b) => (a.group_order ?? 0) - (b.group_order ?? 0));
     return sorted.map((group) => ({
       group,
-      teams: data.groupTeams.filter((gt: GroupTeamDTO) => gt.tournament_group_id === group.id),
+      teams: data.groupTeams
+        .filter((gt: GroupTeamDTO) => gt.tournament_group_id === group.id)
+        .sort((a, b) => {
+          const orderA = a.team?.display_order ?? Number.MAX_SAFE_INTEGER;
+          const orderB = b.team?.display_order ?? Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.team?.id ?? 0) - (b.team?.id ?? 0);
+        }),
     }));
   }, [data?.groups, data?.groupTeams]);
+
+  // Cabezas de zona fijados: primer equipo por display_order dentro de cada zona.
+  const fixedHeadTeamIds = useMemo(() => {
+    const fixed = new Set<number>();
+    groupsWithTeams.forEach(({ teams }) => {
+      const headTeamId = teams[0]?.team?.id;
+      if (headTeamId) fixed.add(headTeamId);
+    });
+    return fixed;
+  }, [groupsWithTeams]);
+
+  const scheduleCompatibilityByGroup = useMemo(() => {
+    const allSlots = data?.tournamentGroupSlots ?? [];
+    if (!allSlots.length || !data?.matches?.length) return [];
+
+    const allSlotIds = new Set(allSlots.map((s) => s.id));
+
+    // Tomamos una sola instancia de cada equipo desde los partidos de grupos.
+    const teamsById = new Map<number, TeamAvailability>();
+    for (const match of data.matches) {
+      const groupId = match.tournament_group_id;
+      if (!groupId) continue;
+
+      for (const t of [match.team1, match.team2]) {
+        if (!t?.id) continue;
+        if (teamsById.has(t.id)) continue;
+
+        const restricted = new Set(t.restricted_slot_ids ?? []);
+        const available = new Set<number>();
+        allSlotIds.forEach((slotId) => {
+          if (!restricted.has(slotId)) available.add(slotId);
+        });
+
+        teamsById.set(t.id, {
+          teamId: t.id,
+          label: teamLabelShort(t),
+          groupId,
+          availableSlotIds: available,
+        });
+      }
+    }
+
+    return groupsWithTeams
+      .map(({ group, teams }) => {
+        const groupTeams = teams
+          .map((gt) => gt.team?.id ? teamsById.get(gt.team.id) : null)
+          .filter((x): x is TeamAvailability => Boolean(x));
+
+        const rows: Array<{
+          teamA: string;
+          teamB: string;
+          availableA: number;
+          availableB: number;
+          overlap: number;
+          compatibilityPct: number;
+        }> = [];
+
+        for (let i = 0; i < groupTeams.length; i++) {
+          for (let j = i + 1; j < groupTeams.length; j++) {
+            const a = groupTeams[i];
+            const b = groupTeams[j];
+            let overlap = 0;
+            a.availableSlotIds.forEach((slotId) => {
+              if (b.availableSlotIds.has(slotId)) overlap++;
+            });
+            const base = Math.min(a.availableSlotIds.size, b.availableSlotIds.size);
+            const compatibilityPct = base > 0 ? Math.round((overlap / base) * 100) : 0;
+            rows.push({
+              teamA: a.label,
+              teamB: b.label,
+              availableA: a.availableSlotIds.size,
+              availableB: b.availableSlotIds.size,
+              overlap,
+              compatibilityPct,
+            });
+          }
+        }
+
+        rows.sort((x, y) => x.compatibilityPct - y.compatibilityPct || x.overlap - y.overlap);
+        return { groupId: group.id, groupName: group.name, rows };
+      })
+      .filter((g) => g.rows.length > 0);
+  }, [data?.matches, data?.tournamentGroupSlots, groupsWithTeams]);
 
   const load = () => {
     queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournament.id] });
@@ -170,6 +274,11 @@ export default function ScheduleReviewTab({
     team2Id: number,
     group2Id: number
   ) => {
+    if (fixedHeadTeamIds.has(team1Id) || fixedHeadTeamIds.has(team2Id)) {
+      alert("Los cabeza de zona están fijados y no pueden intercambiarse.");
+      return;
+    }
+
     try {
       setSwapping(true);
       const res = await fetch(`/api/tournaments/${tournament.id}/swap-teams`, {
@@ -244,15 +353,74 @@ export default function ScheduleReviewTab({
                       {group.name}
                     </div>
                     <ul className="space-y-1 text-sm">
-                      {teams.map((gt: GroupTeamDTO) => (
-                        <li key={gt.id}>
-                          {gt.team ? teamLabelShort(gt.team) : `Equipo #${gt.id}`}
+                      {teams.map((gt: GroupTeamDTO, idx) => (
+                        <li key={gt.id} className="flex items-center gap-2">
+                          <span>{gt.team ? teamLabelShort(gt.team) : `Equipo #${gt.id}`}</span>
+                          {idx === 0 && (
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              cabeza
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
                   </div>
                 ))}
               </div>
+
+              {scheduleCompatibilityByGroup.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Compatibilidad horaria por zona (segun slots disponibles de cada equipo).
+                    Se muestra el cruce de disponibilidad por pares; menor % implica mayor riesgo.
+                  </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {scheduleCompatibilityByGroup.map((groupComp) => (
+                      <div key={groupComp.groupId} className="rounded-md border bg-background p-3">
+                        <div className="text-sm font-semibold mb-2">{groupComp.groupName}</div>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Equipo A</TableHead>
+                                <TableHead>Equipo B</TableHead>
+                                <TableHead className="text-right">Disp. A/B</TableHead>
+                                <TableHead className="text-right">Comunes</TableHead>
+                                <TableHead className="text-right">Compat.</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {groupComp.rows.map((row, idx) => {
+                                const badgeClass =
+                                  row.compatibilityPct < 40
+                                    ? "bg-red-100 text-red-800"
+                                    : row.compatibilityPct < 70
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-green-100 text-green-800";
+                                return (
+                                  <TableRow key={`${groupComp.groupId}-${idx}`}>
+                                    <TableCell className="text-xs">{row.teamA}</TableCell>
+                                    <TableCell className="text-xs">{row.teamB}</TableCell>
+                                    <TableCell className="text-right text-xs">
+                                      {row.availableA}/{row.availableB}
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs">{row.overlap}</TableCell>
+                                    <TableCell className="text-right">
+                                      <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                        {row.compatibilityPct}%
+                                      </span>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -507,6 +675,9 @@ export default function ScheduleReviewTab({
                     ? "Hacé clic en un equipo de otra zona para elegirlo como segundo."
                     : "Podés hacer clic en otro equipo para cambiar la selección."}
               </p>
+              <p className="text-xs text-amber-700">
+                Los cabeza de zona (primer equipo por orden de inscripción en cada zona) están fijados y no pueden intercambiarse.
+              </p>
               <div className="flex flex-wrap gap-3 max-h-[280px] overflow-y-auto">
                 {groupsWithTeams.map(({ group, teams }) => (
                   <div
@@ -519,6 +690,7 @@ export default function ScheduleReviewTab({
                     <ul className="space-y-1">
                       {teams.map((gt: GroupTeamDTO) => {
                         if (!gt.team) return null;
+                        const isFixedHead = fixedHeadTeamIds.has(gt.team.id);
                         const entry: SwapEntry = {
                           teamId: gt.team.id,
                           groupId: group.id,
@@ -555,9 +727,15 @@ export default function ScheduleReviewTab({
                               variant={selected ? "default" : "ghost"}
                               size="sm"
                               className="w-full justify-start text-xs font-normal h-8"
+                              disabled={isFixedHead}
                               onClick={handleClick}
                             >
                               {teamLabelShort(gt.team)}
+                              {isFixedHead && (
+                                <span className="ml-1 text-[10px] opacity-80">
+                                  (cabeza fijo)
+                                </span>
+                              )}
                               {(isFirst || isSecond) && (
                                 <span className="ml-1 text-[10px] opacity-80">
                                   {isFirst ? "(1)" : "(2)"}
