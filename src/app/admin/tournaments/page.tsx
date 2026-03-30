@@ -385,7 +385,7 @@ export default function TournamentsPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label>Zona, 16avos y octavos (minutos)</Label>
+              <Label>Fase de grupos (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -396,7 +396,7 @@ export default function TournamentsPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Cuartos en adelante (minutos)</Label>
+              <Label>Playoffs —todas las rondas— (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -406,7 +406,7 @@ export default function TournamentsPage() {
                 placeholder="60"
               />
               <p className="text-xs text-muted-foreground">
-                Primera duración: zona y primeras rondas de playoff; segunda: cuartos, semifinal y final.
+                Primera: grupos. Segunda: todos los partidos de playoffs (16avos, octavos, cuartos, etc.).
               </p>
             </div>
             <div className="space-y-1">
@@ -608,7 +608,7 @@ export default function TournamentsPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label>Zona, 16avos y octavos (minutos)</Label>
+              <Label>Fase de grupos (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -619,7 +619,7 @@ export default function TournamentsPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Cuartos en adelante (minutos)</Label>
+              <Label>Playoffs —todas las rondas— (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -629,7 +629,7 @@ export default function TournamentsPage() {
                 placeholder="60"
               />
               <p className="text-xs text-muted-foreground">
-                Primera duración: zona y primeras rondas de playoff; segunda: cuartos, semifinal y final.
+                Primera: grupos. Segunda: todos los partidos de playoffs (16avos, octavos, cuartos, etc.).
               </p>
             </div>
             <div className="space-y-1">

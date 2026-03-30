@@ -18,9 +18,9 @@ export interface Tournament {
   end_date: string | null; // DATE
   status: TournamentStatus;
   has_super_tiebreak: boolean;
-  /** Zona + 16avos + octavos (minutos) */
+  /** Fase de grupos (minutos) */
   match_duration: number;
-  /** Cuartos, semifinal y final (minutos) */
+  /** Todos los partidos de playoffs —16avos, octavos, cuartos, etc.— (minutos) */
   match_duration_quarters_onwards: number;
   registration_fee: number;
   created_at: string; // TIMESTAMP

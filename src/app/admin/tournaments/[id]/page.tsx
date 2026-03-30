@@ -288,7 +288,7 @@ export default function TournamentDetailPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Zona, 16avos y octavos (minutos)</Label>
+              <Label>Fase de grupos (minutos)</Label>
               <Input
                 type="number"
                 min={30}
@@ -298,7 +298,7 @@ export default function TournamentDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Cuartos en adelante (minutos)</Label>
+              <Label>Playoffs —todas las rondas— (minutos)</Label>
               <Input
                 type="number"
                 min={30}
@@ -310,8 +310,7 @@ export default function TournamentDetailPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              La primera duración aplica a fase de zona y primeras rondas de playoff; la segunda a
-              cuartos, semifinal y final.
+              La primera duración es para la fase de grupos; la segunda, para todos los partidos de playoffs.
             </p>
           </div>
           <DialogFooter>

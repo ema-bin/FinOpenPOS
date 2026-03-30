@@ -355,12 +355,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     court_id: undefined as number | null | undefined,
   }));
 
-  const earlyPlayoffMin = Math.max(15, t.match_duration ?? 60);
-  const latePlayoffMin = Math.max(15, t.match_duration_quarters_onwards ?? earlyPlayoffMin);
-  const playoffSlotInterval = slotIntervalMinutesForPlayoffScheduling(
-    earlyPlayoffMin,
-    latePlayoffMin
+  /** Todos los partidos de playoffs usan esta duración (DB). */
+  const playoffMin = Math.max(
+    15,
+    t.match_duration_quarters_onwards ?? t.match_duration ?? 60
   );
+  const playoffSlotInterval = slotIntervalMinutesForPlayoffScheduling(playoffMin);
 
   // Asignar horarios a los matches si se proporcionó configuración
   let timeSlots: Array<{ date: string; startTime: string; endTime: string }> = [];
@@ -393,9 +393,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Calcular end_time según ronda (16avos/octavos vs cuartos+)
-    const calculateEndTime = (startTime: string, round: string): string => {
-      const dur = playoffMatchDurationMinutes(round, earlyPlayoffMin, latePlayoffMin);
+    const calculateEndTime = (startTime: string): string => {
+      const dur = playoffMatchDurationMinutes(playoffMin);
       const [startH, startM] = startTime.split(":").map(Number);
       const startMinutes = startH * 60 + startM;
       const endMinutes = startMinutes + dur;
@@ -446,7 +445,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         const slot = timeSlots[slotIndex];
         match.match_date = slot.date;
         match.start_time = slot.startTime;
-        match.end_time = calculateEndTime(slot.startTime, match.round);
+        match.end_time = calculateEndTime(slot.startTime);
         // Los slots se generan con un slot por cancha en cada intervalo
         // Entonces el índice de la cancha es: slotIndex % numCourts
         const courtIndex = slotIndex % scheduleConfig.courtIds.length;

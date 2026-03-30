@@ -1459,13 +1459,13 @@ export default function TeamsTab({
           <DialogHeader>
             <DialogTitle>Generar horarios del torneo</DialogTitle>
             <DialogDescription>
-              Definí rangos de fecha y hora. Los slots de zona usan la duración de zona / 16vos / 8vos; en
-              playoffs, cuartos en adelante usan la otra duración.
+              Definí rangos de fecha y hora. La primera duración es para la fase de grupos; la segunda, para
+              todos los partidos de playoffs (todas las rondas).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-1">
-              <Label className="text-sm">Zona, 16avos y octavos (minutos)</Label>
+              <Label className="text-sm">Fase de grupos (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -1477,7 +1477,7 @@ export default function TeamsTab({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-sm">Cuartos, semifinal y final (minutos)</Label>
+              <Label className="text-sm">Playoffs —todas las rondas— (minutos)</Label>
               <Input
                 type="number"
                 min="30"

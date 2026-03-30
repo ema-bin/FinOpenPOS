@@ -25,7 +25,7 @@ type TournamentScheduleDialogProps = {
   onConfirm: (config: ScheduleConfig) => void;
   matchCount: number; // cantidad de partidos a programar
   tournamentMatchDuration?: number; // duración del partido del torneo (en minutos)
-  /** Cuartos+; si está definido, la grilla de slots usa el máximo entre ambas duraciones */
+  /** Duración de playoffs (todas las rondas); si está definido, la grilla de esta pantalla usa solo este valor */
   tournamentMatchDurationQuartersOnwards?: number;
   availableSchedules?: Array<{ date: string; start_time: string; end_time: string }>; // Horarios disponibles del torneo para pre-llenar (modo sin stream)
   tournamentId?: number; // ID del torneo para usar con SSE
@@ -151,9 +151,10 @@ export function TournamentScheduleDialog({
   }, [storageKey]);
 
   const effectiveGridDuration = useMemo(() => {
-    const early = tournamentMatchDuration;
-    const late = tournamentMatchDurationQuartersOnwards ?? early;
-    return Math.max(30, early, late);
+    if (tournamentMatchDurationQuartersOnwards !== undefined) {
+      return Math.max(30, tournamentMatchDurationQuartersOnwards);
+    }
+    return Math.max(30, tournamentMatchDuration);
   }, [tournamentMatchDuration, tournamentMatchDurationQuartersOnwards]);
 
   // Inicializar matchDuration y días cuando el dialog se abre por primera vez
@@ -516,7 +517,7 @@ export function TournamentScheduleDialog({
             )}
           </div>
 
-          {/* Duración de partidos (grilla de slots; en playoffs el servidor usa el máximo de ambas) */}
+          {/* Grilla de playoffs: solo duración de eliminatoria; regenerar zona: solo match_duration */}
           <div className="space-y-2">
             <Label>Duración estimada de partidos (minutos)</Label>
             <Input
@@ -528,9 +529,9 @@ export function TournamentScheduleDialog({
             />
             {tournamentMatchDurationQuartersOnwards !== undefined && (
               <p className="text-xs text-muted-foreground">
-                Zona / 16vos / 8vos: {tournamentMatchDuration} min · Cuartos+:{" "}
-                {tournamentMatchDurationQuartersOnwards} min. Para estimar slots se usa el máximo (
-                {Math.max(tournamentMatchDuration, tournamentMatchDurationQuartersOnwards)} min).
+                Zona (grupos): {tournamentMatchDuration} min · Playoffs (16avos, octavos, cuartos, etc.):{" "}
+                {tournamentMatchDurationQuartersOnwards} min. Esta grilla usa{" "}
+                {tournamentMatchDurationQuartersOnwards} min por partido de playoff.
               </p>
             )}
           </div>
