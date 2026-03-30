@@ -25,6 +25,8 @@ type TournamentScheduleDialogProps = {
   onConfirm: (config: ScheduleConfig) => void;
   matchCount: number; // cantidad de partidos a programar
   tournamentMatchDuration?: number; // duración del partido del torneo (en minutos)
+  /** Cuartos+; si está definido, la grilla de slots usa el máximo entre ambas duraciones */
+  tournamentMatchDurationQuartersOnwards?: number;
   availableSchedules?: Array<{ date: string; start_time: string; end_time: string }>; // Horarios disponibles del torneo para pre-llenar (modo sin stream)
   tournamentId?: number; // ID del torneo para usar con SSE
   showLogs?: boolean; // Si mostrar la bitácora de logs
@@ -60,6 +62,7 @@ export function TournamentScheduleDialog({
   onConfirm,
   matchCount,
   tournamentMatchDuration = 60,
+  tournamentMatchDurationQuartersOnwards,
   error = null,
   isLoading = false,
   availableSchedules = [],
@@ -147,17 +150,23 @@ export function TournamentScheduleDialog({
     }
   }, [storageKey]);
 
+  const effectiveGridDuration = useMemo(() => {
+    const early = tournamentMatchDuration;
+    const late = tournamentMatchDurationQuartersOnwards ?? early;
+    return Math.max(30, early, late);
+  }, [tournamentMatchDuration, tournamentMatchDurationQuartersOnwards]);
+
   // Inicializar matchDuration y días cuando el dialog se abre por primera vez
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       // El dialog se está abriendo por primera vez o después de estar cerrado
-      setMatchDuration(tournamentMatchDuration);
+      setMatchDuration(effectiveGridDuration);
       // Si hay horarios disponibles, pre-llenar los días
       setDays(getInitialDays(availableSchedules));
       wasOpenRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tournamentMatchDuration, availableSchedulesKey]);
+  }, [open, effectiveGridDuration, availableSchedulesKey]);
 
   // Resetear logs y estado cuando el dialog se abre/cierra
   // Solo resetear si el dialog se está abriendo después de estar cerrado (no si ya estaba abierto)
@@ -507,7 +516,7 @@ export function TournamentScheduleDialog({
             )}
           </div>
 
-          {/* Duración de partidos */}
+          {/* Duración de partidos (grilla de slots; en playoffs el servidor usa el máximo de ambas) */}
           <div className="space-y-2">
             <Label>Duración estimada de partidos (minutos)</Label>
             <Input
@@ -517,6 +526,13 @@ export function TournamentScheduleDialog({
               value={matchDuration}
               onChange={(e) => setMatchDuration(Number(e.target.value))}
             />
+            {tournamentMatchDurationQuartersOnwards !== undefined && (
+              <p className="text-xs text-muted-foreground">
+                Zona / 16vos / 8vos: {tournamentMatchDuration} min · Cuartos+:{" "}
+                {tournamentMatchDurationQuartersOnwards} min. Para estimar slots se usa el máximo (
+                {Math.max(tournamentMatchDuration, tournamentMatchDurationQuartersOnwards)} min).
+              </p>
+            )}
           </div>
 
           {/* Slots del torneo (misma fuente que las restricciones) o días libres */}

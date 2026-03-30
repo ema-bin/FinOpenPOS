@@ -97,7 +97,14 @@ function slotsToRanges(
   return ranges;
 }
 
-export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "status" | "match_duration"> }) {
+export default function TeamsTab({
+  tournament,
+}: {
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "status" | "match_duration" | "match_duration_quarters_onwards"
+  >;
+}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -119,6 +126,12 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   const [generateSlotsRanges, setGenerateSlotsRanges] = useState<Array<{ slot_date: string; start_time: string; end_time: string }>>([
     { slot_date: "", start_time: "09:00", end_time: "00:00" },
   ]);
+  const [scheduleMatchDuration, setScheduleMatchDuration] = useState<number>(
+    tournament.match_duration ?? 60
+  );
+  const [scheduleMatchDurationQuarters, setScheduleMatchDurationQuarters] = useState<number>(
+    tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+  );
   const [generatingSlots, setGeneratingSlots] = useState(false);
   const [confirmReplaceSlotsOpen, setConfirmReplaceSlotsOpen] = useState(false);
   const [initializingAllRestrictions, setInitializingAllRestrictions] = useState(false);
@@ -141,6 +154,19 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   const [localTeamsOrder, setLocalTeamsOrder] = useState<TeamDTO[]>([]);
   const [hasOrderChanges, setHasOrderChanges] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  useEffect(() => {
+    if (generateSlotsDialogOpen) {
+      setScheduleMatchDuration(tournament.match_duration ?? 60);
+      setScheduleMatchDurationQuarters(
+        tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+      );
+    }
+  }, [
+    generateSlotsDialogOpen,
+    tournament.match_duration,
+    tournament.match_duration_quarters_onwards,
+  ]);
   
   // Debounce search terms para edición
   const debouncedEditPlayer1Search = useDebounce(editPlayer1Search, 300);
@@ -600,10 +626,29 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
     try {
       setGeneratingSlots(true);
       setConfirmReplaceSlotsOpen(false);
+      const normalizedDuration = Math.max(30, Number(scheduleMatchDuration) || 60);
+      const normalizedQuarters = Math.max(
+        30,
+        Number(scheduleMatchDurationQuarters) || normalizedDuration
+      );
+
+      // Permitir editar duraciones desde "Configurar horarios".
+      const prevEarly = tournament.match_duration ?? 60;
+      const prevLate =
+        tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60;
+      if (normalizedDuration !== prevEarly || normalizedQuarters !== prevLate) {
+        await tournamentsService.update(tournament.id, {
+          match_duration: normalizedDuration,
+          match_duration_quarters_onwards: normalizedQuarters,
+        });
+        queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+        queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      }
+
       await tournamentsService.createGroupSlots(
         tournament.id,
         valid,
-        tournament.match_duration ?? 60
+        normalizedDuration
       );
       queryClient.invalidateQueries({ queryKey: ["tournament-group-slots", tournament.id] });
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
@@ -1341,10 +1386,35 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           <DialogHeader>
             <DialogTitle>Generar horarios del torneo</DialogTitle>
             <DialogDescription>
-              Definí rangos de fecha y hora. Se generarán slots de {tournament.match_duration ?? 60} min (duración del partido) dentro de cada rango.
+              Definí rangos de fecha y hora. Los slots de zona usan la duración de zona / 16vos / 8vos; en
+              playoffs, cuartos en adelante usan la otra duración.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
+            <div className="space-y-1">
+              <Label className="text-sm">Zona, 16avos y octavos (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="5"
+                value={scheduleMatchDuration}
+                onChange={(e) =>
+                  setScheduleMatchDuration(Math.max(30, Number(e.target.value) || 60))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Cuartos, semifinal y final (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="5"
+                value={scheduleMatchDurationQuarters}
+                onChange={(e) =>
+                  setScheduleMatchDurationQuarters(Math.max(30, Number(e.target.value) || 60))
+                }
+              />
+            </div>
             <Label className="text-sm">Rangos horarios</Label>
             {generateSlotsRanges.map((slot, idx) => (
               <div key={idx} className="flex flex-wrap items-end gap-2 p-2 rounded-md bg-muted/50">

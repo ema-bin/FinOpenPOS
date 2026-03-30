@@ -2,13 +2,17 @@
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Tabs,
   TabsList,
@@ -29,6 +33,7 @@ import ShareTournamentFlyerTab from "./ShareTournamentFlyerTab";
 import PlayoffPreviewTab from "./PlayoffPreviewTab";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
+import { toast } from "sonner";
 
 async function fetchTournament(id: number): Promise<TournamentDTO> {
   return tournamentsService.getById(id);
@@ -38,6 +43,10 @@ export default function TournamentDetailPage() {
   const params = useParams();
   const id = Number(params?.id);
   const [activeTab, setActiveTab] = useState<string>("teams");
+  const [durationDialogOpen, setDurationDialogOpen] = useState(false);
+  const [matchDuration, setMatchDuration] = useState<number>(60);
+  const [matchDurationQuarters, setMatchDurationQuarters] = useState<number>(60);
+  const queryClient = useQueryClient();
 
   const {
     data: tournament,
@@ -48,6 +57,31 @@ export default function TournamentDetailPage() {
     queryFn: () => fetchTournament(id),
     enabled: !!id && !Number.isNaN(id),
     staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
+  const updateDurationMutation = useMutation({
+    mutationFn: async () => {
+      if (!id || Number.isNaN(id)) return;
+      const sanitized = Math.max(30, Number(matchDuration) || 60);
+      const sanitizedQuarters = Math.max(30, Number(matchDurationQuarters) || sanitized);
+      return tournamentsService.update(id, {
+        match_duration: sanitized,
+        match_duration_quarters_onwards: sanitizedQuarters,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Duración de partido actualizada.");
+      setDurationDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["tournament", id] });
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la duración del partido."
+      );
+    },
   });
 
 
@@ -74,17 +108,35 @@ export default function TournamentDetailPage() {
   return (
     <Card className="p-4 flex flex-col gap-4">
       <CardHeader className="p-0">
-        <CardTitle>
-          {tournament.name}{" "}
-          <span className="text-xs text-muted-foreground">
-            {tournament.is_category_specific && tournament.category
-              ? tournament.category
-              : tournament.category ?? "Sin categoría"}
-            {tournament.is_puntuable && " • Puntuable"}
-            {" • "}
-            {tournament.status}
-          </span>
-        </CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle>
+            {tournament.name}{" "}
+            <span className="text-xs text-muted-foreground">
+              {tournament.is_category_specific && tournament.category
+                ? tournament.category
+                : tournament.category ?? "Sin categoría"}
+              {tournament.is_puntuable && " • Puntuable"}
+              {" • "}
+              {tournament.status}
+            </span>
+          </CardTitle>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setMatchDuration(tournament.match_duration ?? 60);
+              setMatchDurationQuarters(
+                tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+              );
+              setDurationDialogOpen(true);
+            }}
+            disabled={tournament.status === "finished" || tournament.status === "cancelled"}
+          >
+            Duración: {tournament.match_duration ?? 60} /{" "}
+            {tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60} min
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0 pt-2">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -233,6 +285,60 @@ export default function TournamentDetailPage() {
           )}
         </Tabs>
       </CardContent>
+
+      <Dialog open={durationDialogOpen} onOpenChange={setDurationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar duración de partido</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Zona, 16avos y octavos (minutos)</Label>
+              <Input
+                type="number"
+                min={30}
+                step={5}
+                value={matchDuration}
+                onChange={(e) => setMatchDuration(Math.max(30, Number(e.target.value) || 60))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cuartos en adelante (minutos)</Label>
+              <Input
+                type="number"
+                min={30}
+                step={5}
+                value={matchDurationQuarters}
+                onChange={(e) =>
+                  setMatchDurationQuarters(Math.max(30, Number(e.target.value) || 60))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              La primera duración aplica a fase de zona y primeras rondas de playoff; la segunda a
+              cuartos, semifinal y final.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDurationDialogOpen(false)}
+              disabled={updateDurationMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => updateDurationMutation.mutate()}
+              disabled={updateDurationMutation.isPending}
+            >
+              {updateDurationMutation.isPending && (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

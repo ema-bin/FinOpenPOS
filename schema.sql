@@ -531,7 +531,10 @@ CREATE TABLE tournaments (
     -- 🔹 Flag para indicar si el tercer set es super tie-break (aplicado a todos los matches del torneo)
     has_super_tiebreak  BOOLEAN NOT NULL DEFAULT FALSE,
     -- 🔹 Duración estimada de un partido en minutos (por defecto 60 minutos = 1 hora)
+    --     Zona + 16avos + octavos
     match_duration      INTEGER NOT NULL DEFAULT 60,
+    -- 🔹 Cuartos, semifinal y final (playoffs)
+    match_duration_quarters_onwards INTEGER NOT NULL DEFAULT 60,
     -- 🔹 Precio de inscripción por jugador
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -67,6 +67,7 @@ export default function TournamentsPage() {
   const [isCategorySpecific, setIsCategorySpecific] = useState(false);
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
+  const [matchDurationQuarters, setMatchDurationQuarters] = useState<number>(60);
   const [registrationFee, setRegistrationFee] = useState<number>(0);
   const [creating, setCreating] = useState(false);
   const [groupSlots, setGroupSlots] = useState<Array<{ slot_date: string; start_time: string; end_time: string }>>([]);
@@ -130,6 +131,7 @@ export default function TournamentsPage() {
         is_puntuable: isPuntuable,
         has_super_tiebreak: hasSuperTiebreak,
         match_duration: matchDuration,
+        match_duration_quarters_onwards: matchDurationQuarters,
         registration_fee: registrationFee,
         group_slots:
           groupSlots.filter(
@@ -175,6 +177,7 @@ export default function TournamentsPage() {
       setIsCategorySpecific(full.is_category_specific ?? false);
       setIsSuma13Damas(full.is_suma_13_damas ?? false);
       setMatchDuration(full.match_duration ?? 60);
+      setMatchDurationQuarters(full.match_duration_quarters_onwards ?? full.match_duration ?? 60);
       setHasSuperTiebreak(full.has_super_tiebreak ?? false);
       setRegistrationFee(full.registration_fee ?? 0);
       setEditDialogOpen(true);
@@ -194,6 +197,7 @@ export default function TournamentsPage() {
         is_category_specific: isCategorySpecific && !isSuma13Damas,
         is_suma_13_damas: isSuma13Damas,
         match_duration: matchDuration,
+        match_duration_quarters_onwards: matchDurationQuarters,
         has_super_tiebreak: hasSuperTiebreak,
         registration_fee: registrationFee,
       });
@@ -381,7 +385,7 @@ export default function TournamentsPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label>Duración del partido (minutos)</Label>
+              <Label>Zona, 16avos y octavos (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -390,8 +394,19 @@ export default function TournamentsPage() {
                 onChange={(e) => setMatchDuration(Number(e.target.value) || 90)}
                 placeholder="60"
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Cuartos en adelante (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="15"
+                value={matchDurationQuarters}
+                onChange={(e) => setMatchDurationQuarters(Number(e.target.value) || 90)}
+                placeholder="60"
+              />
               <p className="text-xs text-muted-foreground">
-                Duración estimada de cada partido (por defecto 60 minutos)
+                Primera duración: zona y primeras rondas de playoff; segunda: cuartos, semifinal y final.
               </p>
             </div>
             <div className="space-y-1">
@@ -593,7 +608,7 @@ export default function TournamentsPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label>Duración del partido (minutos)</Label>
+              <Label>Zona, 16avos y octavos (minutos)</Label>
               <Input
                 type="number"
                 min="30"
@@ -602,8 +617,19 @@ export default function TournamentsPage() {
                 onChange={(e) => setMatchDuration(Number(e.target.value) || 90)}
                 placeholder="60"
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Cuartos en adelante (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="15"
+                value={matchDurationQuarters}
+                onChange={(e) => setMatchDurationQuarters(Number(e.target.value) || 90)}
+                placeholder="60"
+              />
               <p className="text-xs text-muted-foreground">
-                Duración estimada de cada partido (por defecto 60 minutos)
+                Primera duración: zona y primeras rondas de playoff; segunda: cuartos, semifinal y final.
               </p>
             </div>
             <div className="space-y-1">

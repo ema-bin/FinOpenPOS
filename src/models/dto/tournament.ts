@@ -17,6 +17,8 @@ export interface TournamentDTO {
   status: TournamentStatus;
   has_super_tiebreak: boolean;
   match_duration: number;
+  /** Cuartos+; si falta (API vieja), usar match_duration */
+  match_duration_quarters_onwards?: number;
   registration_fee: number;
   start_date?: string | null;
   end_date?: string | null;

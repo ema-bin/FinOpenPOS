@@ -18,7 +18,10 @@ export interface Tournament {
   end_date: string | null; // DATE
   status: TournamentStatus;
   has_super_tiebreak: boolean;
+  /** Zona + 16avos + octavos (minutos) */
   match_duration: number;
+  /** Cuartos, semifinal y final (minutos) */
+  match_duration_quarters_onwards: number;
   registration_fee: number;
   created_at: string; // TIMESTAMP
 }
@@ -128,6 +131,7 @@ export interface CreateTournamentInput {
   end_date?: string | null;
   has_super_tiebreak?: boolean;
   match_duration?: number;
+  match_duration_quarters_onwards?: number;
   registration_fee?: number;
 }
 
