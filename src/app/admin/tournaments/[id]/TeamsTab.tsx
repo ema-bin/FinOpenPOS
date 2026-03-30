@@ -38,6 +38,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  availabilityBadgeClassName,
+  availabilityRowClassName,
+  getTeamAvailabilityLevel,
+} from "@/lib/team-availability-visual";
 import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restrictions-dialog";
 
 import type { PlayerDTO } from "@/models/dto/player";
@@ -97,7 +102,14 @@ function slotsToRanges(
   return ranges;
 }
 
-export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "status" | "match_duration"> }) {
+export default function TeamsTab({
+  tournament,
+}: {
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "status" | "match_duration" | "match_duration_quarters_onwards"
+  >;
+}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -119,6 +131,12 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   const [generateSlotsRanges, setGenerateSlotsRanges] = useState<Array<{ slot_date: string; start_time: string; end_time: string }>>([
     { slot_date: "", start_time: "09:00", end_time: "00:00" },
   ]);
+  const [scheduleMatchDuration, setScheduleMatchDuration] = useState<number>(
+    tournament.match_duration ?? 60
+  );
+  const [scheduleMatchDurationQuarters, setScheduleMatchDurationQuarters] = useState<number>(
+    tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+  );
   const [generatingSlots, setGeneratingSlots] = useState(false);
   const [confirmReplaceSlotsOpen, setConfirmReplaceSlotsOpen] = useState(false);
   const [initializingAllRestrictions, setInitializingAllRestrictions] = useState(false);
@@ -141,6 +159,19 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   const [localTeamsOrder, setLocalTeamsOrder] = useState<TeamDTO[]>([]);
   const [hasOrderChanges, setHasOrderChanges] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  useEffect(() => {
+    if (generateSlotsDialogOpen) {
+      setScheduleMatchDuration(tournament.match_duration ?? 60);
+      setScheduleMatchDurationQuarters(
+        tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+      );
+    }
+  }, [
+    generateSlotsDialogOpen,
+    tournament.match_duration,
+    tournament.match_duration_quarters_onwards,
+  ]);
   
   // Debounce search terms para edición
   const debouncedEditPlayer1Search = useDebounce(editPlayer1Search, 300);
@@ -185,6 +216,13 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
   });
 
   const hasGroups = groupsData?.groups && groupsData.groups.length > 0;
+  /** Solo en borrador y sin grupos generados se puede editar disponibilidad (coincide con la API). */
+  const canEditAvailability =
+    tournament.status === "draft" && !hasGroups && groupSlots.length > 0;
+  const groupSlotIdSet = useMemo(
+    () => new Set(groupSlots.map((s) => s.id)),
+    [groupSlots]
+  );
   const loading = loadingTeams || loadingPlayers || loadingGroups;
 
   // Al abrir el diálogo de horarios, pre-llenar con los slots existentes (convertidos a rangos)
@@ -600,10 +638,29 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
     try {
       setGeneratingSlots(true);
       setConfirmReplaceSlotsOpen(false);
+      const normalizedDuration = Math.max(30, Number(scheduleMatchDuration) || 60);
+      const normalizedQuarters = Math.max(
+        30,
+        Number(scheduleMatchDurationQuarters) || normalizedDuration
+      );
+
+      // Permitir editar duraciones desde "Configurar horarios".
+      const prevEarly = tournament.match_duration ?? 60;
+      const prevLate =
+        tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60;
+      if (normalizedDuration !== prevEarly || normalizedQuarters !== prevLate) {
+        await tournamentsService.update(tournament.id, {
+          match_duration: normalizedDuration,
+          match_duration_quarters_onwards: normalizedQuarters,
+        });
+        queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+        queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      }
+
       await tournamentsService.createGroupSlots(
         tournament.id,
         valid,
-        tournament.match_duration ?? 60
+        normalizedDuration
       );
       queryClient.invalidateQueries({ queryKey: ["tournament-group-slots", tournament.id] });
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
@@ -688,7 +745,8 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           <CardTitle>Equipos</CardTitle>
           <CardDescription>
             Armá las parejas del torneo. Luego cerrá la inscripción para generar
-            las zonas automáticamente.
+            las zonas automáticamente. La disponibilidad horaria de cada pareja solo se puede
+            definir en borrador y antes de generar grupos; después es solo lectura.
           </CardDescription>
           {groupSlots.length === 0 && tournament.status === "draft" && (
             <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3">
@@ -761,7 +819,7 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
-          {groupSlots.length > 0 && teams.length > 0 && tournament.status === "draft" && (
+          {canEditAvailability && teams.length > 0 && (
             <Button
               size="sm"
               variant="outline"
@@ -835,6 +893,23 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           </p>
         ) : (
           <div className="space-y-2">
+            {groupSlots.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border rounded-md px-3 py-2 bg-muted/40">
+                <span className="font-medium text-foreground">Disponibilidad horaria</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-emerald-200 dark:bg-emerald-800 border border-emerald-500/50" />
+                  Puede en todos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-amber-200 dark:bg-amber-800 border border-amber-500/50" />
+                  Más de la mitad de horarios, no todos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-red-200 dark:bg-red-900 border border-red-500/50" />
+                  Menos de la mitad de horarios
+                </span>
+              </div>
+            )}
             {teamsToUse.map((team, index) => {
               // Validar que el equipo tenga jugadores válidos
               if (!team.player1 || !team.player2) {
@@ -865,11 +940,29 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
               
               const canMoveUp = index > 0;
               const canMoveDown = index < teamsToUse.length - 1;
-              
+              const availability = getTeamAvailabilityLevel(
+                groupSlots.length,
+                team.restricted_slot_ids,
+                groupSlotIdSet
+              );
+              const availRow =
+                groupSlots.length > 0 && availability.level !== "none"
+                  ? availabilityRowClassName(availability.level)
+                  : "";
+              const availTitle =
+                groupSlots.length > 0 && availability.level !== "none"
+                  ? `Disponibilidad: puede jugar en ${availability.available} de ${availability.total} horarios del torneo`
+                  : undefined;
+
               return (
                 <div
                   key={team.id}
-                  className={`flex items-center justify-between border rounded-md px-3 py-2 ${team.is_substitute ? 'bg-muted/30 opacity-75' : ''}`}
+                  title={availTitle}
+                  className={cn(
+                    "flex items-center justify-between border rounded-md px-3 py-2",
+                    team.is_substitute && "opacity-80",
+                    availRow || (team.is_substitute ? "bg-muted/30" : "bg-background")
+                  )}
                 >
                   <div className="flex items-center gap-3 flex-1">
                     {tournament.status === "draft" && !hasGroups && (
@@ -910,6 +1003,16 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
                             Suplente
                           </span>
                         )}
+                        {groupSlots.length > 0 && availability.level !== "none" && (
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0",
+                              availabilityBadgeClassName(availability.level)
+                            )}
+                          >
+                            {availability.available}/{availability.total} horarios
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {fullName(team.player1)} &middot; {fullName(team.player2)}
@@ -931,17 +1034,19 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
                       >
                         <EditIcon className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedTeamForRestrictions(team);
-                          setRestrictionsDialogOpen(true);
-                        }}
-                        title="Editar restricciones horarias"
-                      >
-                        <CalendarIcon className="w-4 h-4" />
-                      </Button>
+                      {groupSlots.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTeamForRestrictions(team);
+                            setRestrictionsDialogOpen(true);
+                          }}
+                          title="Editar disponibilidad horaria"
+                        >
+                          <CalendarIcon className="w-4 h-4" />
+                        </Button>
+                      )}
                       <div className="flex items-center gap-1 px-2">
                         <Checkbox
                           id={`substitute-${team.id}`}
@@ -966,7 +1071,20 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
                       </Button>
                     </div>
                   )}
-                  {tournament.status === "draft" && hasGroups && (
+                  {groupSlots.length > 0 && !(tournament.status === "draft" && !hasGroups) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedTeamForRestrictions(team);
+                        setRestrictionsDialogOpen(true);
+                      }}
+                      title="Ver disponibilidad horaria (solo lectura)"
+                    >
+                      <CalendarIcon className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {tournament.status === "draft" && hasGroups && groupSlots.length === 0 && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1341,10 +1459,35 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
           <DialogHeader>
             <DialogTitle>Generar horarios del torneo</DialogTitle>
             <DialogDescription>
-              Definí rangos de fecha y hora. Se generarán slots de {tournament.match_duration ?? 60} min (duración del partido) dentro de cada rango.
+              Definí rangos de fecha y hora. La primera duración es para la fase de grupos; la segunda, para
+              todos los partidos de playoffs (todas las rondas).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
+            <div className="space-y-1">
+              <Label className="text-sm">Fase de grupos (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="5"
+                value={scheduleMatchDuration}
+                onChange={(e) =>
+                  setScheduleMatchDuration(Math.max(30, Number(e.target.value) || 60))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Playoffs —todas las rondas— (minutos)</Label>
+              <Input
+                type="number"
+                min="30"
+                step="5"
+                value={scheduleMatchDurationQuarters}
+                onChange={(e) =>
+                  setScheduleMatchDurationQuarters(Math.max(30, Number(e.target.value) || 60))
+                }
+              />
+            </div>
             <Label className="text-sm">Rangos horarios</Label>
             {generateSlotsRanges.map((slot, idx) => (
               <div key={idx} className="flex flex-wrap items-end gap-2 p-2 rounded-md bg-muted/50">
@@ -1459,9 +1602,10 @@ export default function TeamsTab({ tournament }: { tournament: Pick<TournamentDT
         }}
         team={selectedTeamForRestrictions}
         slots={groupSlots}
+        readOnly={!canEditAvailability}
         onSave={handleSaveRestrictions}
         onInitialize={
-          selectedTeamForRestrictions
+          canEditAvailability && selectedTeamForRestrictions
             ? async () => {
                 await tournamentsService.initializeTeamRestrictions(tournament.id, selectedTeamForRestrictions.id);
                 const updated = await queryClient.fetchQuery({ queryKey: ["tournament-teams", tournament.id], queryFn: () => fetchTournamentTeams(tournament.id) });

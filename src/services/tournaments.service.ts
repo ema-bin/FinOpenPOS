@@ -22,6 +22,7 @@ export interface CreateTournamentInput {
   is_suma_13_damas?: boolean;
   has_super_tiebreak?: boolean;
   match_duration?: number;
+  match_duration_quarters_onwards?: number;
   registration_fee?: number;
   group_slots?: TournamentGroupSlotInput[];
 }
@@ -106,6 +107,7 @@ class TournamentsService {
       end_date: string | null;
       has_super_tiebreak: boolean;
       match_duration: number;
+      match_duration_quarters_onwards?: number;
       registration_fee: number;
     }>
   ): Promise<TournamentDTO> {

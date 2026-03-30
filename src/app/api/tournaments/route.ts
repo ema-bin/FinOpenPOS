@@ -48,7 +48,21 @@ export async function POST(request: Request) {
   try {
     const repos = await createRepositories();
     const body = await request.json();
-    const { name, description, category_id, is_puntuable, is_category_specific, is_suma_13_damas, start_date, end_date, has_super_tiebreak, match_duration, registration_fee, group_slots } = body;
+    const {
+      name,
+      description,
+      category_id,
+      is_puntuable,
+      is_category_specific,
+      is_suma_13_damas,
+      start_date,
+      end_date,
+      has_super_tiebreak,
+      match_duration,
+      match_duration_quarters_onwards,
+      registration_fee,
+      group_slots,
+    } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -71,6 +85,8 @@ export async function POST(request: Request) {
       end_date: normalizeDate(end_date),
       has_super_tiebreak: has_super_tiebreak ?? false,
       match_duration: match_duration ?? 60,
+      match_duration_quarters_onwards:
+        match_duration_quarters_onwards ?? match_duration ?? 60,
       registration_fee: typeof registration_fee === "number" ? registration_fee : Number(registration_fee) || 0,
     });
 

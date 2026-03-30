@@ -530,8 +530,10 @@ CREATE TABLE tournaments (
                  CHECK (status IN ('draft', 'schedule_review', 'in_progress', 'finished', 'cancelled')),
     -- 🔹 Flag para indicar si el tercer set es super tie-break (aplicado a todos los matches del torneo)
     has_super_tiebreak  BOOLEAN NOT NULL DEFAULT FALSE,
-    -- 🔹 Duración estimada de un partido en minutos (por defecto 60 minutos = 1 hora)
+    -- 🔹 Duración de partidos de fase de grupos (minutos)
     match_duration      INTEGER NOT NULL DEFAULT 60,
+    -- 🔹 Duración de todos los partidos de playoffs —16avos, octavos, cuartos, etc.— (minutos)
+    match_duration_quarters_onwards INTEGER NOT NULL DEFAULT 60,
     -- 🔹 Precio de inscripción por jugador
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

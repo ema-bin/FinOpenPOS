@@ -143,7 +143,14 @@ async function fetchTournamentPlayoffs(tournamentId: number): Promise<any[]> {
   return tournamentsService.getPlayoffs(tournamentId);
 }
 
-export default function GroupsTab({ tournament }: { tournament: Pick<TournamentDTO, "id" | "name" | "has_super_tiebreak" | "match_duration" | "status"> }) {
+export default function GroupsTab({
+  tournament,
+}: {
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "name" | "has_super_tiebreak" | "match_duration" | "match_duration_quarters_onwards" | "status"
+  >;
+}) {
   const queryClient = useQueryClient();
   const [closingGroups, setClosingGroups] = useState(false);
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
@@ -503,6 +510,9 @@ export default function GroupsTab({ tournament }: { tournament: Pick<TournamentD
         onConfirm={handleConfirmSchedule}
         matchCount={calculatePlayoffMatchCount()}
         tournamentMatchDuration={tournament.match_duration}
+        tournamentMatchDurationQuartersOnwards={
+          tournament.match_duration_quarters_onwards ?? tournament.match_duration
+        }
         error={playoffsError}
         isLoading={closingGroups}
       />

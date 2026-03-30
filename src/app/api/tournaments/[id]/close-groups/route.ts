@@ -46,6 +46,10 @@ function generateTimeSlots(
 }
 
 import type { TournamentMatch } from "@/models/db/tournament";
+import {
+  playoffMatchDurationMinutes,
+  slotIntervalMinutesForPlayoffScheduling,
+} from "@/lib/playoff-match-duration";
 
 // Using Pick from TournamentMatch for internal processing
 type MatchRow = Pick<TournamentMatch, "id" | "tournament_group_id" | "team1_id" | "team2_id" | "team1_sets" | "team2_sets" | "team1_games_total" | "team2_games_total" | "status">;
@@ -75,7 +79,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // 1) torneo
   const { data: t, error: terr } = await supabase
     .from("tournaments")
-    .select("id, status, user_uid, match_duration")
+    .select("id, status, user_uid, match_duration, match_duration_quarters_onwards")
     .eq("id", tournamentId)
     .single();
 
@@ -351,14 +355,20 @@ export async function POST(req: Request, { params }: RouteParams) {
     court_id: undefined as number | null | undefined,
   }));
 
+  /** Todos los partidos de playoffs usan esta duración (DB). */
+  const playoffMin = Math.max(
+    15,
+    t.match_duration_quarters_onwards ?? t.match_duration ?? 60
+  );
+  const playoffSlotInterval = slotIntervalMinutesForPlayoffScheduling(playoffMin);
+
   // Asignar horarios a los matches si se proporcionó configuración
-  const tournamentMatchDuration = t.match_duration ?? 60;
   let timeSlots: Array<{ date: string; startTime: string; endTime: string }> = [];
-  
+
   if (scheduleConfig && scheduleConfig.days.length > 0 && scheduleConfig.courtIds.length > 0) {
     timeSlots = generateTimeSlots(
       scheduleConfig.days,
-      scheduleConfig.matchDuration,
+      playoffSlotInterval,
       scheduleConfig.courtIds.length
     );
 
@@ -383,11 +393,11 @@ export async function POST(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Calcular end_time para cada match
     const calculateEndTime = (startTime: string): string => {
+      const dur = playoffMatchDurationMinutes(playoffMin);
       const [startH, startM] = startTime.split(":").map(Number);
       const startMinutes = startH * 60 + startM;
-      const endMinutes = startMinutes + tournamentMatchDuration;
+      const endMinutes = startMinutes + dur;
       const endH = Math.floor(endMinutes / 60);
       const endM = endMinutes % 60;
       return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
