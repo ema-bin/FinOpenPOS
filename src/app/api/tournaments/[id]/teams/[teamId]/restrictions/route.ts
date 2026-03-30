@@ -35,6 +35,23 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
+    const { data: tournamentRow, error: tournamentErr } = await supabase
+      .from("tournaments")
+      .select("status")
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentErr || !tournamentRow) {
+      return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
+    }
+
+    if (tournamentRow.status !== "draft") {
+      return NextResponse.json(
+        { error: "La disponibilidad horaria solo se puede editar mientras el torneo está en borrador" },
+        { status: 400 }
+      );
+    }
+
     // Verificar si ya hay grupos generados
     const { data: existingGroups, error: groupsError } = await supabase
       .from("tournament_groups")

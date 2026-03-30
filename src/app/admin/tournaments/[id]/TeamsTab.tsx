@@ -211,6 +211,9 @@ export default function TeamsTab({
   });
 
   const hasGroups = groupsData?.groups && groupsData.groups.length > 0;
+  /** Solo en borrador y sin grupos generados se puede editar disponibilidad (coincide con la API). */
+  const canEditAvailability =
+    tournament.status === "draft" && !hasGroups && groupSlots.length > 0;
   const loading = loadingTeams || loadingPlayers || loadingGroups;
 
   // Al abrir el diálogo de horarios, pre-llenar con los slots existentes (convertidos a rangos)
@@ -733,7 +736,8 @@ export default function TeamsTab({
           <CardTitle>Equipos</CardTitle>
           <CardDescription>
             Armá las parejas del torneo. Luego cerrá la inscripción para generar
-            las zonas automáticamente.
+            las zonas automáticamente. La disponibilidad horaria de cada pareja solo se puede
+            definir en borrador y antes de generar grupos; después es solo lectura.
           </CardDescription>
           {groupSlots.length === 0 && tournament.status === "draft" && (
             <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3">
@@ -806,7 +810,7 @@ export default function TeamsTab({
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
-          {groupSlots.length > 0 && teams.length > 0 && tournament.status === "draft" && (
+          {canEditAvailability && teams.length > 0 && (
             <Button
               size="sm"
               variant="outline"
@@ -976,17 +980,19 @@ export default function TeamsTab({
                       >
                         <EditIcon className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedTeamForRestrictions(team);
-                          setRestrictionsDialogOpen(true);
-                        }}
-                        title="Editar restricciones horarias"
-                      >
-                        <CalendarIcon className="w-4 h-4" />
-                      </Button>
+                      {groupSlots.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTeamForRestrictions(team);
+                            setRestrictionsDialogOpen(true);
+                          }}
+                          title="Editar disponibilidad horaria"
+                        >
+                          <CalendarIcon className="w-4 h-4" />
+                        </Button>
+                      )}
                       <div className="flex items-center gap-1 px-2">
                         <Checkbox
                           id={`substitute-${team.id}`}
@@ -1011,7 +1017,20 @@ export default function TeamsTab({
                       </Button>
                     </div>
                   )}
-                  {tournament.status === "draft" && hasGroups && (
+                  {groupSlots.length > 0 && !(tournament.status === "draft" && !hasGroups) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedTeamForRestrictions(team);
+                        setRestrictionsDialogOpen(true);
+                      }}
+                      title="Ver disponibilidad horaria (solo lectura)"
+                    >
+                      <CalendarIcon className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {tournament.status === "draft" && hasGroups && groupSlots.length === 0 && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1529,9 +1548,10 @@ export default function TeamsTab({
         }}
         team={selectedTeamForRestrictions}
         slots={groupSlots}
+        readOnly={!canEditAvailability}
         onSave={handleSaveRestrictions}
         onInitialize={
-          selectedTeamForRestrictions
+          canEditAvailability && selectedTeamForRestrictions
             ? async () => {
                 await tournamentsService.initializeTeamRestrictions(tournament.id, selectedTeamForRestrictions.id);
                 const updated = await queryClient.fetchQuery({ queryKey: ["tournament-teams", tournament.id], queryFn: () => fetchTournamentTeams(tournament.id) });

@@ -31,6 +31,8 @@ interface TeamScheduleRestrictionsDialogProps {
   onSave: (restrictedSlotIds: number[], scheduleNotes?: string | null) => Promise<void>;
   /** Si se pasa, se muestra un botón para inicializar disponibilidad (una fila por slot con puede jugar). */
   onInitialize?: () => Promise<void>;
+  /** Solo lectura: no permite guardar ni cambiar checkboxes (p. ej. fuera de borrador o con grupos ya generados). */
+  readOnly?: boolean;
 }
 
 export function TeamScheduleRestrictionsDialog({
@@ -40,6 +42,7 @@ export function TeamScheduleRestrictionsDialog({
   slots,
   onSave,
   onInitialize,
+  readOnly = false,
 }: TeamScheduleRestrictionsDialogProps) {
   const [restrictedSlotIds, setRestrictedSlotIds] = useState<Set<number>>(new Set());
   const [scheduleNotes, setScheduleNotes] = useState<string>("");
@@ -122,13 +125,22 @@ export function TeamScheduleRestrictionsDialog({
         <DialogHeader>
           <DialogTitle>Disponibilidad horaria</DialogTitle>
           <DialogDescription>
-            Marcá los horarios en los que {teamName} <strong>puede</strong> jugar. Los no marcados son
-            horarios en los que no puede.
+            {readOnly ? (
+              <>
+                Vista de solo lectura. La disponibilidad horaria no se puede modificar en esta etapa del
+                torneo.
+              </>
+            ) : (
+              <>
+                Marcá los horarios en los que {teamName} <strong>puede</strong> jugar. Los no marcados son
+                horarios en los que no puede.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
-          {onInitialize && slots.length > 0 && (
+          {!readOnly && onInitialize && slots.length > 0 && (
             <div className="p-3 rounded-md border bg-muted/50 flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
                 Si este equipo aún no tiene disponibilidad cargada, inicializala para marcar en qué horarios puede jugar.
@@ -176,11 +188,12 @@ export function TeamScheduleRestrictionsDialog({
                         <Checkbox
                           id={`day-${date}`}
                           checked={dayAllCanPlay}
+                          disabled={readOnly}
                           onCheckedChange={() => handleToggleDay(date, daySlots)}
                         />
                         <Label
                           htmlFor={`day-${date}`}
-                          className="font-semibold text-sm text-muted-foreground uppercase tracking-wide cursor-pointer"
+                          className={`font-semibold text-sm text-muted-foreground uppercase tracking-wide ${readOnly ? "" : "cursor-pointer"}`}
                         >
                           {formattedDate} — puede jugar todo el día
                         </Label>
@@ -196,11 +209,12 @@ export function TeamScheduleRestrictionsDialog({
                               <Checkbox
                                 id={`slot-${slot.id}`}
                                 checked={canPlay}
+                                disabled={readOnly}
                                 onCheckedChange={() => handleToggleSlot(slot.id)}
                               />
                               <Label
                                 htmlFor={`slot-${slot.id}`}
-                                className="flex-1 cursor-pointer font-normal"
+                                className={`flex-1 font-normal ${readOnly ? "" : "cursor-pointer"}`}
                               >
                                 <div className="font-medium text-sm">
                                   {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
@@ -230,6 +244,8 @@ export function TeamScheduleRestrictionsDialog({
               onChange={(e) => setScheduleNotes(e.target.value)}
               rows={3}
               className="resize-none"
+              readOnly={readOnly}
+              disabled={readOnly}
             />
             <p className="text-xs text-muted-foreground">
               Información adicional sobre la disponibilidad horaria de esta pareja.
@@ -239,18 +255,20 @@ export function TeamScheduleRestrictionsDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+            {readOnly ? "Cerrar" : "Cancelar"}
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                Guardando...
-              </>
-            ) : (
-              "Guardar"
-            )}
-          </Button>
+          {!readOnly && (
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar"
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
