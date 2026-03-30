@@ -38,6 +38,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  availabilityBadgeClassName,
+  availabilityRowClassName,
+  getTeamAvailabilityLevel,
+} from "@/lib/team-availability-visual";
 import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restrictions-dialog";
 
 import type { PlayerDTO } from "@/models/dto/player";
@@ -214,6 +219,10 @@ export default function TeamsTab({
   /** Solo en borrador y sin grupos generados se puede editar disponibilidad (coincide con la API). */
   const canEditAvailability =
     tournament.status === "draft" && !hasGroups && groupSlots.length > 0;
+  const groupSlotIdSet = useMemo(
+    () => new Set(groupSlots.map((s) => s.id)),
+    [groupSlots]
+  );
   const loading = loadingTeams || loadingPlayers || loadingGroups;
 
   // Al abrir el diálogo de horarios, pre-llenar con los slots existentes (convertidos a rangos)
@@ -884,6 +893,23 @@ export default function TeamsTab({
           </p>
         ) : (
           <div className="space-y-2">
+            {groupSlots.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border rounded-md px-3 py-2 bg-muted/40">
+                <span className="font-medium text-foreground">Disponibilidad horaria</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-emerald-200 dark:bg-emerald-800 border border-emerald-500/50" />
+                  Puede en todos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-amber-200 dark:bg-amber-800 border border-amber-500/50" />
+                  Más de la mitad de horarios, no todos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-red-200 dark:bg-red-900 border border-red-500/50" />
+                  Menos de la mitad de horarios
+                </span>
+              </div>
+            )}
             {teamsToUse.map((team, index) => {
               // Validar que el equipo tenga jugadores válidos
               if (!team.player1 || !team.player2) {
@@ -914,11 +940,29 @@ export default function TeamsTab({
               
               const canMoveUp = index > 0;
               const canMoveDown = index < teamsToUse.length - 1;
-              
+              const availability = getTeamAvailabilityLevel(
+                groupSlots.length,
+                team.restricted_slot_ids,
+                groupSlotIdSet
+              );
+              const availRow =
+                groupSlots.length > 0 && availability.level !== "none"
+                  ? availabilityRowClassName(availability.level)
+                  : "";
+              const availTitle =
+                groupSlots.length > 0 && availability.level !== "none"
+                  ? `Disponibilidad: puede jugar en ${availability.available} de ${availability.total} horarios del torneo`
+                  : undefined;
+
               return (
                 <div
                   key={team.id}
-                  className={`flex items-center justify-between border rounded-md px-3 py-2 ${team.is_substitute ? 'bg-muted/30 opacity-75' : ''}`}
+                  title={availTitle}
+                  className={cn(
+                    "flex items-center justify-between border rounded-md px-3 py-2",
+                    team.is_substitute && "opacity-80",
+                    availRow || (team.is_substitute ? "bg-muted/30" : "bg-background")
+                  )}
                 >
                   <div className="flex items-center gap-3 flex-1">
                     {tournament.status === "draft" && !hasGroups && (
@@ -957,6 +1001,16 @@ export default function TeamsTab({
                         {team.is_substitute && (
                           <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
                             Suplente
+                          </span>
+                        )}
+                        {groupSlots.length > 0 && availability.level !== "none" && (
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0",
+                              availabilityBadgeClassName(availability.level)
+                            )}
+                          >
+                            {availability.available}/{availability.total} horarios
                           </span>
                         )}
                       </div>
