@@ -330,7 +330,16 @@ export function RankingPuntuableSection() {
 
           ctx.fillStyle = "#ffffff";
 
-          const name = `${r.first_name} ${r.last_name}`.trim();
+          const firstInitials = (r.first_name ?? "")
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0))
+            .join("");
+          const lastName = (r.last_name ?? "").trim();
+          const name = lastName
+            ? `${lastName}, ${firstInitials}`.trim()
+            : `${r.first_name ?? ""}`.trim();
           const nameFont = `bold 36px ${montserrat}`;
           const nameMaxW = Math.max(40, tournamentsX - nameX - 24);
           const safeName = truncate(ctx, name, nameMaxW, nameFont).toUpperCase();
