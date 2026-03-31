@@ -52,7 +52,19 @@ import {
 } from "@/lib/playoff-match-duration";
 
 // Using Pick from TournamentMatch for internal processing
-type MatchRow = Pick<TournamentMatch, "id" | "tournament_group_id" | "team1_id" | "team2_id" | "team1_sets" | "team2_sets" | "team1_games_total" | "team2_games_total" | "status">;
+type MatchRow = Pick<
+  TournamentMatch,
+  | "id"
+  | "tournament_group_id"
+  | "team1_id"
+  | "team2_id"
+  | "team1_sets"
+  | "team2_sets"
+  | "team1_games_total"
+  | "team2_games_total"
+  | "status"
+  | "match_order"
+>;
 
 export async function POST(req: Request, { params }: RouteParams) {
   const supabase = createClient();
@@ -147,7 +159,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { data: matches, error: mError } = await supabase
     .from("tournament_matches")
     .select(
-      "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status, court_id"
+      "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status, match_order, court_id"
     )
     .eq("tournament_id", tournamentId)
     .eq("phase", "group");
@@ -257,8 +269,61 @@ export async function POST(req: Request, { params }: RouteParams) {
       (tid) => map.get(tid) ?? initStand(tid)
     );
 
+    // En zonas de 4, el orden final lo define la 2da ronda:
+    // - match_order 3 (ganadores): ganador=1°, perdedor=2°
+    // - match_order 4 (perdedores): ganador=3°, perdedor=4°
+    // Si aún no están completos, cae al criterio general.
+    let forcedPositionByTeamId: Map<number, number> | null = null;
+    if (groupTeamIds.length === 4) {
+      const groupMatches = (matches as MatchRow[]).filter(
+        (m) => m.tournament_group_id === gid
+      );
+      const winnersMatch = groupMatches.find((m) => m.match_order === 3);
+      const losersMatch = groupMatches.find((m) => m.match_order === 4);
+      const canForceOrder =
+        winnersMatch &&
+        losersMatch &&
+        winnersMatch.status === "finished" &&
+        losersMatch.status === "finished" &&
+        winnersMatch.team1_id &&
+        winnersMatch.team2_id &&
+        losersMatch.team1_id &&
+        losersMatch.team2_id;
+
+      if (canForceOrder) {
+        const winnerOfWinners =
+          (winnersMatch!.team1_sets ?? 0) > (winnersMatch!.team2_sets ?? 0)
+            ? winnersMatch!.team1_id!
+            : winnersMatch!.team2_id!;
+        const loserOfWinners =
+          (winnersMatch!.team1_sets ?? 0) > (winnersMatch!.team2_sets ?? 0)
+            ? winnersMatch!.team2_id!
+            : winnersMatch!.team1_id!;
+        const winnerOfLosers =
+          (losersMatch!.team1_sets ?? 0) > (losersMatch!.team2_sets ?? 0)
+            ? losersMatch!.team1_id!
+            : losersMatch!.team2_id!;
+        const loserOfLosers =
+          (losersMatch!.team1_sets ?? 0) > (losersMatch!.team2_sets ?? 0)
+            ? losersMatch!.team2_id!
+            : losersMatch!.team1_id!;
+
+        forcedPositionByTeamId = new Map<number, number>([
+          [winnerOfWinners, 1],
+          [loserOfWinners, 2],
+          [winnerOfLosers, 3],
+          [loserOfLosers, 4],
+        ]);
+      }
+    }
+
     stats.sort((a, b) => {
-      // Ordenar por partidos ganados, luego diferencia de sets, luego diferencia de games
+      if (forcedPositionByTeamId) {
+        const pA = forcedPositionByTeamId.get(a.team_id) ?? 999;
+        const pB = forcedPositionByTeamId.get(b.team_id) ?? 999;
+        if (pA !== pB) return pA - pB;
+      }
+      // Criterio general: wins, diff sets, diff games
       if (b.wins !== a.wins) return b.wins - a.wins;
       const aSetDiff = a.sets_won - a.sets_lost;
       const bSetDiff = b.sets_won - b.sets_lost;
