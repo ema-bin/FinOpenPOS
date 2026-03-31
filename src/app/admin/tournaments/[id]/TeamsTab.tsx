@@ -107,7 +107,12 @@ export default function TeamsTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "status" | "match_duration" | "match_duration_quarters_onwards"
+    | "id"
+    | "status"
+    | "match_duration"
+    | "match_duration_quarters_onwards"
+    | "is_puntuable"
+    | "category_id"
   >;
 }) {
   const queryClient = useQueryClient();
@@ -212,6 +217,24 @@ export default function TeamsTab({
   const { data: groupSlots = [] } = useQuery({
     queryKey: ["tournament-group-slots", tournament.id],
     queryFn: () => fetchTournamentGroupSlots(tournament.id),
+    staleTime: 1000 * 60,
+  });
+
+  const currentYear = new Date().getFullYear();
+  const canSeedByCategoryPoints =
+    Boolean(tournament.is_puntuable) && tournament.category_id != null;
+  const { data: rankingForCategory } = useQuery<{
+    rows: Array<{ player_id: number; total_points: number }>;
+  }>({
+    queryKey: ["ranking", tournament.category_id, currentYear],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/ranking?category_id=${tournament.category_id}&year=${currentYear}`
+      );
+      if (!res.ok) throw new Error("No se pudo obtener el ranking de la categoría");
+      return res.json();
+    },
+    enabled: canSeedByCategoryPoints,
     staleTime: 1000 * 60,
   });
 
@@ -422,6 +445,21 @@ export default function TeamsTab({
   // Filtrar equipos para cálculos (excluir suplentes) - usar orden local si hay cambios
   const teamsToUse = hasOrderChanges && localTeamsOrder.length > 0 ? localTeamsOrder : teams;
   const activeTeams = useMemo(() => teamsToUse.filter(t => !t.is_substitute), [teamsToUse]);
+  const playerPointsMap = useMemo(() => {
+    const m = new Map<number, number>();
+    (rankingForCategory?.rows ?? []).forEach((r) => {
+      m.set(r.player_id, Number(r.total_points) || 0);
+    });
+    return m;
+  }, [rankingForCategory?.rows]);
+  const teamCategoryPoints = useCallback(
+    (team: TeamDTO) => {
+      const p1 = team.player1?.id ? playerPointsMap.get(team.player1.id) ?? 0 : 0;
+      const p2 = team.player2?.id ? playerPointsMap.get(team.player2.id) ?? 0 : 0;
+      return p1 + p2;
+    },
+    [playerPointsMap]
+  );
 
   // Abrir diálogo de edición
   const handleEdit = (team: TeamDTO) => {
@@ -530,6 +568,26 @@ export default function TeamsTab({
     } finally {
       setSavingOrder(false);
     }
+  };
+
+  const handleSortByCategoryPoints = () => {
+    if (!canSeedByCategoryPoints) return;
+    const sorted = [...teamsToUse].sort((a, b) => {
+      // Suplentes al final
+      if (a.is_substitute !== b.is_substitute) return a.is_substitute ? 1 : -1;
+      const ptsA = teamCategoryPoints(a);
+      const ptsB = teamCategoryPoints(b);
+      if (ptsB !== ptsA) return ptsB - ptsA;
+      const ordA = a.display_order ?? 0;
+      const ordB = b.display_order ?? 0;
+      if (ordA !== ordB) return ordA - ordB;
+      return a.id - b.id;
+    });
+
+    const normalized = sorted.map((t, idx) => ({ ...t, display_order: idx }));
+    setLocalTeamsOrder(normalized);
+    setHasOrderChanges(true);
+    toast.success("Orden sugerido por puntos de pareja aplicado. Guardá para confirmarlo.");
   };
 
   // Marcar como suplente
@@ -814,11 +872,24 @@ export default function TeamsTab({
                     {groupSlots.length > 0 ? groupSlots.length : "No configurados"}
                   </span>
                 </div>
+                {canSeedByCategoryPoints && (
+                  <div>
+                    <span className="text-muted-foreground">Cabezas por puntos:</span>{" "}
+                    <span className="font-medium">
+                      Suma de puntos de ambos jugadores ({currentYear})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
+          {tournament.status === "draft" && !hasGroups && teams.length > 1 && canSeedByCategoryPoints && (
+            <Button size="sm" variant="outline" onClick={handleSortByCategoryPoints}>
+              Ordenar por puntos (pareja)
+            </Button>
+          )}
           {canEditAvailability && teams.length > 0 && (
             <Button
               size="sm"
@@ -1001,6 +1072,11 @@ export default function TeamsTab({
                         {team.is_substitute && (
                           <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full font-medium">
                             Suplente
+                          </span>
+                        )}
+                        {canSeedByCategoryPoints && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-100">
+                            {teamCategoryPoints(team).toFixed(1)} pts pareja
                           </span>
                         )}
                         {groupSlots.length > 0 && availability.level !== "none" && (
