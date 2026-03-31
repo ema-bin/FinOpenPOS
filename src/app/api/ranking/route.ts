@@ -160,6 +160,10 @@ export async function GET(request: Request) {
         ? player.female_category_id
         : player.category_id;
       if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) continue;
+      // La ponderación 50% de la categoría inferior aplica solo si el jugador
+      // hoy pertenece exactamente a la categoría consultada (caso ascenso).
+      // Ej: hoy 7ma, torneo viejo de 8va -> cuenta al 50% en ranking de 7ma.
+      if (playerCategoryId !== categoryId) continue;
 
       const current = merged.get(row.player_id) ?? {
         total_points: 0,
