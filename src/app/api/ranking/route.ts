@@ -65,6 +65,21 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle();
 
+    const { data: sameTypeCategories, error: sameTypeCategoriesError } =
+      await supabase
+        .from("categories")
+        .select("id, display_order")
+        .eq("type", currentCategory.type);
+    if (sameTypeCategoriesError) {
+      return NextResponse.json(
+        { error: "Failed to fetch categories" },
+        { status: 500 }
+      );
+    }
+    const categoryOrderById = new Map(
+      (sameTypeCategories ?? []).map((c) => [c.id as number, c.display_order as number])
+    );
+
     const lowerRanking = lowerCategory
       ? await repos.playerTournamentPoints.getRankingByCategoryAndYear(
           Number(lowerCategory.id),
@@ -110,14 +125,24 @@ export async function GET(request: Request) {
       { total_points: number; tournaments_played: number }
     >();
 
+    const isPlayerEligibleForRequestedCategory = (
+      playerCategoryId: number | null
+    ) => {
+      // Si no tiene categoría seteada, también debe aparecer.
+      if (playerCategoryId == null) return true;
+      const playerOrder = categoryOrderById.get(playerCategoryId);
+      if (playerOrder == null) return false;
+      // Igual o inferior a la categoría consultada.
+      return playerOrder <= currentCategory.display_order;
+    };
+
     for (const row of ranking) {
       const player = playerMap.get(row.player_id);
       if (!player) continue;
       const playerCategoryId = isDamasCategory
         ? player.female_category_id
         : player.category_id;
-      // El jugador solo aparece en su categoría actual.
-      if (playerCategoryId !== categoryId) continue;
+      if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) continue;
 
       const current = merged.get(row.player_id) ?? {
         total_points: 0,
@@ -134,8 +159,7 @@ export async function GET(request: Request) {
       const playerCategoryId = isDamasCategory
         ? player.female_category_id
         : player.category_id;
-      // Solo pondera 50% para jugadores de la categoría consultada.
-      if (playerCategoryId !== categoryId) continue;
+      if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) continue;
 
       const current = merged.get(row.player_id) ?? {
         total_points: 0,
