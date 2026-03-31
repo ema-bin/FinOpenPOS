@@ -149,10 +149,7 @@ export default function TournamentDetailPage() {
               </div>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="teams">Inscripción</TabsTrigger>
-                <TabsTrigger 
-                  value="payments"
-                  disabled={tournament.status === "cancelled" || tournament.status === "finished"}
-                >
+                <TabsTrigger value="payments">
                   Pagos
                 </TabsTrigger>
                 <TabsTrigger 
