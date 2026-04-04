@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +17,25 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { CheckIcon, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playerMatchesCategoryFilter } from "@/lib/player-category-filter";
 import type { PlayerDTO } from "@/models/dto/player";
+import type { Category } from "@/models/db/category";
+
+async function fetchCategories(): Promise<Category[]> {
+  const res = await fetch("/api/categories");
+  if (!res.ok) throw new Error("Failed to fetch categories");
+  return res.json();
+}
 
 interface PlayerSearchSelectProps {
   players: PlayerDTO[];
@@ -28,6 +45,8 @@ interface PlayerSearchSelectProps {
   emptyMessage?: string;
   searchPlaceholder?: string;
   disabled?: boolean;
+  /** Mostrar selector de categoría (libre/damas) sobre la búsqueda. Por defecto true. */
+  showCategoryFilter?: boolean;
 }
 
 function fullName(player: PlayerDTO): string {
@@ -42,22 +61,38 @@ export function PlayerSearchSelect({
   emptyMessage = "No se encontró ningún cliente.",
   searchPlaceholder = "Buscar por nombre o apellido...",
   disabled = false,
+  showCategoryFilter = true,
 }: PlayerSearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [categoryFilterId, setCategoryFilterId] = useState<number | null>(null);
   const [popoverWidth, setPopoverWidth] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories", "all"],
+    queryFn: fetchCategories,
+    staleTime: 1000 * 60 * 30,
+    enabled: showCategoryFilter,
+  });
 
   // Debounce search para evitar filtros costosos en cada keystroke
   const debouncedSearch = useDebounce(search, 300);
 
+  const playersByCategory = useMemo(() => {
+    if (!showCategoryFilter) return players;
+    return players.filter((p) =>
+      playerMatchesCategoryFilter(p, categoryFilterId)
+    );
+  }, [players, categoryFilterId, showCategoryFilter]);
+
   // Filtrar jugadores por búsqueda
   const filteredPlayers = useMemo(() => {
-    if (!debouncedSearch.trim()) return players;
+    if (!debouncedSearch.trim()) return playersByCategory;
     const searchLower = debouncedSearch.toLowerCase().trim();
     const searchTerms = searchLower.split(/\s+/).filter(Boolean);
     
-    return players.filter((p) => {
+    return playersByCategory.filter((p) => {
       const firstName = p.first_name.toLowerCase();
       const lastName = p.last_name.toLowerCase();
       const fullNameLower = fullName(p).toLowerCase();
@@ -90,7 +125,7 @@ export function PlayerSearchSelect({
       
       return false;
     });
-  }, [players, debouncedSearch]);
+  }, [playersByCategory, debouncedSearch]);
 
   const selectedPlayer = value
     ? players.find((p) => p.id === value)
@@ -126,6 +161,32 @@ export function PlayerSearchSelect({
         }}
       >
         <Command shouldFilter={false}>
+          {showCategoryFilter && (
+            <div className="border-b px-3 py-2 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Categoría
+              </Label>
+              <Select
+                value={categoryFilterId === null ? "all" : String(categoryFilterId)}
+                onValueChange={(v) =>
+                  setCategoryFilterId(v === "all" ? null : Number(v))
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.name}
+                      {c.type === "libre" ? " (Libre)" : " (Damas)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <CommandInput
             placeholder={searchPlaceholder}
             value={search}
