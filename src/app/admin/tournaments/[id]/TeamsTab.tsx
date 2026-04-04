@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2Icon, PlusIcon, TrashIcon, Trash2Icon, LockIcon, ChevronsUpDown, CheckIcon, CalendarIcon, EditIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, GripVerticalIcon, SaveIcon, ClockIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -53,10 +46,8 @@ import {
 import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restrictions-dialog";
 
 import type { PlayerDTO } from "@/models/dto/player";
-import type { Category } from "@/models/db/category";
 import type { TeamDTO, TournamentDTO, GroupsApiResponse, TeamPlayer } from "@/models/dto/tournament";
 import { tournamentsService, playersService } from "@/services";
-import { playerMatchesCategoryFilter } from "@/lib/player-category-filter";
 
 // Fetch functions para React Query
 async function fetchTournamentTeams(tournamentId: number): Promise<TeamDTO[]> {
@@ -73,12 +64,6 @@ async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiRes
 
 async function fetchTournamentGroupSlots(tournamentId: number) {
   return tournamentsService.getGroupSlots(tournamentId);
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  const res = await fetch("/api/categories");
-  if (!res.ok) throw new Error("Failed to fetch categories");
-  return res.json();
 }
 
 /** Convierte slots individuales en rangos (fecha + desde-hasta) uniendo consecutivos el mismo día */
@@ -144,9 +129,6 @@ export default function TeamsTab({
   const [player2PopoverWidth, setPlayer2PopoverWidth] = useState(0);
   const [player1Search, setPlayer1Search] = useState("");
   const [player2Search, setPlayer2Search] = useState("");
-  const [teamDialogCategoryFilterId, setTeamDialogCategoryFilterId] = useState<
-    number | null
-  >(null);
   const [restrictionsDialogOpen, setRestrictionsDialogOpen] = useState(false);
   const [selectedTeamForRestrictions, setSelectedTeamForRestrictions] = useState<TeamDTO | null>(null);
   const [closingStatus, setClosingStatus] = useState<string | null>(null);
@@ -173,9 +155,6 @@ export default function TeamsTab({
   const [editPlayer2Open, setEditPlayer2Open] = useState(false);
   const [editPlayer1Search, setEditPlayer1Search] = useState("");
   const [editPlayer2Search, setEditPlayer2Search] = useState("");
-  const [editDialogCategoryFilterId, setEditDialogCategoryFilterId] = useState<
-    number | null
-  >(null);
   const [editPlayer1PopoverWidth, setEditPlayer1PopoverWidth] = useState(0);
   const [editPlayer2PopoverWidth, setEditPlayer2PopoverWidth] = useState(0);
   const [updating, setUpdating] = useState(false);
@@ -224,12 +203,6 @@ export default function TeamsTab({
     queryKey: ["players"], // Mismo key que otros componentes para compartir cache
     queryFn: fetchPlayers,
     staleTime: 1000 * 60 * 5, // 5 minutos - los players no cambian frecuentemente
-  });
-
-  const { data: playerPickerCategories = [] } = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: fetchCategories,
-    staleTime: 1000 * 60 * 30,
   });
 
   const {
@@ -358,61 +331,49 @@ export default function TeamsTab({
   // Filtrar jugadores por búsqueda (subcadena en nombre o apellido)
   // Usa useMemo para memoizar los resultados filtrados
   const filteredPlayers1 = useMemo(() => {
-    let list = players.filter((p) =>
-      playerMatchesCategoryFilter(p, teamDialogCategoryFilterId)
-    );
-    if (!debouncedPlayer1Search.trim()) return list;
+    if (!debouncedPlayer1Search.trim()) return players;
     const searchLower = debouncedPlayer1Search.toLowerCase().trim();
-    return list.filter(
+    return players.filter(
       (p) =>
         p.first_name.toLowerCase().includes(searchLower) ||
         p.last_name.toLowerCase().includes(searchLower) ||
         fullName(p).toLowerCase().includes(searchLower)
     );
-  }, [players, teamDialogCategoryFilterId, debouncedPlayer1Search]);
+  }, [players, debouncedPlayer1Search]);
 
   const filteredPlayers2 = useMemo(() => {
-    let list = players.filter((p) =>
-      playerMatchesCategoryFilter(p, teamDialogCategoryFilterId)
-    );
-    if (!debouncedPlayer2Search.trim()) return list;
+    if (!debouncedPlayer2Search.trim()) return players;
     const searchLower = debouncedPlayer2Search.toLowerCase().trim();
-    return list.filter(
+    return players.filter(
       (p) =>
         p.first_name.toLowerCase().includes(searchLower) ||
         p.last_name.toLowerCase().includes(searchLower) ||
         fullName(p).toLowerCase().includes(searchLower)
     );
-  }, [players, teamDialogCategoryFilterId, debouncedPlayer2Search]);
+  }, [players, debouncedPlayer2Search]);
 
   // Filtrar jugadores para edición
   const filteredEditPlayers1 = useMemo(() => {
-    let list = players.filter((p) =>
-      playerMatchesCategoryFilter(p, editDialogCategoryFilterId)
-    );
-    if (!debouncedEditPlayer1Search.trim()) return list;
+    if (!debouncedEditPlayer1Search.trim()) return players;
     const searchLower = debouncedEditPlayer1Search.toLowerCase().trim();
-    return list.filter(
+    return players.filter(
       (p) =>
         p.first_name.toLowerCase().includes(searchLower) ||
         p.last_name.toLowerCase().includes(searchLower) ||
         fullName(p).toLowerCase().includes(searchLower)
     );
-  }, [players, editDialogCategoryFilterId, debouncedEditPlayer1Search]);
+  }, [players, debouncedEditPlayer1Search]);
 
   const filteredEditPlayers2 = useMemo(() => {
-    let list = players.filter((p) =>
-      playerMatchesCategoryFilter(p, editDialogCategoryFilterId)
-    );
-    if (!debouncedEditPlayer2Search.trim()) return list;
+    if (!debouncedEditPlayer2Search.trim()) return players;
     const searchLower = debouncedEditPlayer2Search.toLowerCase().trim();
-    return list.filter(
+    return players.filter(
       (p) =>
         p.first_name.toLowerCase().includes(searchLower) ||
         p.last_name.toLowerCase().includes(searchLower) ||
         fullName(p).toLowerCase().includes(searchLower)
     );
-  }, [players, editDialogCategoryFilterId, debouncedEditPlayer2Search]);
+  }, [players, debouncedEditPlayer2Search]);
 
   const handleCreate = useCallback(async () => {
     if (player1Id === "none" || player2Id === "none") return;
@@ -1227,7 +1188,6 @@ export default function TeamsTab({
             setPlayer2Id("none");
             setPlayer1Search("");
             setPlayer2Search("");
-            setTeamDialogCategoryFilterId(null);
           }
         }}
       >
@@ -1236,34 +1196,6 @@ export default function TeamsTab({
             <DialogTitle>Nuevo equipo</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Filtrar por categoría</Label>
-              <Select
-                value={
-                  teamDialogCategoryFilterId === null
-                    ? "all"
-                    : String(teamDialogCategoryFilterId)
-                }
-                onValueChange={(v) =>
-                  setTeamDialogCategoryFilterId(
-                    v === "all" ? null : Number(v)
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {playerPickerCategories.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                      {c.type === "libre" ? " (Libre)" : " (Damas)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-1">
               <Label>Jugador 1</Label>
               <Popover open={player1Open} onOpenChange={setPlayer1Open}>
@@ -1432,7 +1364,6 @@ export default function TeamsTab({
             setEditPlayer2Id("none");
             setEditPlayer1Search("");
             setEditPlayer2Search("");
-            setEditDialogCategoryFilterId(null);
           }
         }}
       >
@@ -1441,34 +1372,6 @@ export default function TeamsTab({
             <DialogTitle>Editar equipo</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Filtrar por categoría</Label>
-              <Select
-                value={
-                  editDialogCategoryFilterId === null
-                    ? "all"
-                    : String(editDialogCategoryFilterId)
-                }
-                onValueChange={(v) =>
-                  setEditDialogCategoryFilterId(
-                    v === "all" ? null : Number(v)
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {playerPickerCategories.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                      {c.type === "libre" ? " (Libre)" : " (Damas)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-1">
               <Label>Jugador 1</Label>
               <Popover open={editPlayer1Open} onOpenChange={setEditPlayer1Open}>
