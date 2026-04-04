@@ -49,11 +49,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import type { PlayerDTO } from "@/models/dto/player";
 import type { PlayerStatus } from "@/models/db/player";
 import type { Category } from "@/models/db/category";
 import { playersService } from "@/services/players.service";
+import {
+  playerMatchesPlayersTableCategoryFilter,
+  type PlayersTableCategoryFilter,
+} from "@/lib/player-category-filter";
 
 type Player = PlayerDTO;
 
@@ -78,6 +84,8 @@ export default function PlayersPage() {
     null
   );
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] =
+    useState<PlayersTableCategoryFilter>("all");
   const [filters, setFilters] = useState({
     status: "active" as "all" | PlayerStatus,
   });
@@ -106,6 +114,11 @@ export default function PlayersPage() {
     staleTime: 1000 * 60 * 10,
   });
 
+  const categoriesForListFilter = useMemo(
+    () => [...categoriesLibre, ...categoriesDamas],
+    [categoriesLibre, categoriesDamas]
+  );
+
   // React Query para compartir cache con otros componentes
   const {
     data: playersData = [],
@@ -132,6 +145,9 @@ export default function PlayersPage() {
       if (filters.status !== "all" && player.status !== filters.status) {
         return false;
       }
+      if (!playerMatchesPlayersTableCategoryFilter(player, categoryFilter)) {
+        return false;
+      }
       const term = debouncedSearchTerm.toLowerCase();
       return (
         player.first_name.toLowerCase().includes(term) ||
@@ -140,7 +156,7 @@ export default function PlayersPage() {
         (player.city ?? "").toLowerCase().includes(term)
       );
     });
-  }, [players, filters.status, debouncedSearchTerm]);
+  }, [players, filters.status, debouncedSearchTerm, categoryFilter]);
 
   const resetSelectedPlayer = () => {
     setSelectedPlayerId(null);
@@ -263,7 +279,7 @@ export default function PlayersPage() {
     <Card className="flex flex-col gap-6 p-6">
       <CardHeader className="p-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="relative">
               <Input
                 type="text"
@@ -279,10 +295,19 @@ export default function PlayersPage() {
                 <Button variant="outline" size="sm" className="gap-1">
                   <FilterIcon className="w-4 h-4" />
                   <span>Filtros</span>
+                  {categoryFilter !== "all" && (
+                    <span
+                      className="ml-0.5 h-1.5 w-1.5 rounded-full bg-primary"
+                      aria-hidden
+                    />
+                  )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+              <DropdownMenuContent
+                align="end"
+                className="w-56 max-h-[min(70vh,28rem)] overflow-y-auto"
+              >
+                <DropdownMenuLabel>Estado</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
                   checked={filters.status === "all"}
@@ -302,6 +327,38 @@ export default function PlayersPage() {
                 >
                   Inactivos
                 </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Categoría</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={
+                    categoryFilter === "all"
+                      ? "all"
+                      : categoryFilter === "none"
+                        ? "none"
+                        : String(categoryFilter)
+                  }
+                  onValueChange={(v) => {
+                    if (v === "all") setCategoryFilter("all");
+                    else if (v === "none") setCategoryFilter("none");
+                    else setCategoryFilter(Number(v));
+                  }}
+                >
+                  <DropdownMenuRadioItem value="all">
+                    Todas las categorías
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="none">
+                    Sin categoría
+                  </DropdownMenuRadioItem>
+                  {categoriesForListFilter.map((c) => (
+                    <DropdownMenuRadioItem
+                      key={c.id}
+                      value={String(c.id)}
+                    >
+                      {c.name}
+                      {c.type === "libre" ? " (Libre)" : " (Damas)"}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
