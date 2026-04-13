@@ -29,22 +29,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
-    if (tournamentRow.status !== "draft") {
+    const editableStatuses = new Set(["draft", "schedule_review"]);
+    if (!editableStatuses.has(tournamentRow.status)) {
       return NextResponse.json(
-        { error: "La disponibilidad solo se puede inicializar con el torneo en borrador" },
-        { status: 400 }
-      );
-    }
-
-    const { data: existingGroups } = await supabase
-      .from("tournament_groups")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .limit(1);
-
-    if (existingGroups && existingGroups.length > 0) {
-      return NextResponse.json(
-        { error: "No se puede inicializar disponibilidad después de generar los grupos" },
+        { error: "La disponibilidad solo se puede inicializar en borrador o revisión de horarios" },
         { status: 400 }
       );
     }

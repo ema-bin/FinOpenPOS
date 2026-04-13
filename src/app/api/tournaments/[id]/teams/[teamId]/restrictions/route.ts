@@ -45,31 +45,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
-    if (tournamentRow.status !== "draft") {
+    const editableStatuses = new Set(["draft", "schedule_review"]);
+    if (!editableStatuses.has(tournamentRow.status)) {
       return NextResponse.json(
-        { error: "La disponibilidad horaria solo se puede editar mientras el torneo está en borrador" },
-        { status: 400 }
-      );
-    }
-
-    // Verificar si ya hay grupos generados
-    const { data: existingGroups, error: groupsError } = await supabase
-      .from("tournament_groups")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .limit(1);
-
-    if (groupsError) {
-      console.error("Error checking groups:", groupsError);
-      return NextResponse.json(
-        { error: "Failed to check tournament status" },
-        { status: 500 }
-      );
-    }
-
-    if (existingGroups && existingGroups.length > 0) {
-      return NextResponse.json(
-        { error: "No se pueden editar restricciones después de generar los grupos" },
+        { error: "La disponibilidad horaria solo se puede editar en borrador o revisión de horarios" },
         { status: 400 }
       );
     }

@@ -239,9 +239,14 @@ export default function TeamsTab({
   });
 
   const hasGroups = groupsData?.groups && groupsData.groups.length > 0;
-  /** Solo en borrador y sin grupos generados se puede editar disponibilidad (coincide con la API). */
+  /** Disponibilidad editable en borrador y en revisión de horarios (inscripción cerrada). */
   const canEditAvailability =
-    tournament.status === "draft" && !hasGroups && groupSlots.length > 0;
+    (tournament.status === "draft" || tournament.status === "schedule_review") &&
+    groupSlots.length > 0;
+  /** Cambiar jugadores de la pareja: en borrador (antes de grupos) o en revisión de horarios. */
+  const canEditTeamPlayers =
+    (tournament.status === "draft" && !hasGroups) ||
+    tournament.status === "schedule_review";
   const groupSlotIdSet = useMemo(
     () => new Set(groupSlots.map((s) => s.id)),
     [groupSlots]
@@ -803,8 +808,8 @@ export default function TeamsTab({
           <CardTitle>Equipos</CardTitle>
           <CardDescription>
             Armá las parejas del torneo. Luego cerrá la inscripción para generar
-            las zonas automáticamente. La disponibilidad horaria de cada pareja solo se puede
-            definir en borrador y antes de generar grupos; después es solo lectura.
+            las zonas automáticamente. La disponibilidad y los integrantes de cada pareja se
+            pueden editar en borrador y en revisión de horarios.
           </CardDescription>
           {groupSlots.length === 0 && tournament.status === "draft" && (
             <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3">
@@ -1100,54 +1105,45 @@ export default function TeamsTab({
                       )}
                     </div>
                   </div>
-                  {tournament.status === "draft" && !hasGroups && (
+                  {canEditTeamPlayers && (
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleEdit(team)}
-                        title="Editar pareja"
+                        title="Editar integrantes de la pareja"
                       >
                         <EditIcon className="w-4 h-4" />
                       </Button>
-                      {groupSlots.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedTeamForRestrictions(team);
-                            setRestrictionsDialogOpen(true);
-                          }}
-                          title="Editar disponibilidad horaria"
-                        >
-                          <CalendarIcon className="w-4 h-4" />
-                        </Button>
+                      {tournament.status === "draft" && !hasGroups && (
+                        <>
+                          <div className="flex items-center gap-1 px-2">
+                            <Checkbox
+                              id={`substitute-${team.id}`}
+                              checked={team.is_substitute}
+                              onCheckedChange={() => handleToggleSubstitute(team)}
+                            />
+                            <Label
+                              htmlFor={`substitute-${team.id}`}
+                              className="text-xs cursor-pointer"
+                              title="Marcar como suplente (no se incluirá en la generación del torneo)"
+                            >
+                              Suplente
+                            </Label>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(team.id)}
+                            title="Eliminar equipo"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </Button>
+                        </>
                       )}
-                      <div className="flex items-center gap-1 px-2">
-                        <Checkbox
-                          id={`substitute-${team.id}`}
-                          checked={team.is_substitute}
-                          onCheckedChange={() => handleToggleSubstitute(team)}
-                        />
-                        <Label
-                          htmlFor={`substitute-${team.id}`}
-                          className="text-xs cursor-pointer"
-                          title="Marcar como suplente (no se incluirá en la generación del torneo)"
-                        >
-                          Suplente
-                        </Label>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(team.id)}
-                        title="Eliminar equipo"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
                     </div>
                   )}
-                  {groupSlots.length > 0 && !(tournament.status === "draft" && !hasGroups) && (
+                  {groupSlots.length > 0 && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1155,7 +1151,11 @@ export default function TeamsTab({
                         setSelectedTeamForRestrictions(team);
                         setRestrictionsDialogOpen(true);
                       }}
-                      title="Ver disponibilidad horaria (solo lectura)"
+                      title={
+                        canEditAvailability
+                          ? "Editar disponibilidad horaria"
+                          : "Ver disponibilidad horaria (solo lectura)"
+                      }
                     >
                       <CalendarIcon className="w-4 h-4" />
                     </Button>
