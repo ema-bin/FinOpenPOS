@@ -18,15 +18,15 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const body = await req.json();
     const { player1_id, player2_id, display_name, seed_number, notes, display_order, is_substitute, schedule_notes } = body;
 
-    // Check tournament exists and is in draft
     const tournament = await repos.tournaments.findById(tournamentId);
     if (!tournament) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
-    if (tournament.status !== "draft") {
+    const editableTeamStatuses = new Set(["draft", "schedule_review"]);
+    if (!editableTeamStatuses.has(tournament.status)) {
       return NextResponse.json(
-        { error: "Cannot edit teams once registration is closed" },
+        { error: "No se pueden editar equipos en esta etapa del torneo" },
         { status: 400 }
       );
     }
