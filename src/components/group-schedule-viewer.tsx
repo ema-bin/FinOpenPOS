@@ -46,6 +46,15 @@ interface GroupScheduleViewerProps {
   tournamentGroupSlots?: TournamentGroupSlotSummary[];
 }
 
+function teamShortLabel(team: TeamDTO): string {
+  if (team.display_name?.trim()) return team.display_name.trim();
+  const ln1 = team.player1?.last_name ?? "";
+  const ln2 = team.player2?.last_name ?? "";
+  const pair = [ln1, ln2].filter(Boolean).join("–");
+  if (pair) return pair;
+  return `Equipo ${team.id}`;
+}
+
 function teamLabel(team: TeamDTO | null, matchOrder?: number | null, isTeam1?: boolean) {
   if (!team) {
     if (matchOrder === 3) {
@@ -202,6 +211,26 @@ export function GroupScheduleViewer({
         }
         return 0;
       });
+  }, [matches]);
+
+  /** Zonas de 4: los cuatro equipos obtenidos de los partidos de 1ª ronda (match_order 1 y 2). */
+  const fourTeamsByGroupId = useMemo(() => {
+    const map = new Map<number, Map<number, TeamDTO>>();
+    for (const m of matches) {
+      if (!m.tournament_group_id) continue;
+      if (m.match_order !== 1 && m.match_order !== 2) continue;
+      const gid = m.tournament_group_id;
+      if (!map.has(gid)) map.set(gid, new Map());
+      const inner = map.get(gid)!;
+      if (m.team1?.id) inner.set(m.team1.id, m.team1);
+      if (m.team2?.id) inner.set(m.team2.id, m.team2);
+    }
+    const out = new Map<number, TeamDTO[]>();
+    map.forEach((inner, gid) => {
+      const arr = Array.from(inner.values());
+      if (arr.length === 4) out.set(gid, arr);
+    });
+    return out;
   }, [matches]);
 
   // Calcular diferencias de tiempo para cada partido (mínima y máxima diferencia con otro partido del mismo equipo en el mismo día)
@@ -435,9 +464,12 @@ export function GroupScheduleViewer({
     return new Set(Array.from(byGroup.values()).map((x) => x.teamId));
   }, [matches]);
 
-  // ¿El partido viola la restricción horaria de algún equipo? (slot asignado en restricted_slot_ids de team1 o team2)
+  // ¿El partido viola restricción horaria? En zona de 4, ronda ganadores/perdedores (3–4): cualquiera de los 4 puede jugar → se marca si alguno no puede en ese slot.
   const matchSlotViolation = useMemo(() => {
-    const violation = new Map<number, { team1: boolean; team2: boolean }>();
+    const violation = new Map<
+      number,
+      { team1: boolean; team2: boolean; round2TeamsCantPlay?: TeamDTO[] }
+    >();
     if (!tournamentGroupSlots?.length) return violation;
     const slotByDateTime = new Map<string, number>();
     tournamentGroupSlots.forEach((s) => {
@@ -447,6 +479,32 @@ export function GroupScheduleViewer({
       if (!match.match_date || !match.start_time) return;
       const slotId = slotByDateTime.get(`${match.match_date}\t${match.start_time}`);
       if (slotId === undefined) return;
+
+      const gid = match.tournament_group_id;
+      if (
+        gid &&
+        (match.match_order === 3 || match.match_order === 4)
+      ) {
+        const four = fourTeamsByGroupId.get(gid);
+        if (four && four.length === 4) {
+          const cantPlay = four.filter((t) => t.restricted_slot_ids?.includes(slotId));
+          if (cantPlay.length > 0) {
+            violation.set(match.id, {
+              team1: false,
+              team2: false,
+              round2TeamsCantPlay: cantPlay,
+            });
+          }
+          return;
+        }
+        const t1Restricted = match.team1?.restricted_slot_ids?.includes(slotId) ?? false;
+        const t2Restricted = match.team2?.restricted_slot_ids?.includes(slotId) ?? false;
+        if (t1Restricted || t2Restricted) {
+          violation.set(match.id, { team1: t1Restricted, team2: t2Restricted });
+        }
+        return;
+      }
+
       const t1Restricted = match.team1?.restricted_slot_ids?.includes(slotId) ?? false;
       const t2Restricted = match.team2?.restricted_slot_ids?.includes(slotId) ?? false;
       if (t1Restricted || t2Restricted) {
@@ -454,7 +512,7 @@ export function GroupScheduleViewer({
       }
     });
     return violation;
-  }, [scheduledMatches, tournamentGroupSlots]);
+  }, [scheduledMatches, tournamentGroupSlots, fourTeamsByGroupId]);
 
   // Calcular si algún equipo del partido juega en días diferentes
   const matchMultiDayInfo = useMemo(() => {
@@ -820,7 +878,7 @@ export function GroupScheduleViewer({
         <DialogHeader>
           <DialogTitle>Revisar y editar horarios de partidos</DialogTitle>
           <DialogDescription>
-            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo.
+            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo. En zonas de cuatro, los partidos de ronda de ganadores o perdedores se marcan si el horario no sirve para alguno de los cuatro equipos (cualquiera puede llegar a ese cruce).
           </DialogDescription>
         </DialogHeader>
 
@@ -1042,10 +1100,20 @@ export function GroupScheduleViewer({
                       : { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200", badgeBg: "bg-gray-200", badgeText: "text-gray-800" };
 
                     const slotViolation = matchSlotViolation.get(match.id);
-                    const violatesSlotRestriction = !!slotViolation;
+                    const violatesSlotRestriction =
+                      !!slotViolation &&
+                      (slotViolation.team1 ||
+                        slotViolation.team2 ||
+                        (slotViolation.round2TeamsCantPlay?.length ?? 0) > 0);
                     const restrictionTooltip =
                       slotViolation &&
                       (() => {
+                        if (slotViolation.round2TeamsCantPlay?.length) {
+                          const names = slotViolation.round2TeamsCantPlay.map((t) =>
+                            teamShortLabel(t)
+                          );
+                          return `${names.join(", ")} no pueden en este horario. En la ronda de ganadores o perdedores puede tocarle a cualquiera de los cuatro equipos de la zona.`;
+                        }
                         const parts: string[] = [];
                         if (slotViolation.team1) parts.push(teamLabel(match.team1, match.match_order, true));
                         if (slotViolation.team2) parts.push(teamLabel(match.team2, match.match_order, false));
@@ -1073,9 +1141,20 @@ export function GroupScheduleViewer({
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge className={`${groupColor.badgeBg} ${groupColor.badgeText} border-0`}>
-                            {groupName}
-                          </Badge>
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge className={`${groupColor.badgeBg} ${groupColor.badgeText} border-0`}>
+                              {groupName}
+                            </Badge>
+                            {slotViolation?.round2TeamsCantPlay &&
+                              slotViolation.round2TeamsCantPlay.length > 0 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-destructive/60 text-destructive bg-destructive/10"
+                                >
+                                  Ronda 2: revisar 4 equipos
+                                </Badge>
+                              )}
+                          </div>
                         </TableCell>
                         <TableCell className={`font-medium ${
                           multiDayInfo.team1PlaysMultipleDays ? 'bg-red-100 text-red-800 font-bold' :
