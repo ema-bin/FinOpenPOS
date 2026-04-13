@@ -13,6 +13,26 @@ type Group = {
   size: 3 | 4;
 };
 
+/**
+ * Solo zonas de 4: en partidos de 2ª ronda (ganadores/perdedores) cualquiera de los cuatro equipos puede
+ * jugar; el slot debe ser viable para los cuatro. En zonas de 3 siempre se usan los dos equipos del partido.
+ */
+function teamIdsForScheduleRestriction(group: Group, matchIdx: number): number[] {
+  const m = group.matches[matchIdx];
+  if (
+    group.size === 4 &&
+    (m.match_order === 3 ||
+      m.match_order === 4 ||
+      (matchIdx >= 2 && m.team1_id == null && m.team2_id == null))
+  ) {
+    return [...group.teams];
+  }
+  const out: number[] = [];
+  if (m.team1_id != null) out.push(m.team1_id);
+  if (m.team2_id != null) out.push(m.team2_id);
+  return out;
+}
+
 type State = {
   usedSlots: Set<string>;
   assignments: Map<string, string[]>;
@@ -179,11 +199,22 @@ function spreadBonus(slots: Slot[], matchDurationMs: number): number {
 }
 
 /**
+ * Solo zonas de 4: orden temporal 1ª ronda (dos horarios más tempranos) antes que 2ª ronda.
+ * No usar en zonas de 3 (allí siguen las 6 permutaciones completas).
+ */
+const GROUP_OF_4_TIME_VARIANTS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [0, 1, 2, 3],
+  [1, 0, 2, 3],
+  [0, 1, 3, 2],
+  [1, 0, 3, 2],
+];
+
+/**
  * Candidatos: cada partido (2 equipos) solo puede ir en slots donde ambos pueden jugar.
  * matchRestrictions: matchIndex → set de slotIds prohibidos para ese partido (unión de los 2 equipos).
- * Probamos todas las permutaciones para asignar los N slots a los N partidos:
- * - Zona de 3: pueden jugar en cualquier orden (las 6 permutaciones).
- * - Zona de 4: idem, las 24 permutaciones; el match_order solo afecta al aplicar a matchesPayload.
+ * Probamos permutaciones para asignar los N slots a los N partidos:
+ * - Zona de 3: las 6 permutaciones.
+ * - Zona de 4: solo 4 variantes (intercambio dentro de 1ª ronda y dentro de 2ª); la 2ª ronda nunca antes en el tiempo que la 1ª.
  */
 function generateCandidates(
   group: Group,
@@ -213,6 +244,30 @@ function generateCandidates(
       const sorted = [...current].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
       if (!isValidSlotGroup(sorted, matchDurationMs, group.size)) return;
       if (matchRestrictions) {
+        // Solo zonas de 4: acotar variantes (2ª ronda nunca antes en tiempo que 1ª). Zona de 3: rama de abajo.
+        if (group.size === 4) {
+          for (const vi of GROUP_OF_4_TIME_VARIANTS) {
+            const slotsInMatchOrder = vi.map((idx) => sorted[idx]);
+            let ok = true;
+            for (let j = 0; j < size; j++) {
+              if (!isAllowedForMatch(slotsInMatchOrder[j].slotId, j)) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) {
+              candidates.push({
+                slots: slotsInMatchOrder,
+                score:
+                  scoreSlotGroup(sorted) +
+                  sameTimeBonus(sorted) +
+                  spreadBonus(sorted, matchDurationMs),
+              });
+              return;
+            }
+          }
+          return;
+        }
         for (const perm of perms) {
           let ok = true;
           for (let i = 0; i < size; i++) {
@@ -305,6 +360,25 @@ function generateLastZoneFallback(
     if (idx === -1) return null;
     used.add(idx);
     chosen.push(freeSlots[idx]);
+  }
+
+  // Solo zonas de 4: mismo criterio 1ª/2ª ronda que en generateCandidates.
+  if (group.size === 4 && chosen.length === 4) {
+    const sorted = [...chosen].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+    for (const vi of GROUP_OF_4_TIME_VARIANTS) {
+      const reordered = vi.map((idx) => sorted[idx]);
+      let ok = true;
+      for (let j = 0; j < 4; j++) {
+        if (matchRestrictions && !isAllowedForMatch(reordered[j].slotId, j)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        return { slots: reordered, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
+      }
+    }
+    return { slots: sorted, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
   }
 
   return { slots: chosen, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
@@ -532,17 +606,14 @@ export async function scheduleGroupMatchesWithRestrictions(
     for (const group of groups) {
       const perMatch = new Map<number, Set<string>>();
       for (let i = 0; i < group.matches.length; i++) {
-        const m = group.matches[i];
-        const team1 = m.team1_id ?? 0;
-        const team2 = m.team2_id ?? 0;
-        const cannot1 = teamCannotPlaySlotIds.get(team1);
-        const cannot2 = teamCannotPlaySlotIds.get(team2);
+        const teamIds = teamIdsForScheduleRestriction(group, i);
         const restrictedSlotIds = new Set<string>();
         for (const slot of slots) {
           if (slot.tournamentSlotId == null) continue;
-          if (cannot1?.has(slot.tournamentSlotId) || cannot2?.has(slot.tournamentSlotId)) {
-            restrictedSlotIds.add(slot.slotId);
-          }
+          const bad = teamIds.some((tid) =>
+            teamCannotPlaySlotIds.get(tid)?.has(slot.tournamentSlotId!)
+          );
+          if (bad) restrictedSlotIds.add(slot.slotId);
         }
         perMatch.set(i, restrictedSlotIds);
       }
@@ -565,15 +636,12 @@ export async function scheduleGroupMatchesWithRestrictions(
       for (const group of groups) {
         const perMatch = new Map<number, Set<string>>();
         for (let i = 0; i < group.matches.length; i++) {
-          const m = group.matches[i];
-          const team1 = m.team1_id ?? 0;
-          const team2 = m.team2_id ?? 0;
+          const teamIds = teamIdsForScheduleRestriction(group, i);
           const restrictedSlotIds = new Set<string>();
           for (const slot of slots) {
             const timeSlot: TimeSlot = { date: slot.date, startTime: slot.startTime, endTime: slot.endTime };
-            const r1 = slotViolatesRestriction(timeSlot, teamRestrictions.get(team1));
-            const r2 = slotViolatesRestriction(timeSlot, teamRestrictions.get(team2));
-            if (r1 || r2) restrictedSlotIds.add(slot.slotId);
+            const bad = teamIds.some((tid) => slotViolatesRestriction(timeSlot, teamRestrictions.get(tid)));
+            if (bad) restrictedSlotIds.add(slot.slotId);
           }
           perMatch.set(i, restrictedSlotIds);
         }
