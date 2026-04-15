@@ -296,7 +296,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         cannotPlayWindowsByTeam.get(row.tournament_team_id)!.push(slotData);
       }
 
-      for (const [teamId, windows] of cannotPlayWindowsByTeam.entries()) {
+      cannotPlayWindowsByTeam.forEach((windows, teamId) => {
         const cannotPlaySelectedSlots = new Set<number>();
         for (const selectedSlot of allTournamentSlotsSafe) {
           const selectedDate = String(selectedSlot.slot_date).trim().slice(0, 10);
@@ -317,9 +317,9 @@ export async function POST(req: Request, { params }: RouteParams) {
           }
         }
         if (cannotPlaySelectedSlots.size > 0) {
-          teamCannotPlaySlotIds.set(teamId, cannotPlaySelectedSlots);
+          teamCannotPlaySlotIds!.set(teamId, cannotPlaySelectedSlots);
         }
-      }
+      });
     }
 
     if (teamIds.length > 0) {

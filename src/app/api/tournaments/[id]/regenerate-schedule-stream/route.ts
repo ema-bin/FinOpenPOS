@@ -400,7 +400,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 cannotPlayWindowsByTeam.get(row.tournament_team_id)!.push(slotData);
               }
 
-              for (const [teamId, windows] of cannotPlayWindowsByTeam.entries()) {
+              cannotPlayWindowsByTeam.forEach((windows, teamId) => {
                 const cannotPlaySelectedSlots = new Set<number>();
                 for (const selectedSlot of selectedSlotsSafe) {
                   const selectedDate = String(selectedSlot.slot_date).trim().slice(0, 10);
@@ -428,9 +428,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 }
 
                 if (cannotPlaySelectedSlots.size > 0) {
-                  teamCannotPlaySlotIds.set(teamId, cannotPlaySelectedSlots);
+                  teamCannotPlaySlotIds!.set(teamId, cannotPlaySelectedSlots);
                 }
-              }
+              });
               sendLog(
                 `Restricciones cargadas para ${teamCannotPlaySlotIds.size} equipos (slots seleccionados donde NO pueden jugar).`
               );
@@ -486,11 +486,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               (row) => !scheduledMatchIdsToRegenerate.has(row.id)
             );
             let blockedCount = 0;
-            for (const slot of selectedSlotsById.values()) {
+            selectedSlotsById.forEach((slot) => {
               const slotDate = String(slot.slot_date).trim().slice(0, 10);
               const slotStart = normalizeTimeHHMM(slot.start_time);
               const slotEnd = normalizeTimeHHMM(slot.end_time);
-              if (!slotStart || !slotEnd) continue;
+              if (!slotStart || !slotEnd) return;
 
               for (const match of lockRows) {
                 const matchDate = String(match.match_date ?? "").trim().slice(0, 10);
@@ -503,16 +503,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 const courtId = Number(match.court_id);
                 if (!Number.isFinite(courtId)) continue;
 
-                if (!blockedCourtIdsByTournamentSlotId.has(slot.id)) {
-                  blockedCourtIdsByTournamentSlotId.set(slot.id, new Set<number>());
+                if (!blockedCourtIdsByTournamentSlotId!.has(slot.id)) {
+                  blockedCourtIdsByTournamentSlotId!.set(slot.id, new Set<number>());
                 }
-                const blockedSet = blockedCourtIdsByTournamentSlotId.get(slot.id)!;
+                const blockedSet = blockedCourtIdsByTournamentSlotId!.get(slot.id)!;
                 if (!blockedSet.has(courtId)) {
                   blockedSet.add(courtId);
                   blockedCount++;
                 }
               }
-            }
+            });
 
             sendLog(
               blockedCount > 0
