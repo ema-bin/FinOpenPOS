@@ -6,6 +6,34 @@ import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
 
+function normalizeTimeHHMM(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return trimmed.substring(0, 5);
+}
+
+function timeToMinutes(value: string): number {
+  const [hours, minutes] = value.split(":").map((part) => Number(part));
+  const safeHours = Number.isNaN(hours) ? 0 : hours;
+  const safeMinutes = Number.isNaN(minutes) ? 0 : minutes;
+  if (safeHours === 0 && safeMinutes === 0) return 24 * 60;
+  return safeHours * 60 + safeMinutes;
+}
+
+function rangesOverlap(
+  slotStart: string,
+  slotEnd: string,
+  matchStart: string,
+  matchEnd: string
+): boolean {
+  const slotStartMin = timeToMinutes(slotStart);
+  const slotEndMin = timeToMinutes(slotEnd);
+  const matchStartMin = timeToMinutes(matchStart);
+  const matchEndMin = timeToMinutes(matchEnd);
+  return slotStartMin < matchEndMin && slotEndMin > matchStartMin;
+}
+
 export async function POST(req: Request, { params }: RouteParams) {
   const supabase = createClient();
   const {
@@ -22,6 +50,18 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Obtener configuración de horarios del body
   const body = await req.json().catch(() => ({}));
+  const overlapTournamentIds = Array.isArray(body.overlapTournamentIds)
+    ? Array.from(
+        new Set(
+          body.overlapTournamentIds
+            .map((value: unknown) => Number(value))
+            .filter(
+              (value: number) =>
+                Number.isFinite(value) && value > 0 && value !== tournamentId
+            )
+        )
+      )
+    : [];
   const scheduleConfig: ScheduleConfig | undefined = body.days
     ? {
         days: body.days,
@@ -48,12 +88,16 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
   }
 
+  const involvedTournamentIds = Array.from(
+    new Set([tournamentId, ...overlapTournamentIds])
+  );
+
   // 2) Obtener todos los partidos de fase de grupos sin resultados
   // Un partido sin resultados es aquel donde set1_team1_games es null
   const { data: matches, error: matchesError } = await supabase
     .from("tournament_matches")
-    .select("id, tournament_group_id, team1_id, team2_id, match_order, status, set1_team1_games, court_id")
-    .eq("tournament_id", tournamentId)
+    .select("id, tournament_id, tournament_group_id, team1_id, team2_id, match_order, status, set1_team1_games, court_id")
+    .in("tournament_id", involvedTournamentIds)
     .eq("phase", "group")
     .is("set1_team1_games", null); // Solo partidos sin resultados
 
@@ -70,12 +114,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     const { data: allMatches } = await supabase
       .from("tournament_matches")
       .select("id")
-      .eq("tournament_id", tournamentId)
+      .in("tournament_id", involvedTournamentIds)
       .eq("phase", "group");
     
     if (allMatches && allMatches.length > 0) {
       return NextResponse.json(
-        { error: "Todos los partidos de fase de grupos ya tienen resultados cargados. Solo se pueden regenerar horarios de partidos sin resultados." },
+        { error: "Todos los partidos de fase de grupos ya tienen resultados cargados en los torneos seleccionados. Solo se pueden regenerar horarios de partidos sin resultados." },
         { status: 400 }
       );
     }
@@ -95,7 +139,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       end_time: null,
       court_id: null,
     })
-    .eq("tournament_id", tournamentId)
+    .in("tournament_id", involvedTournamentIds)
     .eq("phase", "group")
     .is("set1_team1_games", null); // Solo partidos sin resultados
 
@@ -140,7 +184,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // Incluir TODOS los partidos, incluso los que tienen equipos null (rondas de ganadores/perdedores en grupos de 4)
   // El scheduler puede programar partidos con equipos null, respetando las restricciones de orden
   const matchesPayload = matches.map((match) => ({
-    tournament_id: tournamentId,
+    tournament_id: match.tournament_id,
     user_uid: user.id,
     phase: "group" as const,
     tournament_group_id: match.tournament_group_id,
@@ -165,6 +209,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   let teamRestrictions: Map<number, Array<{ date: string; start_time: string; end_time: string }>> | undefined;
   let tournamentSlots: Array<{ id: number; slot_date: string; start_time: string; end_time: string }> | undefined;
   let teamCannotPlaySlotIds: Map<number, Set<number>> | undefined;
+  let blockedCourtIdsByTournamentSlotId: Map<number, Set<number>> | undefined;
   let teamDisplayNames: Map<number, string> | undefined;
   let groupDisplayNames: Map<number, string> | undefined;
 
@@ -172,7 +217,6 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { data: groupsData } = await supabase
     .from("tournament_groups")
     .select("id, name")
-    .eq("tournament_id", tournamentId)
     .in("id", groupIds);
   groupDisplayNames = new Map();
   (groupsData ?? []).forEach((row: { id: number; name?: string | null }) => {
@@ -203,21 +247,85 @@ export async function POST(req: Request, { params }: RouteParams) {
       .in("tournament_team_id", teamIds.length > 0 ? teamIds : [-1]);
 
     teamCannotPlaySlotIds = new Map();
-    if (!restrictionsError && restrictions?.length) {
-      const cannotPlay = restrictions.filter((r: { can_play?: boolean }) => r.can_play === false);
-      cannotPlay.forEach((r: { tournament_team_id: number; tournament_group_slot_id: number }) => {
-        if (!teamCannotPlaySlotIds!.has(r.tournament_team_id)) {
-          teamCannotPlaySlotIds!.set(r.tournament_team_id, new Set());
+    if (restrictionsError) {
+      return NextResponse.json(
+        { error: `Error al cargar restricciones de equipos: ${restrictionsError.message}` },
+        { status: 500 }
+      );
+    }
+
+    const cannotPlayRows = (restrictions ?? []).filter(
+      (r: { can_play?: boolean }) => r.can_play === false
+    ) as Array<{ tournament_team_id: number; tournament_group_slot_id: number }>;
+
+    if (cannotPlayRows.length > 0) {
+      const restrictionSlotIds = Array.from(
+        new Set(cannotPlayRows.map((r) => r.tournament_group_slot_id))
+      );
+      const { data: restrictionSlots, error: restrictionSlotsError } = await supabase
+        .from("tournament_group_slots")
+        .select("id, slot_date, start_time, end_time")
+        .in("id", restrictionSlotIds);
+
+      if (restrictionSlotsError) {
+        return NextResponse.json(
+          { error: `Error al cargar slots de restricciones: ${restrictionSlotsError.message}` },
+          { status: 500 }
+        );
+      }
+
+      const allTournamentSlotsSafe = tournamentSlots ?? [];
+      const restrictionSlotMap = new Map(
+        (restrictionSlots ?? []).map(
+          (slot: { id: number; slot_date: string; start_time: string; end_time: string }) => [
+            slot.id,
+            slot,
+          ]
+        )
+      );
+      const cannotPlayWindowsByTeam = new Map<
+        number,
+        Array<{ slot_date: string; start_time: string; end_time: string }>
+      >();
+      for (const row of cannotPlayRows) {
+        const slotData = restrictionSlotMap.get(row.tournament_group_slot_id);
+        if (!slotData) continue;
+        if (!cannotPlayWindowsByTeam.has(row.tournament_team_id)) {
+          cannotPlayWindowsByTeam.set(row.tournament_team_id, []);
         }
-        teamCannotPlaySlotIds!.get(r.tournament_team_id)!.add(r.tournament_group_slot_id);
-      });
+        cannotPlayWindowsByTeam.get(row.tournament_team_id)!.push(slotData);
+      }
+
+      for (const [teamId, windows] of cannotPlayWindowsByTeam.entries()) {
+        const cannotPlaySelectedSlots = new Set<number>();
+        for (const selectedSlot of allTournamentSlotsSafe) {
+          const selectedDate = String(selectedSlot.slot_date).trim().slice(0, 10);
+          const selectedStart = normalizeTimeHHMM(selectedSlot.start_time);
+          const selectedEnd = normalizeTimeHHMM(selectedSlot.end_time);
+          if (!selectedStart || !selectedEnd) continue;
+
+          const conflicts = windows.some((window) => {
+            const windowDate = String(window.slot_date).trim().slice(0, 10);
+            if (windowDate !== selectedDate) return false;
+            const windowStart = normalizeTimeHHMM(window.start_time);
+            const windowEnd = normalizeTimeHHMM(window.end_time) ?? selectedEnd;
+            if (!windowStart) return false;
+            return rangesOverlap(selectedStart, selectedEnd, windowStart, windowEnd);
+          });
+          if (conflicts) {
+            cannotPlaySelectedSlots.add(selectedSlot.id);
+          }
+        }
+        if (cannotPlaySelectedSlots.size > 0) {
+          teamCannotPlaySlotIds.set(teamId, cannotPlaySelectedSlots);
+        }
+      }
     }
 
     if (teamIds.length > 0) {
       const { data: teamsData } = await supabase
         .from("tournament_teams")
         .select("id, display_name, player1:player1_id(last_name), player2:player2_id(last_name)")
-        .eq("tournament_id", tournamentId)
         .in("id", teamIds);
       teamDisplayNames = new Map();
       (teamsData ?? []).forEach((row: Record<string, unknown>) => {
@@ -233,6 +341,52 @@ export async function POST(req: Request, { params }: RouteParams) {
           `Equipo ${id}`;
         teamDisplayNames!.set(id, label);
       });
+    }
+
+    const scheduledMatchIdsToRegenerate = new Set(matches.map((match) => match.id));
+    const { data: scheduledMatches, error: scheduledMatchesError } = await supabase
+      .from("tournament_matches")
+      .select("id, match_date, start_time, end_time, court_id, status")
+      .in("tournament_id", involvedTournamentIds)
+      .in("court_id", scheduleConfig.courtIds)
+      .not("match_date", "is", null)
+      .not("start_time", "is", null)
+      .not("court_id", "is", null)
+      .neq("status", "cancelled");
+
+    if (scheduledMatchesError) {
+      return NextResponse.json(
+        { error: `Error al cargar bloqueos de cancha: ${scheduledMatchesError.message}` },
+        { status: 500 }
+      );
+    }
+
+    blockedCourtIdsByTournamentSlotId = new Map<number, Set<number>>();
+    const allTournamentSlotsSafe = tournamentSlots ?? [];
+    const lockRows = (Array.isArray(scheduledMatches) ? scheduledMatches : []).filter(
+      (row) => !scheduledMatchIdsToRegenerate.has(row.id)
+    );
+    for (const slot of allTournamentSlotsSafe) {
+      const slotDate = String(slot.slot_date).trim().slice(0, 10);
+      const slotStart = normalizeTimeHHMM(slot.start_time);
+      const slotEnd = normalizeTimeHHMM(slot.end_time);
+      if (!slotStart || !slotEnd) continue;
+
+      for (const match of lockRows) {
+        const matchDate = String(match.match_date ?? "").trim().slice(0, 10);
+        if (!matchDate || matchDate !== slotDate) continue;
+        const matchStart = normalizeTimeHHMM(match.start_time as string | null | undefined);
+        const matchEnd = normalizeTimeHHMM(match.end_time as string | null | undefined) ?? slotEnd;
+        if (!matchStart) continue;
+        if (!rangesOverlap(slotStart, slotEnd, matchStart, matchEnd)) continue;
+
+        const courtId = Number(match.court_id);
+        if (!Number.isFinite(courtId)) continue;
+        if (!blockedCourtIdsByTournamentSlotId.has(slot.id)) {
+          blockedCourtIdsByTournamentSlotId.set(slot.id, new Set<number>());
+        }
+        blockedCourtIdsByTournamentSlotId.get(slot.id)!.add(courtId);
+      }
     }
   }
 
@@ -251,7 +405,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     {
       algorithm: useRestrictions ? "with-restrictions" : "default",
       ...(useRestrictions && tournamentSlots && teamCannotPlaySlotIds !== undefined
-        ? { tournamentSlots, teamCannotPlaySlotIds }
+        ? {
+            tournamentSlots,
+            teamCannotPlaySlotIds,
+            ...(blockedCourtIdsByTournamentSlotId
+              ? { blockedCourtIdsByTournamentSlotId }
+              : {}),
+          }
         : {}),
       ...(teamDisplayNames ? { teamDisplayNames } : {}),
       ...(groupDisplayNames ? { groupDisplayNames } : {}),

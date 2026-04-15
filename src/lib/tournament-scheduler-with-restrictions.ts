@@ -48,6 +48,8 @@ type Slot = {
   slotId: string;
   /** Cuando los slots vienen del torneo (tournament_group_slots), mismo id que can_play */
   tournamentSlotId?: number;
+  /** Cancha concreta asociada al slot (si aplica). */
+  courtId?: number;
 };
 
 type ScheduleResult =
@@ -62,6 +64,8 @@ type BeamSearchOptions = {
   tournamentSlots?: TournamentSlotInput[];
   /** Por equipo, IDs de slots del torneo donde NO puede jugar (can_play = false). */
   teamCannotPlaySlotIds?: Map<number, Set<number>>;
+  /** Por slot del torneo, canchas ocupadas por torneos solapados. */
+  blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>;
   /** Por equipo, etiqueta para logs (ej. "Larralde-Stefani"). */
   teamDisplayNames?: Map<number, string>;
   /** Por grupo (tournament_group_id), nombre de la zona (ej. "Zona E" desde tournament_groups.name). */
@@ -130,7 +134,8 @@ function timeSlotToSlot(timeSlot: TimeSlot, index: number): Slot {
 /** Construye slots desde tournament_group_slots: un slot asignable por (slot del torneo × cancha). Mismo conjunto que can_play. */
 function buildSlotsFromTournamentSlots(
   tournamentSlots: TournamentSlotInput[],
-  numCourts: number
+  courtIds: number[],
+  blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>
 ): Slot[] {
   const slots: Slot[] = [];
   let index = 0;
@@ -144,15 +149,18 @@ function buildSlotsFromTournamentSlots(
     const startNorm = toHHMM(ts.start_time);
     const endNorm = toHHMM(ts.end_time);
     const datetime = new Date(`${dateStr}T${startNorm}:00`);
-    for (let c = 0; c < numCourts; c++) {
+    const blockedCourts = blockedCourtIdsByTournamentSlotId?.get(ts.id);
+    for (const courtId of courtIds) {
+      if (blockedCourts?.has(courtId)) continue;
       slots.push({
         index: index++,
         date: dateStr,
         startTime: startNorm,
         endTime: endNorm,
         datetime,
-        slotId: `${ts.id}-${c}`,
+        slotId: `${ts.id}-${courtId}`,
         tournamentSlotId: ts.id,
+        courtId,
       });
     }
   }
@@ -522,6 +530,7 @@ export async function scheduleGroupMatchesWithRestrictions(
   onLog?: (message: string) => void,
   tournamentSlots?: TournamentSlotInput[],
   teamCannotPlaySlotIds?: Map<number, Set<number>>,
+  blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>,
   teamDisplayNames?: Map<number, string>,
   groupDisplayNames?: Map<number, string>
 ): Promise<SchedulerResult> {
@@ -601,7 +610,11 @@ export async function scheduleGroupMatchesWithRestrictions(
   const groupMatchRestrictions = new Map<number, Map<number, Set<string>>>();
 
   if (useTournamentSlots && tournamentSlots && teamCannotPlaySlotIds) {
-    slots = buildSlotsFromTournamentSlots(tournamentSlots, courtIds.length);
+    slots = buildSlotsFromTournamentSlots(
+      tournamentSlots,
+      courtIds,
+      blockedCourtIdsByTournamentSlotId
+    );
     if (onLog) onLog(`📅 Slots del torneo: ${tournamentSlots.length} × ${courtIds.length} canchas = ${slots.length} asignables`);
     for (const group of groups) {
       const perMatch = new Map<number, Set<string>>();
@@ -694,7 +707,7 @@ export async function scheduleGroupMatchesWithRestrictions(
     ...(teamDisplayNames ? { teamDisplayNames } : {}),
     ...(groupDisplayNames ? { groupDisplayNames } : {}),
     ...(useTournamentSlots && tournamentSlots && teamCannotPlaySlotIds
-      ? { tournamentSlots, teamCannotPlaySlotIds }
+      ? { tournamentSlots, teamCannotPlaySlotIds, blockedCourtIdsByTournamentSlotId }
       : {}),
   });
 
@@ -734,7 +747,7 @@ export async function scheduleGroupMatchesWithRestrictions(
               (m) => m.tournament_group_id === match.tournament_group_id && m.match_order === match.match_order
             );
       if (matchIdx === -1) continue;
-      const courtId = courtIds[slot.index % courtIds.length];
+      const courtId = slot.courtId ?? courtIds[slot.index % courtIds.length];
       const endTime = slot.endTime || calculateEndTime(slot.startTime, matchDurationMinutes);
       assignments.push({
         matchIdx,

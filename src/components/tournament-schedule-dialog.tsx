@@ -18,6 +18,7 @@ import type { ScheduleDay, ScheduleConfig } from "@/models/dto/tournament";
 export type { ScheduleDay, ScheduleConfig };
 
 type GroupSlot = { id: number; slot_date: string; start_time: string; end_time: string };
+type OverlapTournamentOption = { id: number; name: string; status: string };
 
 type TournamentScheduleDialogProps = {
   open: boolean;
@@ -79,6 +80,9 @@ export function TournamentScheduleDialog({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
   const [useRestrictionsAlgorithm, setUseRestrictionsAlgorithm] = useState(true);
+  const [overlapTournaments, setOverlapTournaments] = useState<OverlapTournamentOption[]>([]);
+  const [loadingOverlapTournaments, setLoadingOverlapTournaments] = useState(false);
+  const [selectedOverlapTournamentIds, setSelectedOverlapTournamentIds] = useState<number[]>([]);
   const [logs, setLogs] = useState<Array<{ message: string; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -91,6 +95,10 @@ export function TournamentScheduleDialog({
   const isCompletedRef = useRef<boolean>(false);
 
   const useSlotMode = Boolean(tournamentId && showLogs);
+  const showOverlapTournamentSelector =
+    useSlotMode &&
+    streamEndpoint === "regenerate-schedule-stream" &&
+    Boolean(tournamentId);
 
   // Key única para sessionStorage basada en tournamentId y streamEndpoint
   const storageKey = useMemo(() => {
@@ -116,6 +124,32 @@ export function TournamentScheduleDialog({
       })
       .finally(() => setLoadingSlots(false));
   }, [open, tournamentId, showLogs]);
+
+  useEffect(() => {
+    if (!open || !showOverlapTournamentSelector || !tournamentId) {
+      setOverlapTournaments([]);
+      setSelectedOverlapTournamentIds([]);
+      return;
+    }
+
+    setLoadingOverlapTournaments(true);
+    fetch("/api/tournaments?status=schedule_review,in_progress")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Error al cargar torneos"))))
+      .then((data: Array<{ id: number; name: string; status: string }>) => {
+        const candidates = Array.isArray(data)
+          ? data
+              .filter((t) => t.id !== tournamentId)
+              .map((t) => ({ id: t.id, name: t.name, status: t.status }))
+          : [];
+        setOverlapTournaments(candidates);
+        setSelectedOverlapTournamentIds([]);
+      })
+      .catch(() => {
+        setOverlapTournaments([]);
+        setSelectedOverlapTournamentIds([]);
+      })
+      .finally(() => setLoadingOverlapTournaments(false));
+  }, [open, showOverlapTournamentSelector, tournamentId]);
 
   // Estabilizar availableSchedules para evitar loops infinitos
   const availableSchedulesKey = useMemo(() => {
@@ -294,12 +328,22 @@ export function TournamentScheduleDialog({
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
+      const effectiveUseRestrictionsAlgorithm =
+        useRestrictionsAlgorithm ||
+        (showOverlapTournamentSelector &&
+          selectedOverlapTournamentIds.length > 0);
+
       const body = useSlotMode
         ? {
             slotIds: selectedSlotIds,
             matchDuration,
             courtIds: selectedCourtIds,
-            algorithm: useRestrictionsAlgorithm ? "with-restrictions" : "default",
+            algorithm: effectiveUseRestrictionsAlgorithm
+              ? "with-restrictions"
+              : "default",
+            ...(showOverlapTournamentSelector && selectedOverlapTournamentIds.length > 0
+              ? { overlapTournamentIds: selectedOverlapTournamentIds }
+              : {}),
           }
         : { days: scheduleDays, matchDuration, courtIds: selectedCourtIds };
 
@@ -436,6 +480,14 @@ export function TournamentScheduleDialog({
   const toggleSlot = (slotId: number) => {
     setSelectedSlotIds((prev) =>
       prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
+    );
+  };
+
+  const toggleOverlapTournament = (tournamentIdToToggle: number) => {
+    setSelectedOverlapTournamentIds((prev) =>
+      prev.includes(tournamentIdToToggle)
+        ? prev.filter((id) => id !== tournamentIdToToggle)
+        : [...prev, tournamentIdToToggle]
     );
   };
 
@@ -588,6 +640,48 @@ export function TournamentScheduleDialog({
                   Usar restricciones horarias de los equipos (asignar respetando disponibilidad)
                 </Label>
               </div>
+
+              {showOverlapTournamentSelector && (
+                <div className="space-y-2 pt-2 border-t">
+                  <Label>Torneos solapados (compartir canchas/slots)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Seleccioná torneos que usan los mismos días/canchas. Sus partidos de grupos pendientes se regeneran junto con este torneo en una única corrida.
+                  </p>
+                  {loadingOverlapTournaments ? (
+                    <p className="text-sm text-muted-foreground">Cargando torneos...</p>
+                  ) : overlapTournaments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay otros torneos activos para solapar.
+                    </p>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto space-y-2 border rounded-md p-2">
+                      {overlapTournaments.map((otherTournament) => (
+                        <div key={otherTournament.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`overlap-tournament-${otherTournament.id}`}
+                            checked={selectedOverlapTournamentIds.includes(otherTournament.id)}
+                            onCheckedChange={() => toggleOverlapTournament(otherTournament.id)}
+                          />
+                          <Label
+                            htmlFor={`overlap-tournament-${otherTournament.id}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {otherTournament.name}{" "}
+                            <span className="text-xs text-muted-foreground">
+                              ({otherTournament.status})
+                            </span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedOverlapTournamentIds.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Se regenerarán horarios de grupos en conjunto para {selectedOverlapTournamentIds.length + 1} torneo(s).
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
