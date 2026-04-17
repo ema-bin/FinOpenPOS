@@ -230,10 +230,15 @@ export default function TournamentsPage() {
             Gestioná torneos, equipos, grupos y playoffs.
           </CardDescription>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <PlusIcon className="w-4 h-4 mr-1" />
-          Nuevo torneo
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => router.push("/admin/tournaments/schedule-review")}>
+            Revisión global
+          </Button>
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <PlusIcon className="w-4 h-4 mr-1" />
+            Nuevo torneo
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0 pt-4 space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
