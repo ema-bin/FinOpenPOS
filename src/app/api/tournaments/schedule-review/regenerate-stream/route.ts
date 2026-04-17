@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
 
 function normalizeTimeHHMM(value: string | null | undefined): string | null {
@@ -32,7 +33,58 @@ function rangesOverlap(
   return slotStartMin < matchEndMin && slotEndMin > matchStartMin;
 }
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({})) as {
+    courtIds?: unknown;
+    slotIds?: unknown;
+    selectedPhysicalSlots?: unknown;
+    matchDuration?: unknown;
+    algorithm?: unknown;
+  };
+
+  const requestedPhysicalSlots = Array.isArray(body.selectedPhysicalSlots)
+    ? body.selectedPhysicalSlots
+        .map((row) => {
+          const slotDate = String((row as { slotDate?: unknown })?.slotDate ?? "")
+            .trim()
+            .slice(0, 10);
+          const startTime = String((row as { startTime?: unknown })?.startTime ?? "")
+            .trim()
+            .slice(0, 5);
+          const endTime = String((row as { endTime?: unknown })?.endTime ?? "")
+            .trim()
+            .slice(0, 5);
+          const courtId = Number((row as { courtId?: unknown })?.courtId);
+          if (!slotDate || !startTime || !endTime || !Number.isFinite(courtId)) return null;
+          return { slotDate, startTime, endTime, courtId };
+        })
+        .filter(
+          (
+            row
+          ): row is { slotDate: string; startTime: string; endTime: string; courtId: number } =>
+            row !== null
+        )
+    : [];
+  const requestedPhysicalCourtIds = Array.from(
+    new Set(requestedPhysicalSlots.map((row) => row.courtId))
+  );
+
+  const requestedCourtIds = Array.isArray(body.courtIds)
+    ? body.courtIds.map((x) => Number(x)).filter((n): n is number => Number.isFinite(n))
+    : requestedPhysicalCourtIds;
+  const requestedSlotIds = Array.isArray(body.slotIds)
+    ? body.slotIds.map((x) => Number(x)).filter((n): n is number => Number.isFinite(n))
+    : null;
+  const requestedMatchDuration =
+    typeof body.matchDuration === "number" &&
+    Number.isFinite(body.matchDuration) &&
+    body.matchDuration >= 30
+      ? body.matchDuration
+      : null;
+  const hasPhysicalSelections = requestedPhysicalSlots.length > 0;
+  /** Cuerpo vacío u omisión → misma corrida que antes (con restricciones). */
+  const useRestrictions = hasPhysicalSelections || body.algorithm !== "default";
+
   const supabase = createClient();
   const {
     data: { user },
@@ -105,12 +157,41 @@ export async function POST(_req: NextRequest) {
           return;
         }
 
-        const selectedSlots = Array.isArray(allSlots) ? allSlots : [];
+        type SelectedSlot = {
+          id: number;
+          slot_date: string;
+          start_time: string;
+          end_time: string;
+          tournament_id?: number;
+        };
+        const allSelectedSlotsRaw: SelectedSlot[] = Array.isArray(allSlots)
+          ? allSlots.map((slot) => ({
+              id: slot.id,
+              tournament_id: slot.tournament_id,
+              slot_date: slot.slot_date,
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+            }))
+          : [];
+        let selectedSlots: SelectedSlot[] = allSelectedSlotsRaw;
+        if (requestedSlotIds && requestedSlotIds.length > 0) {
+          const idSet = new Set(requestedSlotIds);
+          selectedSlots = selectedSlots.filter((s: { id: number }) => idSet.has(s.id));
+        }
         if (selectedSlots.length === 0) {
-          sendError("No hay slots definidos para los torneos en schedule_review.");
+          sendError(
+            requestedSlotIds && requestedSlotIds.length > 0
+              ? "Ninguno de los slots seleccionados coincide con los torneos en schedule_review."
+              : "No hay slots definidos para los torneos en schedule_review."
+          );
           return;
         }
         sendLog(`Slots combinados: ${selectedSlots.length}.`);
+        if (hasPhysicalSelections) {
+          sendLog(
+            `Slots físicos solicitados: ${requestedPhysicalSlots.length} (horario + cancha).`
+          );
+        }
 
         sendProgress(30, "Cargando partidos pendientes...");
         const { data: matches, error: matchesError } = await supabase
@@ -145,12 +226,80 @@ export async function POST(_req: NextRequest) {
           return;
         }
 
-        const courtIds = (courts ?? []).map((c) => c.id);
+        let courtIds = (courts ?? []).map((c) => c.id);
+        if (requestedCourtIds.length > 0) {
+          const activeSet = new Set(courtIds);
+          courtIds = requestedCourtIds.filter((id) => activeSet.has(id));
+        }
         if (courtIds.length === 0) {
-          sendError("No hay canchas activas para generar horarios.");
+          sendError(
+            requestedCourtIds.length > 0
+              ? "Las canchas seleccionadas no son válidas o no están activas."
+              : "No hay canchas activas para generar horarios."
+          );
           return;
         }
-        sendLog(`Canchas activas incluidas: ${courtIds.length}.`);
+        sendLog(`Canchas en la corrida: ${courtIds.length}.`);
+
+        let allowedCourtIdsBySlotId = new Map<number, Set<number>>();
+        if (hasPhysicalSelections) {
+          const selectedCourtIdSet = new Set(courtIds);
+          const existingWindows = new Set(
+            allSelectedSlotsRaw.map((slot) => {
+              const slotDate = String(slot.slot_date).trim().slice(0, 10);
+              const startTime = String(slot.start_time).trim().slice(0, 5);
+              const endTime = String(slot.end_time).trim().slice(0, 5);
+              return `${slotDate}|${startTime}|${endTime}`;
+            })
+          );
+          const validPhysical = requestedPhysicalSlots.filter((row) => {
+            const key = `${row.slotDate}|${row.startTime}|${row.endTime}`;
+            return existingWindows.has(key) && selectedCourtIdSet.has(row.courtId);
+          });
+
+          if (validPhysical.length === 0) {
+            sendError("Ningún slot físico seleccionado es válido para esta corrida global.");
+            return;
+          }
+
+          allowedCourtIdsBySlotId = new Map();
+          const syntheticSlotByWindow = new Map<
+            string,
+            { id: number; slot_date: string; start_time: string; end_time: string }
+          >();
+          let syntheticSlotId = 1;
+          validPhysical.forEach((row) => {
+            const windowKey = `${row.slotDate}|${row.startTime}|${row.endTime}`;
+            if (!syntheticSlotByWindow.has(windowKey)) {
+              syntheticSlotByWindow.set(windowKey, {
+                id: syntheticSlotId++,
+                slot_date: row.slotDate,
+                start_time: row.startTime,
+                end_time: row.endTime,
+              });
+            }
+            const slot = syntheticSlotByWindow.get(windowKey)!;
+            if (!allowedCourtIdsBySlotId.has(slot.id)) {
+              allowedCourtIdsBySlotId.set(slot.id, new Set<number>());
+            }
+            allowedCourtIdsBySlotId.get(slot.id)!.add(row.courtId);
+          });
+
+          selectedSlots = Array.from(syntheticSlotByWindow.values());
+          if (selectedSlots.length === 0) {
+            sendError("No quedaron slots válidos luego de aplicar la selección por horario/cancha.");
+            return;
+          }
+          courtIds = Array.from(
+            new Set(
+              Array.from(allowedCourtIdsBySlotId.values()).flatMap((ids) => Array.from(ids))
+            )
+          );
+          if (courtIds.length === 0) {
+            sendError("No quedaron canchas válidas luego de aplicar la selección por horario/cancha.");
+            return;
+          }
+        }
 
         sendProgress(45, "Limpiando horarios previos de partidos pendientes...");
         const { error: clearError } = await supabase
@@ -214,82 +363,7 @@ export async function POST(_req: NextRequest) {
           )
         );
 
-        sendProgress(50, "Aplicando restricciones de disponibilidad...");
-        const { data: restrictions, error: restrictionsError } = await supabase
-          .from("tournament_team_schedule_restrictions")
-          .select("tournament_team_id, tournament_group_slot_id, can_play")
-          .in("tournament_team_id", teamIds.length > 0 ? teamIds : [-1]);
-
-        if (restrictionsError) {
-          sendError(`Error al cargar restricciones: ${restrictionsError.message}`);
-          return;
-        }
-
-        const cannotPlayRows = (restrictions ?? []).filter(
-          (row: { can_play?: boolean }) => row.can_play === false
-        ) as Array<{ tournament_team_id: number; tournament_group_slot_id: number }>;
-
-        const restrictionSlotIds = Array.from(
-          new Set(cannotPlayRows.map((row) => row.tournament_group_slot_id))
-        );
-        const { data: restrictionSlots, error: restrictionSlotsError } = await supabase
-          .from("tournament_group_slots")
-          .select("id, slot_date, start_time, end_time")
-          .in("id", restrictionSlotIds.length > 0 ? restrictionSlotIds : [-1]);
-
-        if (restrictionSlotsError) {
-          sendError(`Error al cargar slots de restricciones: ${restrictionSlotsError.message}`);
-          return;
-        }
-
-        const restrictionSlotMap = new Map(
-          (restrictionSlots ?? []).map(
-            (slot: { id: number; slot_date: string; start_time: string; end_time: string }) => [
-              slot.id,
-              slot,
-            ]
-          )
-        );
-        const cannotPlayWindowsByTeam = new Map<
-          number,
-          Array<{ slot_date: string; start_time: string; end_time: string }>
-        >();
-        cannotPlayRows.forEach((row) => {
-          const slotData = restrictionSlotMap.get(row.tournament_group_slot_id);
-          if (!slotData) return;
-          if (!cannotPlayWindowsByTeam.has(row.tournament_team_id)) {
-            cannotPlayWindowsByTeam.set(row.tournament_team_id, []);
-          }
-          cannotPlayWindowsByTeam.get(row.tournament_team_id)!.push(slotData);
-        });
-
-        const teamCannotPlaySlotIds = new Map<number, Set<number>>();
-        cannotPlayWindowsByTeam.forEach((windows, teamId) => {
-          const cannotPlaySelectedSlots = new Set<number>();
-          selectedSlots.forEach((selectedSlot) => {
-            const selectedDate = String(selectedSlot.slot_date).trim().slice(0, 10);
-            const selectedStart = normalizeTimeHHMM(selectedSlot.start_time);
-            const selectedEnd = normalizeTimeHHMM(selectedSlot.end_time);
-            if (!selectedStart || !selectedEnd) return;
-
-            const conflicts = windows.some((window) => {
-              const windowDate = String(window.slot_date).trim().slice(0, 10);
-              if (windowDate !== selectedDate) return false;
-              const windowStart = normalizeTimeHHMM(window.start_time);
-              const windowEnd = normalizeTimeHHMM(window.end_time) ?? selectedEnd;
-              if (!windowStart) return false;
-              return rangesOverlap(selectedStart, selectedEnd, windowStart, windowEnd);
-            });
-
-            if (conflicts) {
-              cannotPlaySelectedSlots.add(selectedSlot.id);
-            }
-          });
-          if (cannotPlaySelectedSlots.size > 0) {
-            teamCannotPlaySlotIds.set(teamId, cannotPlaySelectedSlots);
-          }
-        });
-
+        sendProgress(50, "Cargando equipos...");
         const { data: teamsData, error: teamsError } = await supabase
           .from("tournament_teams")
           .select("id, display_name, player1:player1_id(last_name), player2:player2_id(last_name)")
@@ -323,82 +397,213 @@ export async function POST(_req: NextRequest) {
           teamDisplayNames.set(id, label);
         });
 
-        sendProgress(60, "Construyendo bloqueos de canchas ocupadas...");
-        const scheduledMatchIdsToRegenerate = new Set(pendingMatches.map((match) => match.id));
-        const { data: scheduledMatches, error: scheduledMatchesError } = await supabase
-          .from("tournament_matches")
-          .select("id, match_date, start_time, end_time, court_id, status")
-          .in("tournament_id", tournamentIds)
-          .in("court_id", courtIds)
-          .not("match_date", "is", null)
-          .not("start_time", "is", null)
-          .not("court_id", "is", null)
-          .neq("status", "cancelled");
+        let teamCannotPlaySlotIds = new Map<number, Set<number>>();
+        let blockedCourtIdsByTournamentSlotId = new Map<number, Set<number>>();
 
-        if (scheduledMatchesError) {
-          sendError(`Error al cargar partidos ya agendados: ${scheduledMatchesError.message}`);
-          return;
+        if (useRestrictions) {
+          if (hasPhysicalSelections && body.algorithm === "default") {
+            sendLog(
+              "Selección por slot físico detectada: se usa algoritmo con restricciones para respetar cancha por horario."
+            );
+          }
+          sendProgress(52, "Aplicando restricciones de disponibilidad...");
+          const { data: restrictions, error: restrictionsError } = await supabase
+            .from("tournament_team_schedule_restrictions")
+            .select("tournament_team_id, tournament_group_slot_id, can_play")
+            .in("tournament_team_id", teamIds.length > 0 ? teamIds : [-1]);
+
+          if (restrictionsError) {
+            sendError(`Error al cargar restricciones: ${restrictionsError.message}`);
+            return;
+          }
+
+          const cannotPlayRows = (restrictions ?? []).filter(
+            (row: { can_play?: boolean }) => row.can_play === false
+          ) as Array<{ tournament_team_id: number; tournament_group_slot_id: number }>;
+
+          const restrictionSlotIds = Array.from(
+            new Set(cannotPlayRows.map((row) => row.tournament_group_slot_id))
+          );
+          const { data: restrictionSlots, error: restrictionSlotsError } = await supabase
+            .from("tournament_group_slots")
+            .select("id, slot_date, start_time, end_time")
+            .in("id", restrictionSlotIds.length > 0 ? restrictionSlotIds : [-1]);
+
+          if (restrictionSlotsError) {
+            sendError(`Error al cargar slots de restricciones: ${restrictionSlotsError.message}`);
+            return;
+          }
+
+          const restrictionSlotMap = new Map(
+            (restrictionSlots ?? []).map(
+              (slot: { id: number; slot_date: string; start_time: string; end_time: string }) => [
+                slot.id,
+                slot,
+              ]
+            )
+          );
+          const cannotPlayWindowsByTeam = new Map<
+            number,
+            Array<{ slot_date: string; start_time: string; end_time: string }>
+          >();
+          cannotPlayRows.forEach((row) => {
+            const slotData = restrictionSlotMap.get(row.tournament_group_slot_id);
+            if (!slotData) return;
+            if (!cannotPlayWindowsByTeam.has(row.tournament_team_id)) {
+              cannotPlayWindowsByTeam.set(row.tournament_team_id, []);
+            }
+            cannotPlayWindowsByTeam.get(row.tournament_team_id)!.push(slotData);
+          });
+
+          teamCannotPlaySlotIds = new Map();
+          cannotPlayWindowsByTeam.forEach((windows, teamId) => {
+            const cannotPlaySelectedSlots = new Set<number>();
+            selectedSlots.forEach((selectedSlot) => {
+              const selectedDate = String(selectedSlot.slot_date).trim().slice(0, 10);
+              const selectedStart = normalizeTimeHHMM(selectedSlot.start_time);
+              const selectedEnd = normalizeTimeHHMM(selectedSlot.end_time);
+              if (!selectedStart || !selectedEnd) return;
+
+              const conflicts = windows.some((window) => {
+                const windowDate = String(window.slot_date).trim().slice(0, 10);
+                if (windowDate !== selectedDate) return false;
+                const windowStart = normalizeTimeHHMM(window.start_time);
+                const windowEnd = normalizeTimeHHMM(window.end_time) ?? selectedEnd;
+                if (!windowStart) return false;
+                return rangesOverlap(selectedStart, selectedEnd, windowStart, windowEnd);
+              });
+
+              if (conflicts) {
+                cannotPlaySelectedSlots.add(selectedSlot.id);
+              }
+            });
+            if (cannotPlaySelectedSlots.size > 0) {
+              teamCannotPlaySlotIds.set(teamId, cannotPlaySelectedSlots);
+            }
+          });
+
+          sendProgress(60, "Construyendo bloqueos de canchas ocupadas...");
+          const scheduledMatchIdsToRegenerate = new Set(pendingMatches.map((match) => match.id));
+          const { data: scheduledMatches, error: scheduledMatchesError } = await supabase
+            .from("tournament_matches")
+            .select("id, match_date, start_time, end_time, court_id, status")
+            .in("tournament_id", tournamentIds)
+            .in("court_id", courtIds)
+            .not("match_date", "is", null)
+            .not("start_time", "is", null)
+            .not("court_id", "is", null)
+            .neq("status", "cancelled");
+
+          if (scheduledMatchesError) {
+            sendError(`Error al cargar partidos ya agendados: ${scheduledMatchesError.message}`);
+            return;
+          }
+
+          blockedCourtIdsByTournamentSlotId = new Map();
+          if (hasPhysicalSelections) {
+            selectedSlots.forEach((slot) => {
+              const allowedForSlot = allowedCourtIdsBySlotId.get(slot.id) ?? new Set<number>();
+              const blockedForSlot = new Set<number>();
+              courtIds.forEach((courtId) => {
+                if (!allowedForSlot.has(courtId)) {
+                  blockedForSlot.add(courtId);
+                }
+              });
+              if (blockedForSlot.size > 0) {
+                blockedCourtIdsByTournamentSlotId.set(slot.id, blockedForSlot);
+              }
+            });
+          }
+          const lockRows = (Array.isArray(scheduledMatches) ? scheduledMatches : []).filter(
+            (row) => !scheduledMatchIdsToRegenerate.has(row.id)
+          );
+          selectedSlots.forEach((slot) => {
+            const slotDate = String(slot.slot_date).trim().slice(0, 10);
+            const slotStart = normalizeTimeHHMM(slot.start_time);
+            const slotEnd = normalizeTimeHHMM(slot.end_time);
+            if (!slotStart || !slotEnd) return;
+
+            lockRows.forEach((match) => {
+              const matchDate = String(match.match_date ?? "").trim().slice(0, 10);
+              if (!matchDate || matchDate !== slotDate) return;
+              const matchStart = normalizeTimeHHMM(match.start_time as string | null | undefined);
+              const matchEnd = normalizeTimeHHMM(match.end_time as string | null | undefined) ?? slotEnd;
+              if (!matchStart) return;
+              if (!rangesOverlap(slotStart, slotEnd, matchStart, matchEnd)) return;
+
+              const courtId = Number(match.court_id);
+              if (!Number.isFinite(courtId)) return;
+
+              if (!blockedCourtIdsByTournamentSlotId.has(slot.id)) {
+                blockedCourtIdsByTournamentSlotId.set(slot.id, new Set<number>());
+              }
+              blockedCourtIdsByTournamentSlotId.get(slot.id)!.add(courtId);
+            });
+          });
+        } else {
+          sendLog("Algoritmo sin restricciones: se usarán los slots seleccionados como ventanas de tiempo.");
         }
 
-        const blockedCourtIdsByTournamentSlotId = new Map<number, Set<number>>();
-        const lockRows = (Array.isArray(scheduledMatches) ? scheduledMatches : []).filter(
-          (row) => !scheduledMatchIdsToRegenerate.has(row.id)
-        );
-        selectedSlots.forEach((slot) => {
-          const slotDate = String(slot.slot_date).trim().slice(0, 10);
-          const slotStart = normalizeTimeHHMM(slot.start_time);
-          const slotEnd = normalizeTimeHHMM(slot.end_time);
-          if (!slotStart || !slotEnd) return;
-
-          lockRows.forEach((match) => {
-            const matchDate = String(match.match_date ?? "").trim().slice(0, 10);
-            if (!matchDate || matchDate !== slotDate) return;
-            const matchStart = normalizeTimeHHMM(match.start_time as string | null | undefined);
-            const matchEnd = normalizeTimeHHMM(match.end_time as string | null | undefined) ?? slotEnd;
-            if (!matchStart) return;
-            if (!rangesOverlap(slotStart, slotEnd, matchStart, matchEnd)) return;
-
-            const courtId = Number(match.court_id);
-            if (!Number.isFinite(courtId)) return;
-
-            if (!blockedCourtIdsByTournamentSlotId.has(slot.id)) {
-              blockedCourtIdsByTournamentSlotId.set(slot.id, new Set<number>());
-            }
-            blockedCourtIdsByTournamentSlotId.get(slot.id)!.add(courtId);
-          });
-        });
-
-        const maxDuration = Math.max(
+        const maxFromTournaments = Math.max(
           ...scheduleReviewTournaments.map((t) => Math.max(30, Number(t.match_duration) || 60)),
           60
         );
-        sendLog(
-          `Duración unificada para corrida global: ${maxDuration} min (máxima entre torneos seleccionados).`
-        );
+        const maxDuration = requestedMatchDuration ?? maxFromTournaments;
+        if (requestedMatchDuration !== null) {
+          sendLog(`Duración de partidos (configurada): ${maxDuration} min.`);
+        } else {
+          sendLog(
+            `Duración unificada para corrida global: ${maxDuration} min (máxima entre torneos en revisión).`
+          );
+        }
 
         sendProgress(70, "Ejecutando scheduler global...");
-        const schedulerResult = await scheduleGroupMatches(
-          matchesPayload,
-          [],
-          maxDuration,
-          courtIds,
-          undefined,
-          undefined,
-          sendLog,
-          {
-            algorithm: "with-restrictions",
-            tournamentSlots: selectedSlots.map((slot) => ({
-              id: slot.id,
-              slot_date: slot.slot_date,
-              start_time: slot.start_time,
-              end_time: slot.end_time,
-            })),
-            teamCannotPlaySlotIds,
-            blockedCourtIdsByTournamentSlotId,
-            teamDisplayNames,
-            groupDisplayNames,
-          }
+        const scheduleDaysFromSlots = buildScheduleDaysFromSlots(
+          selectedSlots.map((slot) => ({
+            id: slot.id,
+            slot_date: slot.slot_date,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+          }))
         );
+
+        const schedulerResult = useRestrictions
+          ? await scheduleGroupMatches(
+              matchesPayload,
+              [],
+              maxDuration,
+              courtIds,
+              undefined,
+              undefined,
+              sendLog,
+              {
+                algorithm: "with-restrictions",
+                tournamentSlots: selectedSlots.map((slot) => ({
+                  id: slot.id,
+                  slot_date: slot.slot_date,
+                  start_time: slot.start_time,
+                  end_time: slot.end_time,
+                })),
+                teamCannotPlaySlotIds,
+                blockedCourtIdsByTournamentSlotId,
+                teamDisplayNames,
+                groupDisplayNames,
+              }
+            )
+          : await scheduleGroupMatches(
+              matchesPayload,
+              scheduleDaysFromSlots,
+              maxDuration,
+              courtIds,
+              undefined,
+              undefined,
+              sendLog,
+              {
+                algorithm: "default",
+                teamDisplayNames,
+                groupDisplayNames,
+              }
+            );
 
         if (!schedulerResult.success || schedulerResult.assignments.length === 0) {
           sendError(
