@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Loader2Icon, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
 import { tournamentsService, paymentMethodsService } from "@/services";
@@ -47,15 +49,25 @@ export default function PaymentsTab({
 }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [localPayments, setLocalPayments] = useState<Map<string, {
+  const [savingPricingSettings, setSavingPricingSettings] = useState(false);
+  type LocalPaymentRow = {
     has_paid: boolean;
+    is_registration_free: boolean;
     payment_method_id: number | null;
     notes: string | null;
-  }>>(new Map());
+  };
 
-  const { data: paymentsData, isLoading } = useQuery({
+  const [localPayments, setLocalPayments] = useState<Map<string, LocalPaymentRow>>(new Map());
+
+  const {
+    data: paymentsData,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ["tournament-payments", tournament.id],
     queryFn: () => fetchPayments(tournament.id),
+    retry: 1,
   });
 
   const { data: paymentMethods } = useQuery({
@@ -63,9 +75,73 @@ export default function PaymentsTab({
     queryFn: fetchPaymentMethods,
   });
 
+  const [discountPercent, setDiscountPercent] = useState<number>(20);
+
   const payments = paymentsData?.payments || [];
   const registrationFee = paymentsData?.registration_fee ?? tournament.registration_fee ?? 0;
   const paymentMethodsList = paymentMethods || [];
+  const defaultPricingSettings = {
+    puntuable_lower_category_discount_percent: 20,
+  };
+  const pricingSettings = paymentsData?.pricing_settings ?? defaultPricingSettings;
+
+  useEffect(() => {
+    if (pricingSettings) {
+      setDiscountPercent(pricingSettings.puntuable_lower_category_discount_percent);
+    }
+  }, [pricingSettings]);
+
+  const getAmountDue = (p: TournamentRegistrationPaymentDTO) =>
+    typeof p.amount_due === "number" ? p.amount_due : registrationFee;
+
+  const getEffectiveRow = (
+    p: TournamentRegistrationPaymentDTO,
+    key: string
+  ): LocalPaymentRow => {
+    const local = localPayments.get(key);
+    if (local) return local;
+    return {
+      has_paid: p.has_paid,
+      is_registration_free: p.is_registration_free ?? false,
+      payment_method_id: p.payment_method_id,
+      notes: p.notes,
+    };
+  };
+
+  const getDisplayAmountDue = (p: TournamentRegistrationPaymentDTO, key: string) => {
+    const row = getEffectiveRow(p, key);
+    if (row.is_registration_free) return 0;
+    return getAmountDue(p);
+  };
+
+  const getDisplayPricingReason = (p: TournamentRegistrationPaymentDTO, key: string) => {
+    const row = getEffectiveRow(p, key);
+    if (row.is_registration_free) return "Inscripción gratis (manual)";
+    return p.pricing_reason ?? "—";
+  };
+
+  const handleSavePricingSettings = async () => {
+    setSavingPricingSettings(true);
+    try {
+      const res = await fetch("/api/registration-pricing-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          puntuable_lower_category_discount_percent: discountPercent,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Error al guardar configuración");
+      }
+      toast.success("Configuración de cuotas actualizada");
+      queryClient.invalidateQueries({ queryKey: ["tournament-payments", tournament.id] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error al guardar");
+    } finally {
+      setSavingPricingSettings(false);
+    }
+  };
 
   // Agrupar pagos por equipo
   const paymentsByTeam = new Map<number, TournamentRegistrationPaymentDTO[]>();
@@ -77,27 +153,35 @@ export default function PaymentsTab({
     paymentsByTeam.get(teamId)!.push(payment);
   });
 
-  const handlePaymentChange = (key: string, hasPaid: boolean) => {
-    const current = localPayments.get(key) || {
-      has_paid: false,
-      payment_method_id: null,
-      notes: null,
-    };
+  const handlePaymentChange = (
+    p: TournamentRegistrationPaymentDTO,
+    key: string,
+    hasPaid: boolean
+  ) => {
+    const current = getEffectiveRow(p, key);
     setLocalPayments(new Map(localPayments.set(key, {
       ...current,
       has_paid: hasPaid,
     })));
   };
 
-  const handleMethodChange = (key: string, methodId: string) => {
-    const current = localPayments.get(key) || {
-      has_paid: false,
-      payment_method_id: null,
-      notes: null,
-    };
+  const handleMethodChange = (p: TournamentRegistrationPaymentDTO, key: string, methodId: string) => {
+    const current = getEffectiveRow(p, key);
     setLocalPayments(new Map(localPayments.set(key, {
       ...current,
       payment_method_id: methodId === "none" ? null : Number(methodId),
+    })));
+  };
+
+  const handleRegistrationFreeChange = (
+    p: TournamentRegistrationPaymentDTO,
+    key: string,
+    isFree: boolean
+  ) => {
+    const current = getEffectiveRow(p, key);
+    setLocalPayments(new Map(localPayments.set(key, {
+      ...current,
+      is_registration_free: isFree,
     })));
   };
 
@@ -150,11 +234,18 @@ export default function PaymentsTab({
   const totalPlayers = payments.length;
   const paidPlayers = payments.filter(p => {
     const key = getPaymentKey(p.tournament_team_id, p.player_id);
-    const local = localPayments.get(key);
-    return local ? local.has_paid : p.has_paid;
+    const row = getEffectiveRow(p, key);
+    return row.has_paid;
   }).length;
-  const totalExpected = totalPlayers * registrationFee;
-  const totalPaid = paidPlayers * registrationFee;
+  const totalExpected = payments.reduce(
+    (sum, p) => sum + getDisplayAmountDue(p, getPaymentKey(p.tournament_team_id, p.player_id)),
+    0
+  );
+  const totalPaid = payments.reduce((sum, p) => {
+    const key = getPaymentKey(p.tournament_team_id, p.player_id);
+    const row = getEffectiveRow(p, key);
+    return row.has_paid ? sum + getDisplayAmountDue(p, key) : sum;
+  }, 0);
 
   // Calcular recaudación por medio de pago
   const revenueByPaymentMethod = useMemo(() => {
@@ -162,9 +253,9 @@ export default function PaymentsTab({
 
     payments.forEach(payment => {
       const key = getPaymentKey(payment.tournament_team_id, payment.player_id);
-      const local = localPayments.get(key);
-      const hasPaid = local ? local.has_paid : payment.has_paid;
-      const methodId = local?.payment_method_id ?? payment.payment_method_id;
+      const row = getEffectiveRow(payment, key);
+      const hasPaid = row.has_paid;
+      const methodId = row.payment_method_id;
 
       if (hasPaid && methodId) {
         const method = paymentMethodsList.find(m => m.id === methodId);
@@ -176,7 +267,7 @@ export default function PaymentsTab({
           count: 0,
         };
         
-        existing.amount += registrationFee;
+        existing.amount += getDisplayAmountDue(payment, key);
         existing.count += 1;
         revenueMap.set(methodId, existing);
       }
@@ -195,21 +286,80 @@ export default function PaymentsTab({
     );
   }
 
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Pagos de Inscripción</CardTitle>
+          <CardDescription>
+            No se pudieron cargar los datos de pagos. Suele deberse a que falta aplicar la migración
+            SQL en la base (columna{" "}
+            <code className="rounded bg-muted px-1 text-xs">is_registration_free</code> en{" "}
+            <code className="rounded bg-muted px-1 text-xs">tournament_registration_payments</code>
+            ).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-destructive">
+          {error instanceof Error ? error.message : "Error desconocido"}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Pagos de Inscripción</CardTitle>
         <CardDescription>
-          Registrar los pagos de inscripción por jugador del torneo
+          Registrar los pagos de inscripción por jugador del torneo. Las cuotas pueden variar según
+          descuentos por categoría en torneos puntuables; puedes marcar una inscripción como gratis
+          de forma manual con la columna <strong>Gratis</strong> (si la tabla es ancha, desplázate
+          horizontalmente).
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Configuración global de cuotas</h3>
+              <p className="text-xs text-muted-foreground">
+                Aplica a todos los torneos: descuento por categoría inferior en torneos puntuables con
+                categoría específica.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="discount-pct">Descuento categoría inferior (%)</Label>
+                <Input
+                  id="discount-pct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={discountPercent}
+                  onChange={(e) => setDiscountPercent(Number(e.target.value))}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSavePricingSettings}
+                disabled={savingPricingSettings}
+              >
+                {savingPricingSettings ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Guardar configuración"
+                )}
+              </Button>
+            </div>
+          </div>
+
           {/* Resumen de pagos */}
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-muted rounded-lg">
               <div>
-                <div className="text-sm text-muted-foreground">Precio por jugador</div>
+                <div className="text-sm text-muted-foreground">Cuota base (torneo)</div>
                 <div className="text-2xl font-bold">${registrationFee.toFixed(2)}</div>
               </div>
               <div>
@@ -276,15 +426,17 @@ export default function PaymentsTab({
                 <TableRow>
                   <TableHead>Pareja</TableHead>
                   <TableHead>Jugador</TableHead>
-                  <TableHead className="text-center">Pagó</TableHead>
-                  <TableHead>Medio de pago</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
+                  <TableHead className="text-center w-[72px]">Gratis</TableHead>
+                  <TableHead className="text-center w-[72px]">Pagó</TableHead>
+                  <TableHead className="min-w-[140px]">Medio de pago</TableHead>
+                  <TableHead className="text-right">Cuota</TableHead>
+                  <TableHead className="text-muted-foreground min-w-[120px]">Detalle</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {payments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       No hay equipos registrados todavía
                     </TableCell>
                   </TableRow>
@@ -300,9 +452,10 @@ export default function PaymentsTab({
                         {/* Jugador 1 */}
                         {player1Payment && (() => {
                           const key = getPaymentKey(teamId, player1Payment.player_id);
-                          const localData = localPayments.get(key);
-                          const hasPaid = localData?.has_paid ?? player1Payment.has_paid;
-                          const methodId = localData?.payment_method_id ?? player1Payment.payment_method_id;
+                          const row = getEffectiveRow(player1Payment, key);
+                          const hasPaid = row.has_paid;
+                          const isFree = row.is_registration_free;
+                          const methodId = row.payment_method_id;
                           const playerName = player1Payment.player 
                             ? `${player1Payment.player.first_name} ${player1Payment.player.last_name}`
                             : 'Jugador 1';
@@ -317,17 +470,31 @@ export default function PaymentsTab({
                               <TableCell>{playerName}</TableCell>
                               <TableCell className="text-center">
                                 <Checkbox
+                                  checked={isFree}
+                                  onCheckedChange={(checked) =>
+                                    handleRegistrationFreeChange(
+                                      player1Payment,
+                                      key,
+                                      checked as boolean
+                                    )
+                                  }
+                                  aria-label="Inscripción gratis"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
                                   checked={hasPaid}
                                   onCheckedChange={(checked) =>
-                                    handlePaymentChange(key, checked as boolean)
+                                    handlePaymentChange(player1Payment, key, checked as boolean)
                                   }
+                                  aria-label="Pagó inscripción"
                                 />
                               </TableCell>
                               <TableCell>
                                 <Select
                                   value={methodId?.toString() || "none"}
                                   onValueChange={(value) =>
-                                    handleMethodChange(key, value)
+                                    handleMethodChange(player1Payment, key, value)
                                   }
                                   disabled={!hasPaid}
                                 >
@@ -345,7 +512,12 @@ export default function PaymentsTab({
                                 </Select>
                               </TableCell>
                               <TableCell className="text-right">
-                                {hasPaid ? `$${registrationFee.toFixed(2)}` : '-'}
+                                <span className={hasPaid ? "text-green-700 font-medium" : ""}>
+                                  ${getDisplayAmountDue(player1Payment, key).toFixed(2)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground max-w-[240px] align-top">
+                                {getDisplayPricingReason(player1Payment, key)}
                               </TableCell>
                             </TableRow>
                           );
@@ -354,9 +526,10 @@ export default function PaymentsTab({
                         {/* Jugador 2 */}
                         {player2Payment && (() => {
                           const key = getPaymentKey(teamId, player2Payment.player_id);
-                          const localData = localPayments.get(key);
-                          const hasPaid = localData?.has_paid ?? player2Payment.has_paid;
-                          const methodId = localData?.payment_method_id ?? player2Payment.payment_method_id;
+                          const row = getEffectiveRow(player2Payment, key);
+                          const hasPaid = row.has_paid;
+                          const isFree = row.is_registration_free;
+                          const methodId = row.payment_method_id;
                           const playerName = player2Payment.player 
                             ? `${player2Payment.player.first_name} ${player2Payment.player.last_name}`
                             : 'Jugador 2';
@@ -369,17 +542,31 @@ export default function PaymentsTab({
                               <TableCell>{playerName}</TableCell>
                               <TableCell className="text-center">
                                 <Checkbox
+                                  checked={isFree}
+                                  onCheckedChange={(checked) =>
+                                    handleRegistrationFreeChange(
+                                      player2Payment,
+                                      key,
+                                      checked as boolean
+                                    )
+                                  }
+                                  aria-label="Inscripción gratis"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
                                   checked={hasPaid}
                                   onCheckedChange={(checked) =>
-                                    handlePaymentChange(key, checked as boolean)
+                                    handlePaymentChange(player2Payment, key, checked as boolean)
                                   }
+                                  aria-label="Pagó inscripción"
                                 />
                               </TableCell>
                               <TableCell>
                                 <Select
                                   value={methodId?.toString() || "none"}
                                   onValueChange={(value) =>
-                                    handleMethodChange(key, value)
+                                    handleMethodChange(player2Payment, key, value)
                                   }
                                   disabled={!hasPaid}
                                 >
@@ -397,7 +584,12 @@ export default function PaymentsTab({
                                 </Select>
                               </TableCell>
                               <TableCell className="text-right">
-                                {hasPaid ? `$${registrationFee.toFixed(2)}` : '-'}
+                                <span className={hasPaid ? "text-green-700 font-medium" : ""}>
+                                  ${getDisplayAmountDue(player2Payment, key).toFixed(2)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground max-w-[240px] align-top">
+                                {getDisplayPricingReason(player2Payment, key)}
                               </TableCell>
                             </TableRow>
                           );

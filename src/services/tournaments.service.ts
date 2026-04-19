@@ -355,7 +355,12 @@ class TournamentsService {
     tournamentId: number,
     teamId: number,
     playerId: number,
-    payment: { has_paid?: boolean; payment_method_id?: number | null; notes?: string | null }
+    payment: {
+      has_paid?: boolean;
+      is_registration_free?: boolean;
+      payment_method_id?: number | null;
+      notes?: string | null;
+    }
   ): Promise<TournamentRegistrationPaymentDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/payments`, {
       method: "POST",
@@ -371,7 +376,12 @@ class TournamentsService {
   async updateRegistrationPayment(
     tournamentId: number,
     paymentId: number,
-    updates: { has_paid?: boolean; payment_method_id?: number | null; notes?: string | null }
+    updates: {
+      has_paid?: boolean;
+      is_registration_free?: boolean;
+      payment_method_id?: number | null;
+      notes?: string | null;
+    }
   ): Promise<TournamentRegistrationPaymentDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/payments`, {
       method: "PATCH",

@@ -3,6 +3,7 @@
 -- =========================================================
 
 DROP TABLE IF EXISTS tournament_team_schedule_restrictions;
+DROP TABLE IF EXISTS registration_pricing_settings;
 DROP TABLE IF EXISTS tournament_registration_payments;
 DROP TABLE IF EXISTS tournament_group_standings;
 DROP TABLE IF EXISTS tournament_playoffs;
@@ -593,6 +594,7 @@ CREATE TABLE tournament_registration_payments (
     user_uid                UUID NOT NULL,
     
     has_paid                BOOLEAN NOT NULL DEFAULT FALSE,
+    is_registration_free  BOOLEAN NOT NULL DEFAULT FALSE,
     payment_method_id       BIGINT REFERENCES payment_methods(id),
     
     notes                   TEXT,
@@ -810,3 +812,18 @@ CREATE TABLE player_tournament_points (
 
 CREATE INDEX idx_player_tournament_points_category_year ON player_tournament_points(category_id, year);
 CREATE INDEX idx_player_tournament_points_player_year ON player_tournament_points(player_id, year);
+
+-- =========================================================
+-- REGISTRATION_PRICING_SETTINGS (configuración global de cuotas)
+-- =========================================================
+
+CREATE TABLE registration_pricing_settings (
+    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    puntuable_lower_category_discount_percent NUMERIC(5, 2) NOT NULL DEFAULT 20
+        CHECK (
+            puntuable_lower_category_discount_percent >= 0
+            AND puntuable_lower_category_discount_percent <= 100
+        )
+);
+
+INSERT INTO registration_pricing_settings (id) VALUES (1);

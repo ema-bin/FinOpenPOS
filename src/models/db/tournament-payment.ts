@@ -5,6 +5,7 @@ export interface TournamentRegistrationPayment {
   player_id: number;
   user_uid: string;
   has_paid: boolean;
+  is_registration_free: boolean;
   payment_method_id: number | null;
   notes: string | null;
   created_at: string;
@@ -16,12 +17,14 @@ export interface CreateTournamentPaymentInput {
   tournament_team_id: number;
   player_id: number;
   has_paid?: boolean;
+  is_registration_free?: boolean;
   payment_method_id?: number | null;
   notes?: string | null;
 }
 
 export interface UpdateTournamentPaymentInput {
   has_paid?: boolean;
+  is_registration_free?: boolean;
   payment_method_id?: number | null;
   notes?: string | null;
 }
