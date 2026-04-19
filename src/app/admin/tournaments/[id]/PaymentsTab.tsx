@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,8 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Loader2Icon, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
 import { tournamentsService, paymentMethodsService } from "@/services";
@@ -49,7 +47,6 @@ export default function PaymentsTab({
 }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [savingPricingSettings, setSavingPricingSettings] = useState(false);
   type LocalPaymentRow = {
     has_paid: boolean;
     is_registration_free: boolean;
@@ -75,21 +72,9 @@ export default function PaymentsTab({
     queryFn: fetchPaymentMethods,
   });
 
-  const [discountPercent, setDiscountPercent] = useState<number>(20);
-
   const payments = paymentsData?.payments || [];
   const registrationFee = paymentsData?.registration_fee ?? tournament.registration_fee ?? 0;
   const paymentMethodsList = paymentMethods || [];
-  const defaultPricingSettings = {
-    puntuable_lower_category_discount_percent: 20,
-  };
-  const pricingSettings = paymentsData?.pricing_settings ?? defaultPricingSettings;
-
-  useEffect(() => {
-    if (pricingSettings) {
-      setDiscountPercent(pricingSettings.puntuable_lower_category_discount_percent);
-    }
-  }, [pricingSettings]);
 
   const getAmountDue = (p: TournamentRegistrationPaymentDTO) =>
     typeof p.amount_due === "number" ? p.amount_due : registrationFee;
@@ -118,29 +103,6 @@ export default function PaymentsTab({
     const row = getEffectiveRow(p, key);
     if (row.is_registration_free) return "Inscripción gratis (manual)";
     return p.pricing_reason ?? "—";
-  };
-
-  const handleSavePricingSettings = async () => {
-    setSavingPricingSettings(true);
-    try {
-      const res = await fetch("/api/registration-pricing-settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          puntuable_lower_category_discount_percent: discountPercent,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Error al guardar configuración");
-      }
-      toast.success("Configuración de cuotas actualizada");
-      queryClient.invalidateQueries({ queryKey: ["tournament-payments", tournament.id] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error al guardar");
-    } finally {
-      setSavingPricingSettings(false);
-    }
   };
 
   // Agrupar pagos por equipo
@@ -311,50 +273,13 @@ export default function PaymentsTab({
       <CardHeader>
         <CardTitle>Pagos de Inscripción</CardTitle>
         <CardDescription>
-          Registrar los pagos de inscripción por jugador del torneo. Las cuotas pueden variar según
-          descuentos por categoría en torneos puntuables; puedes marcar una inscripción como gratis
-          de forma manual con la columna <strong>Gratis</strong> (si la tabla es ancha, desplázate
-          horizontalmente).
+          Registrar pagos por jugador. Los descuentos por categoría en puntuables vienen de la
+          configuración global en la lista de torneos. Podés marcar una inscripción como gratis con
+          la columna <strong>Gratis</strong> (si la tabla es ancha, desplazate horizontalmente).
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="rounded-lg border bg-card p-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold">Configuración global de cuotas</h3>
-              <p className="text-xs text-muted-foreground">
-                Aplica a todos los torneos: descuento por categoría inferior en torneos puntuables con
-                categoría específica.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 items-end">
-              <div className="space-y-2">
-                <Label htmlFor="discount-pct">Descuento categoría inferior (%)</Label>
-                <Input
-                  id="discount-pct"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={discountPercent}
-                  onChange={(e) => setDiscountPercent(Number(e.target.value))}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleSavePricingSettings}
-                disabled={savingPricingSettings}
-              >
-                {savingPricingSettings ? (
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Guardar configuración"
-                )}
-              </Button>
-            </div>
-          </div>
-
           {/* Resumen de pagos */}
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-muted rounded-lg">
