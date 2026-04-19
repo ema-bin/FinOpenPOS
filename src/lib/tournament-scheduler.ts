@@ -209,6 +209,8 @@ export async function scheduleGroupMatches(
     tournamentSlots?: TournamentSlotInput[];
     /** Por equipo, IDs de slots (tournament_group_slots.id) donde can_play = false. */
     teamCannotPlaySlotIds?: Map<number, Set<number>>;
+    /** Por slot del torneo, canchas ocupadas por torneos solapados. */
+    blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>;
     /** Por equipo, etiqueta para logs (ej. "Larralde-Stefani"). */
     teamDisplayNames?: Map<number, string>;
     /** Por grupo (tournament_group_id), nombre de la zona (tournament_groups.name, ej. "Zona E"). */
@@ -229,6 +231,7 @@ export async function scheduleGroupMatches(
       onLog,
       options?.tournamentSlots,
       options?.teamCannotPlaySlotIds,
+      options?.blockedCourtIdsByTournamentSlotId,
       options?.teamDisplayNames,
       options?.groupDisplayNames
     );
