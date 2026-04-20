@@ -35,6 +35,7 @@ import type { TournamentStatus } from "@/models/db/tournament";
 import type { Category } from "@/models/db/category";
 import { tournamentsService } from "@/services";
 import { RankingPuntuableSection } from "@/components/ranking-puntuable-section";
+import { RegistrationPricingSettingsSection } from "./RegistrationPricingSettingsSection";
 
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<TournamentListItem[]>([]);
@@ -270,6 +271,9 @@ export default function TournamentsPage() {
             </div>
           )}
         </div>
+
+        <RegistrationPricingSettingsSection />
+
         {tournaments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Todavía no creaste ningún torneo.

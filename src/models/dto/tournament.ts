@@ -227,6 +227,11 @@ export interface TournamentRegistrationPaymentDTO {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** Monto a cobrar según reglas (descuentos / gratis manual). */
+  amount_due?: number;
+  pricing_reason?: string | null;
+  /** Marcado manual: inscripción sin costo */
+  is_registration_free?: boolean;
   player?: {
     id: number;
     first_name: string;
@@ -239,7 +244,13 @@ export interface TournamentRegistrationPaymentDTO {
   };
 }
 
+export interface RegistrationPricingSettingsDTO {
+  puntuable_lower_category_discount_percent: number;
+}
+
 export interface TournamentPaymentsApiResponse {
   payments: TournamentRegistrationPaymentDTO[];
   registration_fee: number;
+  /** Presente cuando el servidor tiene la tabla de configuración de cuotas. */
+  pricing_settings?: RegistrationPricingSettingsDTO;
 }
