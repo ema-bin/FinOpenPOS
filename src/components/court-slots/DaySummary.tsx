@@ -116,11 +116,11 @@ export function DaySummary({
             </h2>
             
             <div className="space-y-2 text-xs">
-              {unpaidByCourtType.INDOOR.length > 0 && (
+              {unpaidByCourtType.C1.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold mb-1 text-foreground">INDOOR</h3>
+                  <h3 className="text-xs font-semibold mb-1 text-foreground">C1</h3>
                   <div className="space-y-0.5 pl-2">
-                    {unpaidByCourtType.INDOOR.map((slot, idx) => (
+                    {unpaidByCourtType.C1.map((slot, idx) => (
                       <p key={idx} className="text-[11px] font-medium text-destructive/90">
                         {slot.courtName} - {slot.timeRange} ({slot.unpaidCount} jug.)
                       </p>
@@ -129,11 +129,11 @@ export function DaySummary({
                 </div>
               )}
 
-              {unpaidByCourtType.OUTDOOR.length > 0 && (
+              {unpaidByCourtType.C2.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold mb-1 text-foreground">OUTDOOR</h3>
+                  <h3 className="text-xs font-semibold mb-1 text-foreground">C2</h3>
                   <div className="space-y-0.5 pl-2">
-                    {unpaidByCourtType.OUTDOOR.map((slot, idx) => (
+                    {unpaidByCourtType.C2.map((slot, idx) => (
                       <p key={idx} className="text-[11px] font-medium text-destructive/90">
                         {slot.courtName} - {slot.timeRange} ({slot.unpaidCount} jug.)
                       </p>
@@ -185,20 +185,20 @@ export function DaySummary({
           ) : (
             <>
               <div className="space-y-2 text-xs">
-                {playedByCourtType.INDOOR.length > 0 && (
+                {playedByCourtType.C1.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold mb-1">INDOOR</h3>
+                    <h3 className="text-xs font-semibold mb-1">C1</h3>
                     <p className="text-[11px] text-muted-foreground pl-2">
-                      {playedByCourtType.INDOOR.join(", ")}
+                      {playedByCourtType.C1.join(", ")}
                     </p>
                   </div>
                 )}
 
-                {playedByCourtType.OUTDOOR.length > 0 && (
+                {playedByCourtType.C2.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold mb-1">OUTDOOR</h3>
+                    <h3 className="text-xs font-semibold mb-1">C2</h3>
                     <p className="text-[11px] text-muted-foreground pl-2">
-                      {playedByCourtType.OUTDOOR.join(", ")}
+                      {playedByCourtType.C2.join(", ")}
                     </p>
                   </div>
                 )}

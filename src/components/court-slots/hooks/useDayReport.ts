@@ -86,8 +86,8 @@ export function useDayReport(
       courtsMap.set(courtName, existingCourt);
 
       // Debug: verificar court_id
-      if (slot.court?.name?.toUpperCase().includes("INDOOR")) {
-        console.log(`[useDayReport] Slot INDOOR - court_id: ${slot.court?.id}, start_time: ${slot.start_time}, court_name: ${slot.court?.name}`);
+      if (slot.court?.name?.toUpperCase().includes("C1") || slot.court?.name?.toUpperCase().includes("INDOOR")) {
+        console.log(`[useDayReport] Slot C1 - court_id: ${slot.court?.id}, start_time: ${slot.start_time}, court_name: ${slot.court?.name}`);
       }
       
       const pricePerPlayer = getPricePerPlayer(
@@ -97,7 +97,7 @@ export function useDayReport(
         slot.court?.name // Para fallback
       );
       
-      if (slot.court?.name?.toUpperCase().includes("INDOOR")) {
+      if (slot.court?.name?.toUpperCase().includes("C1") || slot.court?.name?.toUpperCase().includes("INDOOR")) {
         console.log(`[useDayReport] Price calculated: ${pricePerPlayer}`);
       }
 
@@ -198,8 +198,8 @@ export function useDayReport(
 
   const playedByCourtType = useMemo(() => {
     const groups: Record<string, string[]> = {
-      INDOOR: [],
-      OUTDOOR: [],
+      C1: [],
+      C2: [],
       OTRAS: [],
     };
 
@@ -219,8 +219,8 @@ export function useDayReport(
 
   const unpaidByCourtType = useMemo(() => {
     const groups: Record<string, Array<{ courtName: string; timeRange: string; unpaidCount: number }>> = {
-      INDOOR: [],
-      OUTDOOR: [],
+      C1: [],
+      C2: [],
       OTRAS: [],
     };
 
