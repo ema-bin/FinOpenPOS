@@ -13,6 +13,13 @@ import { MatchResultForm } from "@/components/match-result-form";
 import { Loader2Icon, PencilIcon, CheckIcon, XIcon, ArrowLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatDate, formatTime } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import { TournamentScheduleDialog, ScheduleConfig } from "@/components/tournament-schedule-dialog";
@@ -156,6 +163,7 @@ export default function GroupsTab({
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
+  const [editCourtId, setEditCourtId] = useState<string>("none");
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [deletingGroups, setDeletingGroups] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
@@ -273,12 +281,14 @@ export default function GroupsTab({
     // Convertir fecha a formato YYYY-MM-DD para el input
     setEditDate(match.match_date ? match.match_date.split("T")[0] : "");
     setEditTime(match.start_time || "");
+    setEditCourtId(match.court_id ? String(match.court_id) : "none");
   };
 
   const handleCancelEdit = () => {
     setEditingMatchId(null);
     setEditDate("");
     setEditTime("");
+    setEditCourtId("none");
   };
 
   const handleSaveSchedule = async (matchId: number) => {
@@ -291,10 +301,12 @@ export default function GroupsTab({
       await tournamentMatchesService.scheduleMatch(matchId, {
         date: editDate,
         start_time: editTime,
+        court_id: editCourtId === "none" ? undefined : Number(editCourtId),
       });
       setEditingMatchId(null);
       setEditDate("");
       setEditTime("");
+      setEditCourtId("none");
       load();
     } catch (err: any) {
       console.error(err);
@@ -625,6 +637,19 @@ export default function GroupsTab({
                             className="h-7 text-xs"
                             step="60"
                           />
+                          <Select value={editCourtId} onValueChange={setEditCourtId}>
+                            <SelectTrigger className="h-7 w-[150px] text-xs">
+                              <SelectValue placeholder="Cancha" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sin cancha</SelectItem>
+                              {courts.map((court) => (
+                                <SelectItem key={court.id} value={String(court.id)}>
+                                  {court.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
                             size="sm"
                             variant="ghost"

@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2Icon, PencilIcon, CheckIcon, XIcon, TrashIcon, PlayIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { MatchResultForm } from "@/components/match-result-form";
@@ -67,6 +74,7 @@ export default function PlayoffsTab({
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
+  const [editCourtId, setEditCourtId] = useState<string>("none");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [simulatingResults, setSimulatingResults] = useState(false);
@@ -112,6 +120,7 @@ export default function PlayoffsTab({
       setEditingMatchId(matchId);
       setEditDate(row.match.match_date ? row.match.match_date.split("T")[0] : "");
       setEditTime(row.match.start_time || "");
+      setEditCourtId(row.match.court_id ? String(row.match.court_id) : "none");
     }
   };
 
@@ -119,6 +128,7 @@ export default function PlayoffsTab({
     setEditingMatchId(null);
     setEditDate("");
     setEditTime("");
+    setEditCourtId("none");
   };
 
   const handleSaveSchedule = async (matchId: number) => {
@@ -131,10 +141,12 @@ export default function PlayoffsTab({
       await tournamentMatchesService.scheduleMatch(matchId, {
         date: editDate,
         start_time: editTime,
+        court_id: editCourtId === "none" ? undefined : Number(editCourtId),
       });
       setEditingMatchId(null);
       setEditDate("");
       setEditTime("");
+      setEditCourtId("none");
       load(); // load() ahora invalida cache
     } catch (err: any) {
       console.error(err);
@@ -379,6 +391,19 @@ export default function PlayoffsTab({
                       className="h-7 text-xs"
                       step="60"
                     />
+                    <Select value={editCourtId} onValueChange={setEditCourtId}>
+                      <SelectTrigger className="h-7 w-[150px] text-xs">
+                        <SelectValue placeholder="Cancha" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin cancha</SelectItem>
+                        {courts.map((court) => (
+                          <SelectItem key={court.id} value={String(court.id)}>
+                            {court.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="sm"
                       variant="ghost"
