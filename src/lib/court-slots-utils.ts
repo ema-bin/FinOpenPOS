@@ -71,8 +71,8 @@ export function getPricePerPlayer(
     console.log(`[getPricePerPlayer] No court_id provided, using fallback for: ${courtName}`);
     if (courtName) {
       const upper = courtName.toUpperCase();
-      if (upper.includes("INDOOR")) return 7000;
-      if (upper.includes("OUTDOOR")) return 5000;
+      if (upper.includes("C1") || upper.includes("INDOOR")) return 7000;
+      if (upper.includes("C2") || upper.includes("OUTDOOR")) return 5000;
     }
     return 0;
   }
@@ -87,8 +87,8 @@ export function getPricePerPlayer(
       return parseInt(id, 10) === courtId;
     });
     
-    if (courtName?.toUpperCase().includes("INDOOR")) {
-      console.log(`[getPricePerPlayer] INDOOR court_id=${courtId} at ${normalizedTime}`);
+    if (courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) {
+      console.log(`[getPricePerPlayer] C1 court_id=${courtId} at ${normalizedTime}`);
       console.log(`[getPricePerPlayer] Pricing map size: ${pricingMap.size}, entries for this court: ${courtEntries.length}`);
       console.log(`[getPricePerPlayer] Court entries:`, courtEntries);
     }
@@ -107,7 +107,7 @@ export function getPricePerPlayer(
         // Si el tiempo es exactamente el start_time, incluirlo
         // Si el tiempo es exactamente el end_time, NO incluirlo (pertenece al siguiente rango)
         const matches = normalizedTime >= start && normalizedTime < end;
-        if (courtName?.toUpperCase().includes("INDOOR") && matches) {
+        if ((courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) && matches) {
           console.log(`[getPricePerPlayer] Match found: ${start}-${end} = ${price}`);
         }
         return matches;
@@ -118,17 +118,17 @@ export function getPricePerPlayer(
       // Si hay múltiples coincidencias, usar el primero (rango que empieza más tarde)
       // Esto asegura que en el borde (ej: 19:00) use el rango que empieza a las 19:00
       const selected = matchingEntries[0];
-      if (courtName?.toUpperCase().includes("INDOOR")) {
+      if (courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) {
         console.log(`[getPricePerPlayer] Selected: ${selected.start}-${selected.end} = ${selected.price}`);
       }
       return selected.price;
     } else {
-      if (courtName?.toUpperCase().includes("INDOOR")) {
+      if (courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) {
         console.log(`[getPricePerPlayer] No matches found, using fallback`);
       }
     }
   } else {
-    if (courtName?.toUpperCase().includes("INDOOR")) {
+    if (courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) {
       console.log(`[getPricePerPlayer] Pricing map empty or missing: map=${!!pricingMap}, startTime=${startTime}, size=${pricingMap?.size || 0}`);
     }
   }
@@ -136,11 +136,11 @@ export function getPricePerPlayer(
   // Fallback a valores hardcodeados si no hay precios en DB
   if (courtName) {
     const upper = courtName.toUpperCase();
-    if (upper.includes("INDOOR")) {
-      console.log(`[getPricePerPlayer] Using hardcoded fallback for INDOOR: 7000`);
+    if (upper.includes("C1") || upper.includes("INDOOR")) {
+      console.log(`[getPricePerPlayer] Using hardcoded fallback for C1: 7000`);
       return 7000;
     }
-    if (upper.includes("OUTDOOR")) return 5000;
+    if (upper.includes("C2") || upper.includes("OUTDOOR")) return 5000;
   }
 
   return 0;
@@ -160,8 +160,8 @@ export function getCourtType(courtName?: string | null) {
 
   const upper = courtName.toUpperCase();
 
-  if (upper.includes("INDOOR")) return "INDOOR";
-  if (upper.includes("OUTDOOR")) return "OUTDOOR";
+  if (upper.includes("C1") || upper.includes("INDOOR")) return "C1";
+  if (upper.includes("C2") || upper.includes("OUTDOOR")) return "C2";
 
   return "OTRAS";
 }

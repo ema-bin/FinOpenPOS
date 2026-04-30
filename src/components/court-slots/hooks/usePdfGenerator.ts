@@ -158,8 +158,8 @@ export function usePdfGenerator() {
         y += 2;
       };
 
-      printUnpaidGroup("INDOOR", unpaidByCourtType.INDOOR);
-      printUnpaidGroup("OUTDOOR", unpaidByCourtType.OUTDOOR);
+      printUnpaidGroup("C1", unpaidByCourtType.C1);
+      printUnpaidGroup("C2", unpaidByCourtType.C2);
       printUnpaidGroup("OTRAS", unpaidByCourtType.OTRAS);
 
       // Resumen
@@ -219,8 +219,8 @@ export function usePdfGenerator() {
         y += 7;
       };
 
-      printGroup("INDOOR", playedByCourtType.INDOOR);
-      printGroup("OUTDOOR", playedByCourtType.OUTDOOR);
+      printGroup("C1", playedByCourtType.C1);
+      printGroup("C2", playedByCourtType.C2);
       printGroup("OTRAS", playedByCourtType.OTRAS);
 
       // Resumen

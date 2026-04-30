@@ -72,7 +72,7 @@ export interface CourtSlotWithCourt extends CourtSlotDB {
   } | null;
 }
 
-export type CourtType = 'INDOOR' | 'OUTDOOR' | 'OTRAS';
+export type CourtType = 'C1' | 'C2' | 'OTRAS';
 
 export interface CourtPricingDB {
   id: number;
