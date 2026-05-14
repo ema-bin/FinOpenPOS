@@ -398,7 +398,12 @@ class TournamentsService {
 class TournamentMatchesService {
   private baseUrl = "/api/tournament-matches";
 
-  async scheduleMatch(matchId: number, input: { date: string; start_time: string; end_time?: string; court_id?: number }): Promise<void> {
+  async scheduleMatch(matchId: number, input: {
+    date: string;
+    start_time: string;
+    end_time?: string;
+    court_id?: number | null;
+  }): Promise<void> {
     const response = await fetch(`${this.baseUrl}/${matchId}/schedule`, {
       method: "PATCH",
       headers: {
@@ -408,7 +413,7 @@ class TournamentMatchesService {
         match_date: input.date,
         start_time: input.start_time,
         end_time: input.end_time,
-        court_id: input.court_id,
+        ...(input.court_id !== undefined ? { court_id: input.court_id } : {}),
       }),
     });
     if (!response.ok) {

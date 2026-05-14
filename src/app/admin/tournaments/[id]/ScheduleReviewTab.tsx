@@ -552,6 +552,7 @@ export default function ScheduleReviewTab({
               tournamentId={tournament.id}
               onScheduleUpdated={load}
               tournamentGroupSlots={data.tournamentGroupSlots}
+              groupScheduleCourtIds={data.groupScheduleCourtIds}
             />
 
             <TournamentScheduleDialog

@@ -695,9 +695,85 @@ interface RealMatchAtPosition {
  */
 function stageSeedBracketPositions(
   rankedTeams: QualifiedTeam[],
-  nextRoundSize: number
+  nextRoundSize: number,
+  teamsWithBye: number
 ): (QualifiedTeam | null)[] {
-  return seedByeTeams([...rankedTeams], nextRoundSize);
+  // Solo los que tienen bye entran al seeding de posiciones; mezclar a todos los
+  // clasificados llenaba 8 plazas con 10+ equipos y dejaba mal el play-in (13 parejas, etc.).
+  const byeTeamsOnly = rankedTeams.slice(0, teamsWithBye);
+  return seedByeTeams(byeTeamsOnly, nextRoundSize);
+}
+
+/**
+ * En cada posición null del bracket, deja anclado un equipo (el mejor del cruce) para que
+ * stageBuildRealMatchesForFirstRound asigne el rival entre los "playing" restantes.
+ */
+function preAssignPlayInAnchors(
+  nextRoundSeeded: (QualifiedTeam | null)[],
+  rankedTeams: QualifiedTeam[],
+  teamsWithBye: number
+): void {
+  const teamsPlayingInFirstRound = rankedTeams.slice(teamsWithBye);
+  if (teamsPlayingInFirstRound.length === 0) return;
+
+  const nullPositions = nextRoundSeeded
+    .map((t, i) => (t === null ? i : -1))
+    .filter((i) => i >= 0);
+  const numMatches = Math.floor(teamsPlayingInFirstRound.length / 2);
+  if (numMatches === 0 || nullPositions.length === 0) return;
+
+  const pairs = pairPlayInTeamsAvoidSameGroup(teamsPlayingInFirstRound, rankedTeams);
+  const toAssign = Math.min(numMatches, pairs.length, nullPositions.length);
+  for (let m = 0; m < toAssign; m++) {
+    nextRoundSeeded[nullPositions[m]] = pairs[m][0];
+  }
+}
+
+/** Empareja equipos play-in (mejor vs peor, evitando misma zona cuando se puede). */
+function pairPlayInTeamsAvoidSameGroup(
+  teamsPlaying: QualifiedTeam[],
+  rankedTeams: QualifiedTeam[]
+): Array<[QualifiedTeam, QualifiedTeam]> {
+  const sorted = [...teamsPlaying].sort(
+    (a, b) =>
+      rankedTeams.findIndex((t) => t.team_id === a.team_id) -
+      rankedTeams.findIndex((t) => t.team_id === b.team_id)
+  );
+  const numMatches = Math.floor(sorted.length / 2);
+  const pairs: Array<[QualifiedTeam, QualifiedTeam]> = [];
+  const usedIndices = new Set<number>();
+
+  for (let i = 0; i < numMatches; i++) {
+    let team1 = sorted[i];
+    let team2Index = sorted.length - 1 - i;
+    let team2 = sorted[team2Index];
+
+    if (team1.from_group_id === team2.from_group_id) {
+      let found = false;
+      for (let j = sorted.length - 1; j >= numMatches; j--) {
+        if (!usedIndices.has(j) && sorted[j].from_group_id !== team1.from_group_id) {
+          team2Index = j;
+          team2 = sorted[j];
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        for (let j = numMatches; j < sorted.length; j++) {
+          if (!usedIndices.has(j) && sorted[j].from_group_id !== team1.from_group_id) {
+            team2Index = j;
+            team2 = sorted[j];
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    usedIndices.add(team2Index);
+    pairs.push([team1, team2]);
+  }
+
+  return pairs;
 }
 
 /**
@@ -1015,7 +1091,12 @@ export function generatePlayoffBracket(
 
   // Rama: hay byes y equipos que juegan primera ronda
   if (teamsWithBye > 0 && teamsPlaying > 0) {
-    const nextRoundSeeded = stageSeedBracketPositions(rankedTeams, nextRoundSize);
+    const nextRoundSeeded = stageSeedBracketPositions(
+      rankedTeams,
+      nextRoundSize,
+      teamsWithBye
+    );
+    preAssignPlayInAnchors(nextRoundSeeded, rankedTeams, teamsWithBye);
     const { positionsWithByes, positionsWithTeamNeedingRival, unplacedPlaying } =
       stageClassifyPositions(
         nextRoundSeeded,

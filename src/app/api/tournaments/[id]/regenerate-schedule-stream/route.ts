@@ -2,6 +2,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
+import {
+  buildBlockedCourtsFromPhysicalSelections,
+  mergeBlockedCourtsByTournamentSlot,
+  parseTournamentPhysicalSlotSelections,
+} from "@/lib/tournament-schedule-stream-payload";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
@@ -59,10 +64,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Días y horarios se obtienen de los slots del torneo (misma fuente que las restricciones)
-    const body = await req.json().catch(() => ({}));
-    const courtIds = Array.isArray(body.courtIds) ? body.courtIds : [];
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const parsedPhysicalSlots = parseTournamentPhysicalSlotSelections(body);
+    const hasPhysicalSlotSelection = parsedPhysicalSlots.length > 0;
+    const courtIds = Array.isArray(body.courtIds)
+      ? body.courtIds
+          .map((x: unknown) => Number(x))
+          .filter((n: number): n is number => Number.isFinite(n) && n > 0)
+      : [];
     const slotIds = Array.isArray(body.slotIds) ? body.slotIds : null;
-    const matchDuration = body.matchDuration ?? 60;
+    const matchDuration =
+      typeof body.matchDuration === "number" &&
+      Number.isFinite(body.matchDuration) &&
+      body.matchDuration >= 30
+        ? body.matchDuration
+        : 60;
     const overlapTournamentIds = Array.isArray(body.overlapTournamentIds)
       ? Array.from(
           new Set(
@@ -77,13 +93,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           )
         )
       : [];
-
-    if (courtIds.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Debés seleccionar al menos una cancha" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
 
     const { data: allSlots, error: slotsError } = await supabase
       .from("tournament_group_slots")
@@ -102,10 +111,51 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const slots =
-      slotIds && slotIds.length > 0
-        ? allSlots.filter((s: { id: number }) => slotIds.includes(s.id))
-        : allSlots;
+    type GroupSlotRow = { id: number; slot_date: string; start_time: string; end_time: string };
+    const slotRows: GroupSlotRow[] = (allSlots as Array<Record<string, unknown>>).map((row) => ({
+      id: Number(row.id),
+      slot_date: String(row.slot_date ?? ""),
+      start_time: String(row.start_time ?? ""),
+      end_time: String(row.end_time ?? ""),
+    }));
+
+    const allSlotIds = new Set(slotRows.map((s) => s.id));
+    if (hasPhysicalSlotSelection) {
+      for (const p of parsedPhysicalSlots) {
+        if (!allSlotIds.has(p.tournamentGroupSlotId)) {
+          return new Response(
+            JSON.stringify({
+              error: "Hay combinaciones slot/cancha que no pertenecen a este torneo.",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
+    const effectiveCourtIds = hasPhysicalSlotSelection
+      ? Array.from(new Set(parsedPhysicalSlots.map((p) => p.courtId)))
+      : courtIds;
+
+    if (effectiveCourtIds.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Debés seleccionar al menos una cancha" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    let slots: GroupSlotRow[];
+    if (hasPhysicalSlotSelection) {
+      const chosen = new Set(parsedPhysicalSlots.map((p) => p.tournamentGroupSlotId));
+      slots = slotRows.filter((s) => chosen.has(s.id));
+    } else if (slotIds && slotIds.length > 0) {
+      const idSet = new Set(
+        slotIds.map((x: unknown) => Number(x)).filter((n: number): n is number => Number.isFinite(n))
+      );
+      slots = slotRows.filter((s) => idSet.has(s.id));
+    } else {
+      slots = slotRows;
+    }
 
     if (slots.length === 0) {
       return new Response(
@@ -114,11 +164,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const days = buildScheduleDaysFromSlots(slots);
+    const days = buildScheduleDaysFromSlots(slots as Parameters<typeof buildScheduleDaysFromSlots>[0]);
     const scheduleConfig: ScheduleConfig = {
       days,
       matchDuration,
-      courtIds,
+      courtIds: effectiveCourtIds,
     };
 
     // Crear un stream de Server-Sent Events
@@ -334,20 +384,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           });
 
           const useRestrictions = body.algorithm === "with-restrictions";
+          const useTournamentSlotMode = useRestrictions || hasPhysicalSlotSelection;
           let teamRestrictions: Map<number, Array<{ date: string; start_time: string; end_time: string }>> | undefined;
           let tournamentSlots: Array<{ id: number; slot_date: string; start_time: string; end_time: string }> | undefined;
           let teamCannotPlaySlotIds: Map<number, Set<number>> | undefined;
           let blockedCourtIdsByTournamentSlotId: Map<number, Set<number>> | undefined;
           let teamDisplayNames: Map<number, string> | undefined;
 
-          if (useRestrictions) {
+          if (useTournamentSlotMode) {
             tournamentSlots = slots.map((s: { id: number; slot_date: string; start_time: string; end_time: string }) => ({
               id: s.id,
               slot_date: s.slot_date,
               start_time: s.start_time,
               end_time: s.end_time,
             }));
+          }
 
+          if (useRestrictions) {
             const teamIds = Array.from(new Set(matches.flatMap((m) => [m.team1_id, m.team2_id]).filter((id): id is number => id !== null)));
             const { data: restrictions, error: restrictionsError } = await supabase
               .from("tournament_team_schedule_restrictions")
@@ -456,7 +509,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 teamDisplayNames!.set(id, label);
               });
             }
+          }
 
+          if (!useRestrictions && useTournamentSlotMode) {
+            teamCannotPlaySlotIds = new Map();
+          }
+
+          if (useTournamentSlotMode) {
             const scheduledMatchIdsToRegenerate = new Set(
               matches.map((match) => match.id)
             );
@@ -519,6 +578,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                 ? `Bloqueos de cancha aplicados: ${blockedCount} en ${blockedCourtIdsByTournamentSlotId.size} slot(s) por partidos ya agendados.`
                 : "Sin bloqueos de cancha por partidos ya agendados."
             );
+
+            if (hasPhysicalSlotSelection) {
+              const physicalBlocked = buildBlockedCourtsFromPhysicalSelections(
+                scheduleConfig.courtIds,
+                slots.map((s: { id: number }) => s.id),
+                parsedPhysicalSlots
+              );
+              blockedCourtIdsByTournamentSlotId =
+                mergeBlockedCourtsByTournamentSlot(blockedCourtIdsByTournamentSlotId, physicalBlocked) ??
+                blockedCourtIdsByTournamentSlotId;
+            }
           }
 
           sendLog("Horarios disponibles: slots del torneo");
@@ -542,7 +612,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
           sendProgress(60, "Generando horarios con algoritmo inteligente...");
 
-          sendLog(useRestrictions ? "Iniciando algoritmo con restricciones (slots del torneo = can_play)..." : "Iniciando algoritmo de asignación (sin restricciones)...");
+          sendLog(
+            useTournamentSlotMode
+              ? useRestrictions
+                ? "Iniciando algoritmo con restricciones (slots del torneo = can_play)..."
+                : "Iniciando algoritmo con slots del torneo y canchas elegidas por horario..."
+              : "Iniciando algoritmo de asignación (sin restricciones)..."
+          );
           sendLog(`Llamando a scheduleGroupMatches con ${matchesPayload.length} partidos...`);
           
           let schedulerResult;
@@ -561,12 +637,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               teamRestrictions,
               sendLog,
               {
-                algorithm: useRestrictions ? "with-restrictions" : "default",
-                ...(useRestrictions && tournamentSlots && teamCannotPlaySlotIds !== undefined
+                algorithm: useTournamentSlotMode ? "with-restrictions" : "default",
+                ...(useTournamentSlotMode &&
+                tournamentSlots &&
+                teamCannotPlaySlotIds !== undefined
                   ? {
                       tournamentSlots,
                       teamCannotPlaySlotIds,
-                      ...(blockedCourtIdsByTournamentSlotId
+                      ...(blockedCourtIdsByTournamentSlotId?.size
                         ? { blockedCourtIdsByTournamentSlotId }
                         : {}),
                     }
@@ -754,6 +832,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           }
 
           sendLog(`✅ Actualización completada: ${updatedCount} partidos actualizados, ${errorCount} errores`);
+
+          const { error: courtMetaError } = await supabase
+            .from("tournaments")
+            .update({ group_schedule_court_ids: scheduleConfig.courtIds })
+            .eq("id", tournamentId);
+
+          if (courtMetaError) {
+            sendLog(`⚠️ No se pudo guardar la lista de canchas del torneo: ${courtMetaError.message}`);
+          }
+
           sendProgress(100, "¡Proceso completado!");
           sendSuccess({ ok: true, updatedCount });
         } catch (error: any) {

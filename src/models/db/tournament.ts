@@ -23,6 +23,8 @@ export interface Tournament {
   /** Todos los partidos de playoffs —16avos, octavos, cuartos, etc.— (minutos) */
   match_duration_quarters_onwards: number;
   registration_fee: number;
+  /** IDs de cancha para horarios de zona (cerrar inscripción / regenerar; slots × estas canchas). */
+  group_schedule_court_ids?: number[] | null;
   created_at: string; // TIMESTAMP
 }
 
@@ -207,5 +209,7 @@ export interface TournamentGroupsData {
   standings: TournamentGroupStanding[];
   /** Slots del torneo para mapear (match_date, start_time) → slot id en revisión de horarios */
   tournamentGroupSlots?: Array<Pick<TournamentGroupSlot, "id" | "slot_date" | "start_time" | "end_time">>;
+  /** Canchas de la corrida de grupos persistidas en el torneo (revisión de horarios: slots libres por cancha). */
+  groupScheduleCourtIds?: number[];
 }
 

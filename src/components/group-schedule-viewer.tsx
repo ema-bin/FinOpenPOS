@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/date-utils";
+import { toHHMM } from "@/lib/build-schedule-days-from-slots";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import type { MatchDTO, TeamDTO, GroupDTO, TournamentGroupSlotSummary } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
@@ -44,6 +45,11 @@ interface GroupScheduleViewerProps {
   onScheduleUpdated?: () => void;
   /** Slots del torneo para detectar si un partido viola restricción horaria de algún equipo */
   tournamentGroupSlots?: TournamentGroupSlotSummary[];
+  /**
+   * Canchas de la corrida de grupos guardadas en el torneo (cerrar inscripción / regenerar).
+   * Sin esto, solo se infieren canchas ya asignadas a partidos y puede faltar una cancha sin uso.
+   */
+  groupScheduleCourtIds?: number[];
 }
 
 function teamShortLabel(team: TeamDTO): string {
@@ -150,11 +156,10 @@ export function GroupScheduleViewer({
   tournamentId,
   onScheduleUpdated,
   tournamentGroupSlots = [],
+  groupScheduleCourtIds = [],
 }: GroupScheduleViewerProps) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"matches" | "groups" | "teams">("matches");
-  const [selectedMatch1, setSelectedMatch1] = useState<number | null>(null);
-  const [selectedMatch2, setSelectedMatch2] = useState<number | null>(null);
   const [selectedGroup1, setSelectedGroup1] = useState<number | null>(null);
   const [selectedGroup2, setSelectedGroup2] = useState<number | null>(null);
   const [selectedTeam1, setSelectedTeam1] = useState<{ teamId: number; groupId: number } | null>(null);
@@ -163,9 +168,11 @@ export function GroupScheduleViewer({
   const [lastSwap, setLastSwap] = useState<{
     match1Id: number;
     match2Id: number;
-    match1Original: { date: string; start_time: string; end_time: string | null };
-    match2Original: { date: string; start_time: string; end_time: string | null };
+    match1Original: { date: string; start_time: string; end_time: string | null; court_id: number | null };
+    match2Original: { date: string; start_time: string; end_time: string | null; court_id: number | null };
   } | null>(null);
+  const [selectedRow1, setSelectedRow1] = useState<string | null>(null);
+  const [selectedRow2, setSelectedRow2] = useState<string | null>(null);
 
   // Obtener canchas para mostrar nombres
   const { data: courts = [] } = useQuery<CourtDTO[]>({
@@ -212,6 +219,156 @@ export function GroupScheduleViewer({
         return 0;
       });
   }, [matches]);
+
+  /** Lista persistida ∪ canchas ya asignadas en partidos (evita perder una cancha si la API viene incompleta). */
+  const tournamentCourtIds = useMemo(() => {
+    const persisted = groupScheduleCourtIds.filter((id) => Number.isFinite(id));
+    const fromMatches = new Set<number>();
+    for (const m of matches) {
+      if (m.phase === "group" && m.court_id != null) fromMatches.add(m.court_id);
+    }
+    if (persisted.length > 0) {
+      return Array.from(new Set([...persisted, ...Array.from(fromMatches)])).sort((a, b) => a - b);
+    }
+    return Array.from(fromMatches).sort((a, b) => a - b);
+  }, [matches, groupScheduleCourtIds]);
+
+  type ScheduleRow =
+    | {
+        key: string;
+        type: "match";
+        slotDate: string;
+        startTime: string;
+        endTime: string | null;
+        match: MatchDTO;
+      }
+    | {
+        key: string;
+        type: "free";
+        slotDate: string;
+        startTime: string;
+        endTime: string | null;
+        /** Definido cuando sabemos las canchas del torneo (partidos de zona ya tienen cancha). */
+        courtId?: number;
+      };
+
+  const scheduleRows = useMemo<ScheduleRow[]>(() => {
+    const rows: ScheduleRow[] = scheduledMatches
+      .filter((m) => m.id != null)
+      .map((match) => ({
+        key: `match-${match.id}`,
+        type: "match" as const,
+        slotDate: String(match.match_date!).trim().slice(0, 10),
+        startTime: match.start_time!,
+        endTime: match.end_time ?? null,
+        match,
+      }));
+
+    if (tournamentCourtIds.length > 0 && (tournamentGroupSlots ?? []).length > 0) {
+      const occupiedRemaining = new Map<string, number>();
+      for (const match of scheduledMatches) {
+        if (match.court_id == null || !match.match_date || !match.start_time) continue;
+        const d = String(match.match_date).trim().slice(0, 10);
+        const tNorm = toHHMM(match.start_time);
+        const cellKey = `${d}\t${tNorm}\t${match.court_id}`;
+        occupiedRemaining.set(cellKey, (occupiedRemaining.get(cellKey) ?? 0) + 1);
+      }
+
+      /** Partidos con horario pero sin cancha: ocupan una celda horario-cancha (primero en orden de iteración). */
+      const unassignedRemaining = new Map<string, number>();
+      for (const match of scheduledMatches) {
+        if (match.court_id != null || !match.match_date || !match.start_time) continue;
+        const d = String(match.match_date).trim().slice(0, 10);
+        const tNorm = toHHMM(match.start_time);
+        const dtKey = `${d}\t${tNorm}`;
+        unassignedRemaining.set(dtKey, (unassignedRemaining.get(dtKey) ?? 0) + 1);
+      }
+
+      let freeIdx = 0;
+      for (const slot of tournamentGroupSlots ?? []) {
+        const d = String(slot.slot_date).trim().slice(0, 10);
+        const tNorm = toHHMM(slot.start_time);
+        const dtKey = `${d}\t${tNorm}`;
+        for (const courtId of tournamentCourtIds) {
+          const cellKey = `${d}\t${tNorm}\t${courtId}`;
+          const rem = occupiedRemaining.get(cellKey) ?? 0;
+          if (rem > 0) {
+            occupiedRemaining.set(cellKey, rem - 1);
+          } else {
+            const u = unassignedRemaining.get(dtKey) ?? 0;
+            if (u > 0) {
+              unassignedRemaining.set(dtKey, u - 1);
+            } else {
+              rows.push({
+                key: `free-${cellKey}-${freeIdx++}`,
+                type: "free",
+                slotDate: d,
+                startTime: slot.start_time,
+                endTime: slot.end_time ?? null,
+                courtId,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      const occupiedCountByDateTime = new Map<string, number>();
+      for (const match of scheduledMatches) {
+        const d = String(match.match_date).trim().slice(0, 10);
+        const key = `${d}\t${toHHMM(match.start_time!)}`;
+        occupiedCountByDateTime.set(key, (occupiedCountByDateTime.get(key) ?? 0) + 1);
+      }
+
+      const slotCountByDateTime = new Map<
+        string,
+        { slotDate: string; startTime: string; endTime: string | null; count: number }
+      >();
+      for (const slot of tournamentGroupSlots ?? []) {
+        const d = String(slot.slot_date).trim().slice(0, 10);
+        const key = `${d}\t${toHHMM(slot.start_time)}`;
+        const current = slotCountByDateTime.get(key);
+        if (current) {
+          current.count += 1;
+        } else {
+          slotCountByDateTime.set(key, {
+            slotDate: d,
+            startTime: slot.start_time,
+            endTime: slot.end_time ?? null,
+            count: 1,
+          });
+        }
+      }
+
+      slotCountByDateTime.forEach((slotInfo, key) => {
+        const occupied = occupiedCountByDateTime.get(key) ?? 0;
+        const freeCount = Math.max(0, slotInfo.count - occupied);
+        for (let i = 0; i < freeCount; i++) {
+          rows.push({
+            key: `free-${slotInfo.slotDate}-${slotInfo.startTime}-${i}`,
+            type: "free",
+            slotDate: slotInfo.slotDate,
+            startTime: slotInfo.startTime,
+            endTime: slotInfo.endTime,
+          });
+        }
+      });
+    }
+
+    rows.sort((a, b) => {
+      const dateCompare = a.slotDate.localeCompare(b.slotDate);
+      if (dateCompare !== 0) return dateCompare;
+      const timeCompare = toHHMM(a.startTime).localeCompare(toHHMM(b.startTime));
+      if (timeCompare !== 0) return timeCompare;
+      if (a.type !== b.type) return a.type === "match" ? -1 : 1;
+      if (a.type === "match" && b.type === "match") return a.match.id - b.match.id;
+      const ac = a.type === "free" ? (a.courtId ?? 0) : 0;
+      const bc = b.type === "free" ? (b.courtId ?? 0) : 0;
+      if (ac !== bc) return ac - bc;
+      return a.key.localeCompare(b.key);
+    });
+
+    return rows;
+  }, [scheduledMatches, tournamentGroupSlots, tournamentCourtIds]);
 
   /** Zonas de 4: los cuatro equipos obtenidos de los partidos de 1ª ronda (match_order 1 y 2). */
   const fourTeamsByGroupId = useMemo(() => {
@@ -677,69 +834,111 @@ export function GroupScheduleViewer({
   }, [matchTimeDiffs, scheduledMatches, groupMap, matchMultiDayInfo]);
 
 
-  const handleSelectMatch = (matchId: number) => {
-    if (selectedMatch1 === null) {
-      setSelectedMatch1(matchId);
-    } else if (selectedMatch1 === matchId) {
-      setSelectedMatch1(null);
-    } else if (selectedMatch2 === null) {
-      setSelectedMatch2(matchId);
-    } else if (selectedMatch2 === matchId) {
-      setSelectedMatch2(null);
+  const handleSelectRow = (rowKey: string) => {
+    if (selectedRow1 === null) {
+      setSelectedRow1(rowKey);
+    } else if (selectedRow1 === rowKey) {
+      setSelectedRow1(null);
+    } else if (selectedRow2 === null) {
+      setSelectedRow2(rowKey);
+    } else if (selectedRow2 === rowKey) {
+      setSelectedRow2(null);
     } else {
       // Reemplazar la primera selección
-      setSelectedMatch1(matchId);
-      setSelectedMatch2(null);
+      setSelectedRow1(rowKey);
+      setSelectedRow2(null);
     }
   };
 
   const handleSwapSchedules = async () => {
-    if (!selectedMatch1 || !selectedMatch2) return;
-    
-    const match1 = scheduledMatches.find((m) => m.id === selectedMatch1);
-    const match2 = scheduledMatches.find((m) => m.id === selectedMatch2);
-    
-    if (!match1 || !match2 || !match1.match_date || !match1.start_time || !match2.match_date || !match2.start_time) {
-      alert("Ambos partidos deben tener horarios asignados");
+    if (!selectedRow1 || !selectedRow2) return;
+
+    const row1 = scheduleRows.find((r) => r.key === selectedRow1);
+    const row2 = scheduleRows.find((r) => r.key === selectedRow2);
+    if (!row1 || !row2) return;
+
+    const matchRows = [row1, row2].filter((r): r is Extract<ScheduleRow, { type: "match" }> => r.type === "match");
+    const freeRows = [row1, row2].filter((r): r is Extract<ScheduleRow, { type: "free" }> => r.type === "free");
+
+    if (matchRows.length === 0) {
+      alert("Seleccioná al menos un partido para mover o intercambiar");
       return;
     }
 
     try {
       setSwapping(true);
-      
-      // Guardar estado anterior para undo
-      setLastSwap({
-        match1Id: selectedMatch1,
-        match2Id: selectedMatch2,
-        match1Original: {
-          date: match1.match_date,
-          start_time: match1.start_time,
-          end_time: match1.end_time || null,
-        },
-        match2Original: {
-          date: match2.match_date,
-          start_time: match2.start_time,
-          end_time: match2.end_time || null,
-        },
-      });
-      
-      // Intercambiar horarios
-      await Promise.all([
-        tournamentMatchesService.scheduleMatch(selectedMatch1, {
-          date: match2.match_date,
-          start_time: match2.start_time,
-          end_time: match2.end_time || undefined,
-        }),
-        tournamentMatchesService.scheduleMatch(selectedMatch2, {
-          date: match1.match_date,
-          start_time: match1.start_time,
-          end_time: match1.end_time || undefined,
-        }),
-      ]);
+
+      if (matchRows.length === 2) {
+        const match1 = matchRows[0].match;
+        const match2 = matchRows[1].match;
+
+        // Guardar estado anterior para undo
+        setLastSwap({
+          match1Id: match1.id,
+          match2Id: match2.id,
+          match1Original: {
+            date: match1.match_date!,
+            start_time: match1.start_time!,
+            end_time: match1.end_time || null,
+            court_id: match1.court_id ?? null,
+          },
+          match2Original: {
+            date: match2.match_date!,
+            start_time: match2.start_time!,
+            end_time: match2.end_time || null,
+            court_id: match2.court_id ?? null,
+          },
+        });
+
+        await Promise.all([
+          tournamentMatchesService.scheduleMatch(match1.id, {
+            date: match2.match_date!,
+            start_time: match2.start_time!,
+            end_time: match2.end_time || undefined,
+            court_id: match2.court_id ?? null,
+          }),
+          tournamentMatchesService.scheduleMatch(match2.id, {
+            date: match1.match_date!,
+            start_time: match1.start_time!,
+            end_time: match1.end_time || undefined,
+            court_id: match1.court_id ?? null,
+          }),
+        ]);
+      } else if (matchRows.length === 1 && freeRows.length === 1) {
+        const match = matchRows[0].match;
+        const freeSlot = freeRows[0];
+
+        setLastSwap({
+          match1Id: match.id,
+          match2Id: match.id,
+          match1Original: {
+            date: match.match_date!,
+            start_time: match.start_time!,
+            end_time: match.end_time || null,
+            court_id: match.court_id ?? null,
+          },
+          match2Original: {
+            date: match.match_date!,
+            start_time: match.start_time!,
+            end_time: match.end_time || null,
+            court_id: match.court_id ?? null,
+          },
+        });
+
+        await tournamentMatchesService.scheduleMatch(match.id, {
+          date: freeSlot.slotDate,
+          start_time: freeSlot.startTime,
+          end_time: freeSlot.endTime || undefined,
+          court_id: freeSlot.courtId ?? null,
+        });
+      } else {
+        alert("Seleccioná dos partidos o un partido y un slot libre");
+        return;
+      }
 
       // Limpiar selección
-      setSelectedMatch1(null);
-      setSelectedMatch2(null);
+      setSelectedRow1(null);
+      setSelectedRow2(null);
 
       // Invalidar cache y recargar
       queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournamentId] });
@@ -767,11 +966,13 @@ export function GroupScheduleViewer({
           date: lastSwap.match1Original.date,
           start_time: lastSwap.match1Original.start_time,
           end_time: lastSwap.match1Original.end_time || undefined,
+          court_id: lastSwap.match1Original.court_id,
         }),
         tournamentMatchesService.scheduleMatch(lastSwap.match2Id, {
           date: lastSwap.match2Original.date,
           start_time: lastSwap.match2Original.start_time,
           end_time: lastSwap.match2Original.end_time || undefined,
+          court_id: lastSwap.match2Original.court_id,
         }),
       ]);
 
@@ -792,8 +993,8 @@ export function GroupScheduleViewer({
   };
 
   const handleCancelSelection = () => {
-    setSelectedMatch1(null);
-    setSelectedMatch2(null);
+    setSelectedRow1(null);
+    setSelectedRow2(null);
   };
 
   const handleSwapGroups = async () => {
@@ -860,8 +1061,8 @@ export function GroupScheduleViewer({
   const handleDialogOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       // Limpiar selección y undo al cerrar
-      setSelectedMatch1(null);
-      setSelectedMatch2(null);
+      setSelectedRow1(null);
+      setSelectedRow2(null);
       setSelectedGroup1(null);
       setSelectedGroup2(null);
       setSelectedTeam1(null);
@@ -878,7 +1079,7 @@ export function GroupScheduleViewer({
         <DialogHeader>
           <DialogTitle>Revisar y editar horarios de partidos</DialogTitle>
           <DialogDescription>
-            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo. En zonas de cuatro, los partidos de ronda de ganadores o perdedores se marcan si el horario no sirve para alguno de los cuatro equipos (cualquiera puede llegar a ese cruce).
+            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. En la tabla de partidos también se muestran los slots libres para poder mover un partido a un horario disponible sin partido asignado. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo. En zonas de cuatro, los partidos de ronda de ganadores o perdedores se marcan si el horario no sirve para alguno de los cuatro equipos (cualquiera puede llegar a ese cruce).
           </DialogDescription>
         </DialogHeader>
 
@@ -979,14 +1180,14 @@ export function GroupScheduleViewer({
           <TabsContent value="matches" className="space-y-4 mt-4">
           <TooltipProvider>
           {/* Barra de acciones para selección */}
-          {(selectedMatch1 || selectedMatch2) && (
+          {(selectedRow1 || selectedRow2) && (
             <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <span className="text-sm font-medium text-blue-900">
-                {selectedMatch1 && selectedMatch2
-                  ? "2 partidos seleccionados. ¿Intercambiar horarios?"
-                  : "1 partido seleccionado. Seleccioná otro para intercambiar."}
+                {selectedRow1 && selectedRow2
+                  ? "2 elementos seleccionados. Podés intercambiar partidos o mover un partido a un slot libre."
+                  : "1 elemento seleccionado. Seleccioná otro para intercambiar o mover."}
               </span>
-              {selectedMatch1 && selectedMatch2 && (
+              {selectedRow1 && selectedRow2 && (
                 <>
                   <Button
                     size="sm"
@@ -1020,7 +1221,7 @@ export function GroupScheduleViewer({
           )}
 
           {/* Barra de acciones para undo */}
-          {lastSwap && !selectedMatch1 && !selectedMatch2 && (
+          {lastSwap && !selectedRow1 && !selectedRow2 && (
             <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
               <span className="text-sm font-medium text-amber-900">
                 Último intercambio realizado. ¿Deshacer?
@@ -1072,34 +1273,38 @@ export function GroupScheduleViewer({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {scheduledMatches.length === 0 ? (
+                {scheduleRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      No hay partidos con horarios asignados
+                      No hay slots ni partidos para mostrar
                     </TableCell>
                   </TableRow>
                 ) : (
-                  scheduledMatches.map((match) => {
-                    const isSelected1 = selectedMatch1 === match.id;
-                    const isSelected2 = selectedMatch2 === match.id;
+                  scheduleRows.map((rowItem) => {
+                    const isSelected1 = selectedRow1 === rowItem.key;
+                    const isSelected2 = selectedRow2 === rowItem.key;
                     const isSelected = isSelected1 || isSelected2;
-                    const diffInfo = matchTimeDiffs.get(match.id) ?? { minDiff: null, maxDiff: null, teamWithMaxDiff: null, team1MaxDiff: null, team2MaxDiff: null };
+                    const match = rowItem.type === "match" ? rowItem.match : null;
+                    const diffInfo = match
+                      ? matchTimeDiffs.get(match.id) ?? { minDiff: null, maxDiff: null, teamWithMaxDiff: null, team1MaxDiff: null, team2MaxDiff: null }
+                      : { minDiff: null, maxDiff: null, teamWithMaxDiff: null, team1MaxDiff: null, team2MaxDiff: null };
                     const minDiff = diffInfo.minDiff;
                     const maxDiff = diffInfo.maxDiff;
-                    const teamWithMaxDiff = diffInfo.teamWithMaxDiff;
                     const team1MaxDiff = diffInfo.team1MaxDiff;
                     const team2MaxDiff = diffInfo.team2MaxDiff;
-                    const multiDayInfo = matchMultiDayInfo.get(match.id) ?? { team1PlaysMultipleDays: false, team2PlaysMultipleDays: false };
+                    const multiDayInfo = match
+                      ? matchMultiDayInfo.get(match.id) ?? { team1PlaysMultipleDays: false, team2PlaysMultipleDays: false }
+                      : { team1PlaysMultipleDays: false, team2PlaysMultipleDays: false };
                     const hasMultiDayTeam = multiDayInfo.team1PlaysMultipleDays || multiDayInfo.team2PlaysMultipleDays;
-                    const groupInfo = match.tournament_group_id
+                    const groupInfo = match?.tournament_group_id
                       ? groupMap.get(match.tournament_group_id)
                       : null;
-                    const groupName = groupInfo?.name || "Sin grupo";
+                    const groupName = rowItem.type === "free" ? "Slot libre" : groupInfo?.name || "Sin grupo";
                     const groupColor = groupInfo
                       ? getGroupColor(groupInfo.index)
                       : { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200", badgeBg: "bg-gray-200", badgeText: "text-gray-800" };
 
-                    const slotViolation = matchSlotViolation.get(match.id);
+                    const slotViolation = match ? matchSlotViolation.get(match.id) : undefined;
                     const violatesSlotRestriction =
                       !!slotViolation &&
                       (slotViolation.team1 ||
@@ -1114,6 +1319,7 @@ export function GroupScheduleViewer({
                           );
                           return `${names.join(", ")} no pueden en este horario. En la ronda de ganadores o perdedores puede tocarle a cualquiera de los cuatro equipos de la zona.`;
                         }
+                        if (!match) return "";
                         const parts: string[] = [];
                         if (slotViolation.team1) parts.push(teamLabel(match.team1, match.match_order, true));
                         if (slotViolation.team2) parts.push(teamLabel(match.team2, match.match_order, false));
@@ -1121,15 +1327,17 @@ export function GroupScheduleViewer({
                       })();
                     const row = (
                       <TableRow
-                        key={match.id}
+                        key={rowItem.key}
                         className={`cursor-pointer ${
                           violatesSlotRestriction
                             ? "bg-red-100 hover:bg-red-200"
+                            : rowItem.type === "free"
+                              ? "bg-emerald-50 hover:bg-emerald-100"
                             : isSelected
                               ? "bg-blue-50 hover:bg-blue-100"
                               : "hover:bg-muted/50"
                         }`}
-                        onClick={() => handleSelectMatch(match.id)}
+                        onClick={() => handleSelectRow(rowItem.key)}
                       >
                         <TableCell>
                           {isSelected && (
@@ -1161,33 +1369,46 @@ export function GroupScheduleViewer({
                           team1MaxDiff !== null ? getTeamHighlightClass(team1MaxDiff) : 
                           (minDiff !== null) ? getTeamHighlightClass(minDiff) : ''
                         }`}>
-                          {teamLabel(match.team1, match.match_order, true)}
+                          {match ? teamLabel(match.team1, match.match_order, true) : "—"}
                         </TableCell>
                         <TableCell className={`font-medium ${
                           multiDayInfo.team2PlaysMultipleDays ? 'bg-red-100 text-red-800 font-bold' :
                           team2MaxDiff !== null ? getTeamHighlightClass(team2MaxDiff) : 
                           (minDiff !== null) ? getTeamHighlightClass(minDiff) : ''
                         }`}>
-                          {teamLabel(match.team2, match.match_order, false)}
+                          {match ? teamLabel(match.team2, match.match_order, false) : "—"}
                         </TableCell>
                         <TableCell>
-                          {match.match_date ? (
+                          {rowItem.slotDate ? (
                             (() => {
-                              const date = parseLocalDate(match.match_date);
+                              const date = parseLocalDate(rowItem.slotDate);
                               const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
                               const dayName = dayNames[date.getDay()].toUpperCase();
-                              return `${dayName} ${formatDate(match.match_date)}`;
+                              return `${dayName} ${formatDate(rowItem.slotDate)}`;
                             })()
                           ) : (
                             "-"
                           )}
                         </TableCell>
                         <TableCell>
-                          {match.start_time ? (
+                          {rowItem.startTime ? (
                             <>
-                              {formatTime(match.start_time)}
-                              {match.court_id && courtMap.get(match.court_id) && (
-                                <span className="text-muted-foreground ml-1">- {courtMap.get(match.court_id)}</span>
+                              {formatTime(rowItem.startTime)}
+                              {rowItem.type === "free" &&
+                                rowItem.courtId != null &&
+                                (courtMap.has(rowItem.courtId) ? (
+                                  <span className="text-muted-foreground ml-1">
+                                    - {courtMap.get(rowItem.courtId)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground ml-1">
+                                    - Cancha #{rowItem.courtId}
+                                  </span>
+                                ))}
+                              {rowItem.type === "match" && match?.court_id != null && (
+                                <span className="text-muted-foreground ml-1">
+                                  - {courtMap.get(match.court_id) ?? `Cancha #${match.court_id}`}
+                                </span>
                               )}
                             </>
                           ) : "-"}
@@ -1247,7 +1468,7 @@ export function GroupScheduleViewer({
                       </TableRow>
                     );
                     return restrictionTooltip ? (
-                      <Tooltip key={match.id}>
+                      <Tooltip key={rowItem.key}>
                         <TooltipTrigger asChild>{row}</TooltipTrigger>
                         <TooltipContent>{restrictionTooltip}</TooltipContent>
                       </Tooltip>

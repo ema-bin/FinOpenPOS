@@ -53,7 +53,10 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
 
     // Cambiar el estado del torneo a "draft" para volver a la fase de inscripción
     try {
-      await repos.tournaments.update(tournamentId, { status: "draft" });
+      await repos.tournaments.update(tournamentId, {
+        status: "draft",
+        group_schedule_court_ids: [],
+      });
     } catch (error) {
       // No fallamos el request completo, solo logueamos el error
       console.error("Error updating tournament status:", error);

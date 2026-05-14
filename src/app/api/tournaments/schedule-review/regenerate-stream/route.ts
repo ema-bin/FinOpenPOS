@@ -651,6 +651,16 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (courtIds.length > 0) {
+          const { error: metaErr } = await supabase
+            .from("tournaments")
+            .update({ group_schedule_court_ids: courtIds })
+            .in("id", tournamentIds);
+          if (metaErr) {
+            sendLog(`⚠️ No se pudo guardar canchas en los torneos: ${metaErr.message}`);
+          }
+        }
+
         sendProgress(100, "Proceso completado");
         sendSuccess({
           ok: true,

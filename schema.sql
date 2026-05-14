@@ -537,6 +537,8 @@ CREATE TABLE tournaments (
     match_duration_quarters_onwards INTEGER NOT NULL DEFAULT 60,
     -- 🔹 Precio de inscripción por jugador
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
+    -- Canchas usadas al generar horarios de fase de grupos (mismo conjunto que el scheduler: slots × canchas)
+    group_schedule_court_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
