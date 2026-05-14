@@ -182,6 +182,8 @@ export interface GroupsApiResponse {
   standings?: StandingDTO[];
   /** Slots del torneo para revisión de horarios (detectar violación de restricciones) */
   tournamentGroupSlots?: TournamentGroupSlotSummary[];
+  /** Canchas usadas al generar horarios de zona (slots × canchas), persistidas en el torneo */
+  groupScheduleCourtIds?: number[];
 }
 
 export interface TeamsApiResponse {

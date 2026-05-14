@@ -20,6 +20,22 @@ import type {
   TournamentGroupsData,
 } from "@/models/db/tournament";
 
+function parseGroupScheduleCourtIds(raw: unknown): number[] {
+  if (raw == null) return [];
+  let v: unknown = raw;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(v)) {
+    return v.map((x) => Number(x)).filter((n): n is number => Number.isFinite(n));
+  }
+  return [];
+}
+
 export class TournamentsRepository extends BaseRepository {
   /**
    * Get all tournaments
@@ -510,6 +526,14 @@ export class TournamentGroupsRepository extends BaseRepository {
    * Get all groups data for a tournament (groups, teams, matches, standings)
    */
   async getGroupsData(tournamentId: number): Promise<TournamentGroupsData> {
+    const { data: torMeta } = await this.supabase
+      .from("tournaments")
+      .select("group_schedule_court_ids")
+      .eq("id", tournamentId)
+      .maybeSingle();
+
+    const groupScheduleCourtIds = parseGroupScheduleCourtIds(torMeta?.group_schedule_court_ids);
+
     // Get groups first
     const { data: groups, error: gError } = await this.supabase
       .from("tournament_groups")
@@ -522,7 +546,14 @@ export class TournamentGroupsRepository extends BaseRepository {
     }
 
     if (!groups || groups.length === 0) {
-      return { groups: [], groupTeams: [], matches: [], standings: [], tournamentGroupSlots: [] };
+      return {
+        groups: [],
+        groupTeams: [],
+        matches: [],
+        standings: [],
+        tournamentGroupSlots: [],
+        groupScheduleCourtIds,
+      };
     }
 
     const groupIds = groups.map((g) => g.id);
@@ -677,6 +708,14 @@ export class TournamentGroupsRepository extends BaseRepository {
       team2: m.team2 ? { ...m.team2, restricted_slot_ids: restrictedSlotIdsMap.get(m.team2.id) ?? [] } : m.team2,
     })) as unknown as TournamentGroupsData["matches"];
 
+    const courtsFromMatches = new Set<number>();
+    normalizedMatches.forEach((m: { court_id?: number | null }) => {
+      if (m.court_id != null && Number.isFinite(Number(m.court_id))) courtsFromMatches.add(Number(m.court_id));
+    });
+    const mergedGroupScheduleCourtIds = Array.from(
+      new Set<number>([...groupScheduleCourtIds, ...Array.from(courtsFromMatches)])
+    ).sort((a, b) => a - b);
+
     return {
       groups: groups as TournamentGroup[],
       groupTeams: normalizedGroupTeams,
@@ -688,6 +727,7 @@ export class TournamentGroupsRepository extends BaseRepository {
         start_time: s.start_time,
         end_time: s.end_time,
       })),
+      groupScheduleCourtIds: mergedGroupScheduleCourtIds,
     };
   }
 

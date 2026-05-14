@@ -185,6 +185,59 @@ export function TournamentScheduleDialog({
     return options;
   }, [globalScheduleReview, useSlotMode, groupSlots, courts]);
 
+  /** Torneo único (cerrar / regenerar): cada fila es un slot del torneo × cancha elegida. */
+  const physicalSlotOptionsSingle = useMemo(() => {
+    if (!useSlotMode || globalScheduleReview || !groupSlots?.length || selectedCourtIds.length === 0) {
+      return [] as Array<{
+        key: string;
+        slotDate: string;
+        startTime: string;
+        endTime: string;
+        courtId: number;
+        courtName: string;
+        tournamentGroupSlotId: number;
+        label: string;
+      }>;
+    }
+    const courtById = new Map(courts.map((c) => [c.id, c]));
+    const options: Array<{
+      key: string;
+      slotDate: string;
+      startTime: string;
+      endTime: string;
+      courtId: number;
+      courtName: string;
+      tournamentGroupSlotId: number;
+      label: string;
+    }> = [];
+    for (const slot of groupSlots) {
+      const slotDate = String(slot.slot_date).trim().slice(0, 10);
+      const startTime = String(slot.start_time).trim().slice(0, 5);
+      const endTime = String(slot.end_time).trim().slice(0, 5);
+      const [y, m, d] = slotDate.split("-").map(Number);
+      const dateLabel = new Date(y, m - 1, d).toLocaleDateString("es-AR", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+      for (const courtId of selectedCourtIds) {
+        const court = courtById.get(courtId);
+        if (!court) continue;
+        options.push({
+          key: `${slot.id}|${courtId}`,
+          slotDate,
+          startTime,
+          endTime,
+          courtId,
+          courtName: court.name,
+          tournamentGroupSlotId: slot.id,
+          label: `${dateLabel} ${startTime}–${endTime}`,
+        });
+      }
+    }
+    return options;
+  }, [useSlotMode, globalScheduleReview, groupSlots, selectedCourtIds, courts]);
+
   // Cargar slots del torneo cuando se usa el stream (misma fuente que las restricciones)
   useEffect(() => {
     if (!open || !showLogs) {
@@ -220,7 +273,11 @@ export function TournamentScheduleDialog({
           }
           const list = Array.isArray(data) ? data : [];
           setGroupSlots(list);
-          setSelectedSlotIds(list.map((s) => s.id));
+          if (globalScheduleReview) {
+            setSelectedSlotIds(list.map((s) => s.id));
+          } else {
+            setSelectedSlotIds([]);
+          }
           setResolvedGlobalMatchCount(null);
         }
       )
@@ -250,6 +307,23 @@ export function TournamentScheduleDialog({
       return filtered;
     });
   }, [open, globalScheduleReview, useSlotMode, physicalSlotOptions]);
+
+  useEffect(() => {
+    if (!open || !useSlotMode || globalScheduleReview) {
+      return;
+    }
+    if (physicalSlotOptionsSingle.length === 0) {
+      setSelectedPhysicalSlotKeys([]);
+      return;
+    }
+    const allKeys = physicalSlotOptionsSingle.map((o) => o.key);
+    const allKeysSet = new Set(allKeys);
+    setSelectedPhysicalSlotKeys((prev) => {
+      if (prev.length === 0) return allKeys;
+      const filtered = prev.filter((key) => allKeysSet.has(key));
+      return filtered.length > 0 ? filtered : allKeys;
+    });
+  }, [open, globalScheduleReview, useSlotMode, physicalSlotOptionsSingle]);
 
   useEffect(() => {
     if (!open || !showOverlapTournamentSelector || !tournamentId) {
@@ -423,12 +497,8 @@ export function TournamentScheduleDialog({
         alert("Seleccioná al menos un slot físico (horario + cancha).");
         return;
       }
-      if (!globalScheduleReview && selectedSlotIds.length === 0) {
-        alert(
-          globalScheduleReview
-            ? "Seleccioná al menos un slot (combinado de todos los torneos en revisión)"
-            : "Seleccioná al menos un slot del torneo"
-        );
+      if (!globalScheduleReview && selectedPhysicalSlotKeys.length === 0) {
+        alert("Seleccioná al menos una combinación de horario del torneo y cancha.");
         return;
       }
     } else {
@@ -468,7 +538,7 @@ export function TournamentScheduleDialog({
         (showOverlapTournamentSelector &&
           selectedOverlapTournamentIds.length > 0);
 
-      const selectedPhysicalSlotsPayload: PhysicalSlotSelection[] = globalScheduleReview
+      const selectedPhysicalSlotsGlobal: PhysicalSlotSelection[] = globalScheduleReview
         ? physicalSlotOptions
             .filter((option) => selectedPhysicalSlotKeys.includes(option.key))
             .map((option) => ({
@@ -478,20 +548,36 @@ export function TournamentScheduleDialog({
               courtId: option.courtId,
             }))
         : [];
+
+      const selectedPhysicalSlotsSingleTournament = !globalScheduleReview
+        ? physicalSlotOptionsSingle
+            .filter((option) => selectedPhysicalSlotKeys.includes(option.key))
+            .map((option) => ({
+              tournamentGroupSlotId: option.tournamentGroupSlotId,
+              courtId: option.courtId,
+            }))
+        : [];
+
       const derivedCourtIds = globalScheduleReview
-        ? Array.from(new Set(selectedPhysicalSlotsPayload.map((s) => s.courtId)))
-        : selectedCourtIds;
+        ? Array.from(new Set(selectedPhysicalSlotsGlobal.map((s) => s.courtId)))
+        : selectedPhysicalSlotsSingleTournament.length > 0
+          ? Array.from(new Set(selectedPhysicalSlotsSingleTournament.map((s) => s.courtId)))
+          : selectedCourtIds;
 
       const body = useSlotMode
         ? {
-            ...(globalScheduleReview ? {} : { slotIds: selectedSlotIds }),
+            ...(globalScheduleReview
+              ? {}
+              : selectedPhysicalSlotsSingleTournament.length > 0
+                ? { selectedPhysicalSlots: selectedPhysicalSlotsSingleTournament }
+                : { slotIds: selectedSlotIds }),
             matchDuration,
             courtIds: derivedCourtIds,
             algorithm: effectiveUseRestrictionsAlgorithm
               ? "with-restrictions"
               : "default",
             ...(globalScheduleReview
-              ? { selectedPhysicalSlots: selectedPhysicalSlotsPayload }
+              ? { selectedPhysicalSlots: selectedPhysicalSlotsGlobal }
               : {}),
             ...(showOverlapTournamentSelector && selectedOverlapTournamentIds.length > 0
               ? { overlapTournamentIds: selectedOverlapTournamentIds }
@@ -645,6 +731,26 @@ export function TournamentScheduleDialog({
     );
   };
 
+  const selectAllSlotsForCourt = (courtId: number) => {
+    setSelectedPhysicalSlotKeys((prev) => {
+      const keysForCourt = physicalSlotOptionsSingle
+        .filter((o) => o.courtId === courtId)
+        .map((o) => o.key);
+      const next = new Set(prev);
+      for (let i = 0; i < keysForCourt.length; i++) next.add(keysForCourt[i]);
+      return Array.from(next);
+    });
+  };
+
+  const deselectAllSlotsForCourt = (courtId: number) => {
+    setSelectedPhysicalSlotKeys((prev) => {
+      const keysForCourt = new Set(
+        physicalSlotOptionsSingle.filter((o) => o.courtId === courtId).map((o) => o.key)
+      );
+      return prev.filter((k) => !keysForCourt.has(k));
+    });
+  };
+
   const toggleOverlapTournament = (tournamentIdToToggle: number) => {
     setSelectedOverlapTournamentIds((prev) =>
       prev.includes(tournamentIdToToggle)
@@ -660,6 +766,20 @@ export function TournamentScheduleDialog({
   };
 
   const calculateAvailableSlots = (): number => {
+    if (!globalScheduleReview && useSlotMode && physicalSlotOptionsSingle.length > 0) {
+      const selectedKeySet = new Set(selectedPhysicalSlotKeys);
+      let total = 0;
+      for (const option of physicalSlotOptionsSingle) {
+        if (!selectedKeySet.has(option.key)) continue;
+        const startM = timeToMinutes(option.startTime);
+        let endM = timeToMinutes(option.endTime);
+        if (endM <= startM) endM += 24 * 60;
+        const durationMinutes = endM - startM;
+        total += Math.floor(durationMinutes / matchDuration);
+      }
+      return total;
+    }
+
     if (globalScheduleReview && useSlotMode && physicalSlotOptions.length > 0) {
       const selectedKeySet = new Set(selectedPhysicalSlotKeys);
       let total = 0;
@@ -706,11 +826,19 @@ export function TournamentScheduleDialog({
   const canConfirmSlotMode =
     globalScheduleReview && useSlotMode
       ? physicalSlotOptions.length > 0 && selectedPhysicalSlotKeys.length > 0
-      : useSlotMode && groupSlots && groupSlots.length > 0 && selectedSlotIds.length > 0;
+      : Boolean(
+          useSlotMode &&
+            groupSlots &&
+            groupSlots.length > 0 &&
+            physicalSlotOptionsSingle.length > 0 &&
+            selectedPhysicalSlotKeys.length > 0
+        );
   const canConfirmDaysMode = !useSlotMode && days.length > 0 && days.every((d) => d.date);
   const canConfirm =
     (useSlotMode ? canConfirmSlotMode : canConfirmDaysMode) &&
-    (globalScheduleReview ? selectedPhysicalSlotKeys.length > 0 : selectedCourtIds.length > 0) &&
+    (globalScheduleReview
+      ? selectedPhysicalSlotKeys.length > 0
+      : selectedCourtIds.length > 0 && selectedPhysicalSlotKeys.length > 0) &&
     availableSlots >= effectiveMatchCount &&
     !loadingCourts &&
     !loadingSlots &&
@@ -784,7 +912,7 @@ export function TournamentScheduleDialog({
               <Label>
                 {globalScheduleReview
                   ? "Slots a usar (todos los torneos en revisión)"
-                  : "Slots del torneo a usar"}
+                  : "Slots del torneo por cancha"}
               </Label>
               {loadingSlots ? (
                 <p className="text-sm text-muted-foreground">
@@ -838,38 +966,65 @@ export function TournamentScheduleDialog({
                   </div>
                 )
               ) : (
-                <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
-                  {groupSlots.map((slot) => {
-                    const [y, m, d] = slot.slot_date.split("-").map(Number);
-                    const dateLabel = new Date(y, m - 1, d).toLocaleDateString("es-AR", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                    });
-                    const start = slot.start_time.trim().substring(0, 5);
-                    const end = slot.end_time.trim().substring(0, 5);
-                    const checked = selectedSlotIds.includes(slot.id);
-                    const prefix =
-                      globalScheduleReview && slot.tournament_name
-                        ? `${slot.tournament_name} · `
-                        : "";
-                    return (
-                      <div key={slot.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`slot-${slot.id}`}
-                          checked={checked}
-                          onCheckedChange={() => toggleSlot(slot.id)}
-                        />
-                        <Label
-                          htmlFor={`slot-${slot.id}`}
-                          className="text-sm font-normal cursor-pointer flex-1"
-                        >
-                          {prefix}
-                          {dateLabel} {start}–{end}
-                        </Label>
-                      </div>
-                    );
-                  })}
+                <div className="max-h-72 overflow-y-auto space-y-4 border rounded-md p-2">
+                  {physicalSlotOptionsSingle.length === 0 ? (
+                    <p className="text-sm text-muted-foreground px-1">
+                      Marcá al menos una cancha arriba para ver los horarios disponibles por cancha.
+                    </p>
+                  ) : (
+                    courts
+                      .filter((c) => selectedCourtIds.includes(c.id))
+                      .sort((a, b) => a.name.localeCompare(b.name, "es"))
+                      .map((court) => (
+                        <div key={court.id} className="space-y-2">
+                          <div className="flex items-center justify-between gap-2 border-b pb-1">
+                            <p className="text-sm font-medium min-w-0 truncate">{court.name}</p>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => selectAllSlotsForCourt(court.id)}
+                              >
+                                Todos
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => deselectAllSlotsForCourt(court.id)}
+                              >
+                                Ninguno
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="space-y-1 pl-1">
+                            {physicalSlotOptionsSingle
+                              .filter((o) => o.courtId === court.id)
+                              .map((option) => {
+                                const checked = selectedPhysicalSlotKeys.includes(option.key);
+                                return (
+                                  <div key={option.key} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`physical-slot-single-${option.key}`}
+                                      checked={checked}
+                                      onCheckedChange={() => togglePhysicalSlot(option.key)}
+                                    />
+                                    <Label
+                                      htmlFor={`physical-slot-single-${option.key}`}
+                                      className="text-sm font-normal cursor-pointer flex-1"
+                                    >
+                                      {option.label}
+                                    </Label>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      ))
+                  )}
                 </div>
               )}
               <div className="flex items-center space-x-2 pt-2">
@@ -882,6 +1037,12 @@ export function TournamentScheduleDialog({
                   Usar restricciones horarias de los equipos (asignar respetando disponibilidad)
                 </Label>
               </div>
+              {!globalScheduleReview && useSlotMode && groupSlots && groupSlots.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Elegí en qué cancha puede usarse cada ventana horaria del torneo (misma definición que en
+                  restricciones de equipos).
+                </p>
+              )}
               {globalScheduleReview && (
                 <p className="text-xs text-muted-foreground">
                   En revisión global, las canchas se eligen por slot físico (horario + cancha).
@@ -953,9 +1114,10 @@ export function TournamentScheduleDialog({
                   <span className="font-bold">{selectedPhysicalSlotKeys.length}</span>
                 </p>
               )}
-              {!globalScheduleReview && useSlotMode && groupSlots && selectedSlotIds.length > 0 && (
+              {!globalScheduleReview && useSlotMode && selectedPhysicalSlotKeys.length > 0 && (
                 <p className="text-sm">
-                  Slots seleccionados: <span className="font-bold">{selectedSlotIds.length}</span>
+                  Combinaciones horario + cancha:{" "}
+                  <span className="font-bold">{selectedPhysicalSlotKeys.length}</span>
                 </p>
               )}
               <p className="text-sm">
