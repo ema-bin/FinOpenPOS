@@ -1,15 +1,52 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { closeOpenOrder } from "@/lib/order-close";
+import {
+  buildOrderPaymentSummary,
+  computeDiscountAndTotal,
+  fetchOrderIncomePayments,
+  isFullyPaid,
+  roundMoney,
+  sumPayments,
+} from "@/lib/order-payment-helpers";
 
 type RouteParams = { params: { id: string } };
 
-// helpers (mismos que usamos en otros endpoints, pero copiados acá)
+async function recalcOrderTotal(
+  supabase: ReturnType<typeof createClient>,
+  orderId: number
+) {
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("quantity, unit_price")
+    .eq("order_id", orderId);
+
+  if (error) {
+    throw new Error("Error calculating order total");
+  }
+
+  const total = (data ?? []).reduce(
+    (sum, item) => sum + item.quantity * item.unit_price,
+    0
+  );
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({ total_amount: total })
+    .eq("id", orderId);
+
+  if (updateError) {
+    throw new Error("Error updating order total");
+  }
+
+  return total;
+}
 
 async function getOrderWithItems(
   supabase: ReturnType<typeof createClient>,
   orderId: number,
-  userId: string
+  finalTotal: number
 ) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -50,77 +87,29 @@ async function getOrderWithItems(
     throw new Error("Error fetching order items");
   }
 
-  // Si la orden está cerrada, obtener información de la transacción y método de pago
-  let paymentInfo = null;
-  if (order.status === "closed") {
-    const { data: transaction } = await supabase
-      .from("transactions")
-      .select(
-        `
-          id,
-          payment_method_id,
-          amount,
-          payment_method:payment_methods!payment_method_id (
-            id,
-            name
-          )
-        `
-      )
-      .eq("order_id", orderId)
-      .eq("type", "income")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+  const paymentSummary = await buildOrderPaymentSummary(supabase, orderId, finalTotal);
 
-    if (transaction) {
-      paymentInfo = {
-        payment_method_id: transaction.payment_method_id,
-        payment_method: transaction.payment_method,
-        amount: transaction.amount,
-      };
-    }
+  let payment_info = null;
+  if (order.status === "closed" && paymentSummary.payments.length > 0) {
+    const last = paymentSummary.payments[paymentSummary.payments.length - 1];
+    payment_info = {
+      payment_method_id: last.payment_method_id,
+      payment_method: last.payment_method,
+      amount: last.amount,
+    };
   }
 
   return {
     ...order,
     items: items ?? [],
-    payment_info: paymentInfo,
+    payment_info,
+    ...paymentSummary,
   };
 }
 
-async function recalcOrderTotal(
-  supabase: ReturnType<typeof createClient>,
-  orderId: number,
-  userId: string
-) {
-  const { data, error } = await supabase
-    .from("order_items")
-    .select("quantity, unit_price")
-    .eq("order_id", orderId);
-
-  if (error) {
-    throw new Error("Error calculating order total");
-  }
-
-  const total = (data ?? []).reduce(
-    (sum, item) => sum + item.quantity * item.unit_price,
-    0
-  );
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ total_amount: total })
-    .eq("id", orderId);
-
-  if (updateError) {
-    throw new Error("Error updating order total");
-  }
-
-  return total;
-}
-
 // 💰 POST /api/orders/:id/pay
-// body: { paymentMethodId, amount? }
+// body: { paymentMethodId, amount?, discount_percentage?, discount_amount? }
+// Registra un pago en dinero. Si el saldo queda en cero, cierra la cuenta.
 export async function POST(request: Request, { params }: RouteParams) {
   const supabase = createClient();
   const {
@@ -137,19 +126,19 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const body = await request.json();
-  // Aceptar tanto paymentMethodId como payment_method_id para compatibilidad
   const paymentMethodId = Number(body.paymentMethodId || body.payment_method_id);
   const amountInput =
     body.amount !== undefined && body.amount !== null
       ? Number(body.amount)
       : null;
-  // Descuentos
-  const discountPercentage = body.discount_percentage !== undefined && body.discount_percentage !== null
-    ? Number(body.discount_percentage)
-    : null;
-  const discountAmount = body.discount_amount !== undefined && body.discount_amount !== null
-    ? Number(body.discount_amount)
-    : null;
+  const discountPercentage =
+    body.discount_percentage !== undefined && body.discount_percentage !== null
+      ? Number(body.discount_percentage)
+      : null;
+  const discountAmount =
+    body.discount_amount !== undefined && body.discount_amount !== null
+      ? Number(body.discount_amount)
+      : null;
 
   if (!paymentMethodId || Number.isNaN(paymentMethodId)) {
     return NextResponse.json(
@@ -159,10 +148,9 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    // 1) Traer la orden y validar que es del usuario y está abierta
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, status, total_amount")
+      .select("id, status, discount_percentage, discount_amount")
       .eq("id", orderId)
       .single();
 
@@ -171,80 +159,26 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     if (order.status !== "open") {
-      return NextResponse.json(
-        { error: "Order is not open" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Order is not open" }, { status: 400 });
     }
 
-    // 2) Asegurarnos que haya items
-    const { data: fetchedItems, error: itemsError } = await supabase
+    const { count: itemCount, error: countError } = await supabase
       .from("order_items")
-      .select(`
-        id,
-        quantity,
-        unit_price,
-        product_id,
-        product:product_id (
-          name,
-          uses_stock,
-          category_id,
-          category:category_id (
-            id,
-            name,
-            is_cantina_revenue
-          )
-        )
-      `)
+      .select("id", { count: "exact", head: true })
       .eq("order_id", orderId);
 
-    if (itemsError) {
-      console.error("Error fetching items to pay:", itemsError);
-      return NextResponse.json(
-        { error: "Error fetching items" },
-        { status: 500 }
-      );
+    if (countError) {
+      return NextResponse.json({ error: "Error fetching items" }, { status: 500 });
     }
 
-    const allItems = fetchedItems ?? [];
-    const nonRevenueItemIds = allItems
-      .filter(
-        (item: any) =>
-          item.product?.category?.is_cantina_revenue === false
-      )
-      .map((item: any) => item.id);
-
-    if (nonRevenueItemIds.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("order_items")
-        .delete()
-        .eq("order_id", orderId)
-        .in("id", nonRevenueItemIds);
-
-      if (deleteError) {
-        console.error("Error removing non-cantina items:", deleteError);
-        return NextResponse.json(
-          { error: "Error removing special items" },
-          { status: 500 }
-        );
-      }
-    }
-
-    const revenueItems = allItems.filter(
-      (item: any) =>
-        item.product?.category?.is_cantina_revenue !== false
-    );
-
-    if (revenueItems.length === 0) {
+    if (!itemCount || itemCount === 0) {
       return NextResponse.json(
         { error: "Cannot pay an empty order" },
         { status: 400 }
       );
     }
 
-    // 3) Recalcular total por seguridad
-    const subtotal = await recalcOrderTotal(supabase, orderId, user.id);
-
+    const subtotal = await recalcOrderTotal(supabase, orderId);
     if (subtotal <= 0) {
       return NextResponse.json(
         { error: "Order total is zero" },
@@ -252,42 +186,53 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    // 4) Calcular descuento y total final
-    let discountValue = 0;
-    let finalTotal = subtotal;
+    const effectiveDiscountPct =
+      discountPercentage !== null && !Number.isNaN(discountPercentage)
+        ? discountPercentage
+        : order.discount_percentage;
+    const effectiveDiscountAmt =
+      discountAmount !== null && !Number.isNaN(discountAmount)
+        ? discountAmount
+        : order.discount_amount;
 
-    // Si hay descuento porcentual, calcularlo
-    if (discountPercentage !== null && !Number.isNaN(discountPercentage) && discountPercentage > 0) {
-      discountValue = (subtotal * discountPercentage) / 100;
-      finalTotal = subtotal - discountValue;
+    const { discountValue, finalTotal } = computeDiscountAndTotal(
+      subtotal,
+      effectiveDiscountPct,
+      effectiveDiscountAmt
+    );
+
+    const existingPayments = await fetchOrderIncomePayments(supabase, orderId);
+    const paidSoFar = roundMoney(sumPayments(existingPayments));
+    const balanceDue = roundMoney(Math.max(0, finalTotal - paidSoFar));
+
+    if (balanceDue <= 0) {
+      return NextResponse.json(
+        { error: "La cuenta ya está saldada. Podés cerrarla desde el sistema." },
+        { status: 400 }
+      );
     }
-    // Si hay descuento por monto fijo, usarlo (tiene prioridad sobre porcentual si ambos están presentes)
-    if (discountAmount !== null && !Number.isNaN(discountAmount) && discountAmount > 0) {
-      discountValue = discountAmount;
-      finalTotal = subtotal - discountValue;
-    }
 
-    // Asegurar que el total final no sea negativo
-    if (finalTotal < 0) {
-      finalTotal = 0;
-    }
+    const amount =
+      amountInput !== null && !Number.isNaN(amountInput) && amountInput > 0
+        ? roundMoney(amountInput)
+        : balanceDue;
 
-    // 5) Determinar monto a cobrar (si viene amountInput, usarlo; sino usar el total con descuento)
-    const amount = amountInput && !Number.isNaN(amountInput) && amountInput > 0
-      ? amountInput
-      : finalTotal;
-
-    if (amount < 0) {
+    if (amount <= 0) {
       return NextResponse.json(
         { error: "Invalid amount to charge" },
         { status: 400 }
       );
     }
 
-    // (opcional) podrías validar amount >= total, pero para buffet
-    // con cambio quizás no hace falta hacer drama.
+    if (amount > balanceDue + 0.009) {
+      return NextResponse.json(
+        {
+          error: `El monto no puede superar el saldo pendiente ($${balanceDue.toFixed(2)})`,
+        },
+        { status: 400 }
+      );
+    }
 
-    // 5) Validar que el método de pago existe (aunque sea global)
     const { data: paymentMethod, error: pmError } = await supabase
       .from("payment_methods")
       .select("id, name")
@@ -301,11 +246,11 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    // 6) Crear transaction con el monto final (ya con descuento aplicado)
-    const description = discountValue > 0
-      ? `Payment for order #${orderId} (${paymentMethod.name}) - Discount: $${discountValue.toFixed(2)}`
-      : `Payment for order #${orderId} (${paymentMethod.name})`;
-    
+    const description =
+      discountValue > 0
+        ? `Pago cuenta #${orderId} (${paymentMethod.name}) - Descuento: $${discountValue.toFixed(2)}`
+        : `Pago cuenta #${orderId} (${paymentMethod.name})`;
+
     const { error: txError } = await supabase.from("transactions").insert({
       order_id: orderId,
       payment_method_id: paymentMethodId,
@@ -324,88 +269,40 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    // 7) Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina
-    const normalizeProductRecord = (productField: any) => {
-      if (!productField) {
-        return null;
-      }
-      return Array.isArray(productField) ? productField[0] ?? null : productField;
-    };
-
-    type StockMovementPayload = {
-      product_id: number;
-      movement_type: "sale";
-      quantity: number;
-      unit_cost: number;
-      notes: string;
-      user_uid: string;
-    };
-
-    const stockMovementsPayload = revenueItems
-      .map((item: any) => {
-        const product = normalizeProductRecord(item.product);
-        if (product && product.uses_stock === false) {
-          return null;
-        }
-        return {
-          product_id: item.product_id,
-          movement_type: "sale",
-          quantity: item.quantity,
-          unit_cost: item.unit_price,
-          notes: `Venta (order #${orderId})`,
-          user_uid: user.id,
-        };
-      })
-      .filter((movement): movement is StockMovementPayload => movement !== null);
-
-    const { error: smError } = await supabase
-      .from("stock_movements")
-      .insert(stockMovementsPayload);
-
-    if (smError) {
-      console.error("Error inserting stock movements (sale):", smError);
-      // Si querés ser ultra prolijo, podrías hacer rollback de la transaction acá.
-      return NextResponse.json(
-        { error: "Error inserting stock movements" },
-        { status: 500 }
-      );
-    }
-
-    // 8) Marcar order como completed, setear closed_at, guardar descuentos y actualizar total_amount
-    const updateData: any = {
-      status: "closed",
-      closed_at: new Date().toISOString(),
-      total_amount: finalTotal, // Guardar el total final con descuento aplicado
-    };
-
-    // Guardar descuentos si fueron proporcionados
+    const discountUpdate: Record<string, number | null> = {};
     if (discountPercentage !== null && !Number.isNaN(discountPercentage)) {
-      updateData.discount_percentage = discountPercentage;
+      discountUpdate.discount_percentage = discountPercentage;
     }
     if (discountAmount !== null && !Number.isNaN(discountAmount)) {
-      updateData.discount_amount = discountAmount;
+      discountUpdate.discount_amount = discountAmount;
+    }
+    if (Object.keys(discountUpdate).length > 0) {
+      await supabase.from("orders").update(discountUpdate).eq("id", orderId);
     }
 
-    const { error: updateOrderError } = await supabase
-      .from("orders")
-      .update(updateData)
-      .eq("id", orderId);
+    const newPaidTotal = roundMoney(paidSoFar + amount);
+    const willClose = isFullyPaid(newPaidTotal, finalTotal);
 
-    if (updateOrderError) {
-      console.error("Error updating order status:", updateOrderError);
-      return NextResponse.json(
-        { error: "Error updating order status" },
-        { status: 500 }
+    if (willClose) {
+      await closeOpenOrder(
+        supabase,
+        orderId,
+        user.id,
+        finalTotal,
+        effectiveDiscountPct ?? null,
+        effectiveDiscountAmt ?? null
       );
     }
 
-    // 9) Devolver la orden actualizada con items (para refrescar la UI)
-    const updatedOrder = await getOrderWithItems(supabase, orderId, user.id);
-    return NextResponse.json(updatedOrder);
+    const updatedOrder = await getOrderWithItems(supabase, orderId, finalTotal);
+    return NextResponse.json({
+      ...updatedOrder,
+      closed: willClose,
+    });
   } catch (err) {
     console.error("POST /orders/:id/pay error:", err);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }
     );
   }

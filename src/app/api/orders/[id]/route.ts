@@ -2,6 +2,10 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
 import { createClient } from '@/lib/supabase/server';
+import {
+  buildOrderPaymentSummary,
+  computeDiscountAndTotal,
+} from '@/lib/order-payment-helpers';
 
 type RouteParams = { params: { id: string } };
 
@@ -28,43 +32,39 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Si la orden está cerrada, obtener información de la transacción y método de pago
-    let paymentInfo = null;
-    if (order.status === "closed") {
-      const { data: transaction } = await supabase
-        .from("transactions")
-        .select(
-          `
-          id,
-          payment_method_id,
-          amount,
-          payment_method:payment_methods!payment_method_id (
-            id,
-            name
-          )
-        `
-        )
-        .eq("order_id", orderId)
-        .eq("type", "income")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+    const items = order.items ?? [];
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.unit_price * item.quantity,
+      0
+    );
+    const { finalTotal } = computeDiscountAndTotal(
+      subtotal,
+      (order as { discount_percentage?: number | null }).discount_percentage,
+      (order as { discount_amount?: number | null }).discount_amount
+    );
 
-      if (transaction) {
-        paymentInfo = {
-          payment_method_id: transaction.payment_method_id,
-          payment_method: transaction.payment_method,
-          amount: transaction.amount,
-        };
-      }
+    const paymentSummary = await buildOrderPaymentSummary(
+      supabase,
+      orderId,
+      finalTotal
+    );
+
+    let paymentInfo = null;
+    if (order.status === "closed" && paymentSummary.payments.length > 0) {
+      const last = paymentSummary.payments[paymentSummary.payments.length - 1];
+      paymentInfo = {
+        payment_method_id: last.payment_method_id,
+        payment_method: last.payment_method,
+        amount: last.amount,
+      };
     }
 
-    // Incluir campos de descuento y payment_info en la respuesta
     const orderWithDiscounts = {
       ...order,
-      discount_percentage: (order as any).discount_percentage ?? null,
-      discount_amount: (order as any).discount_amount ?? null,
+      discount_percentage: (order as { discount_percentage?: number | null }).discount_percentage ?? null,
+      discount_amount: (order as { discount_amount?: number | null }).discount_amount ?? null,
       payment_info: paymentInfo,
+      ...paymentSummary,
     };
 
     return NextResponse.json(orderWithDiscounts);

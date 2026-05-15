@@ -44,6 +44,8 @@ import { ProductSelector } from "@/components/product-selector/ProductSelector";
 import { PaymentMethodSelector } from "@/components/payment-method-selector/PaymentMethodSelector";
 import type { ProductDTO } from "@/models/dto/product";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
+import type { OrderPaymentDTO } from "@/models/dto/order";
+import { formatDateTime } from "@/lib/date-utils";
 
 export interface OrderItem {
   id: number;
@@ -335,6 +337,11 @@ interface OrderSummaryPanelProps {
     payment_method: { id: number; name: string } | null;
     amount: number;
   } | null;
+  payments?: OrderPaymentDTO[];
+  amountPaid?: number;
+  balanceDue?: number;
+  paymentAmount?: number | "";
+  onPaymentAmountChange?: (value: number | "") => void;
   onProcess?: () => void;
   onCancel?: () => void;
   onClear?: () => void;
@@ -361,6 +368,11 @@ export function OrderSummaryPanel({
   onPaymentMethodSelect,
   loadingPaymentMethods = false,
   paymentInfo = null,
+  payments = [],
+  amountPaid = 0,
+  balanceDue,
+  paymentAmount = "",
+  onPaymentAmountChange,
   onProcess,
   onCancel,
   onClear,
@@ -371,13 +383,20 @@ export function OrderSummaryPanel({
   clearButtonLabel = "Limpiar",
   isDiscountSectionEnabled = true,
 }: OrderSummaryPanelProps) {
+  const effectiveBalance =
+    balanceDue !== undefined ? balanceDue : Math.max(0, finalTotal - amountPaid);
+  const willCloseOnPay =
+    typeof paymentAmount === "number" &&
+    paymentAmount > 0 &&
+    paymentAmount >= effectiveBalance - 0.009;
+
   return (
     <Card className={!isEditable ? "opacity-75" : ""}>
       <CardHeader>
         <CardTitle>Resumen</CardTitle>
         <CardDescription>
           {isEditable
-            ? "Revisá el total y registrá el pago para cerrar la cuenta."
+            ? "Registrá pagos en dinero; al saldar el total se cierra la cuenta."
             : "Esta cuenta está cerrada. No se pueden realizar modificaciones."}
         </CardDescription>
       </CardHeader>
@@ -412,6 +431,41 @@ export function OrderSummaryPanel({
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
               <span>${finalTotal.toFixed(2)}</span>
+            </div>
+            {isEditable && amountPaid > 0 && (
+              <>
+                <div className="flex justify-between text-sm text-green-700 dark:text-green-400">
+                  <span>Pagado</span>
+                  <span>${amountPaid.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-medium">
+                  <span>Saldo pendiente</span>
+                  <span>${effectiveBalance.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {isEditable && !isLoading && payments.length > 0 && (
+          <>
+            <div className="h-px bg-border my-2" />
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Pagos registrados</Label>
+              <ul className="space-y-1.5 max-h-28 overflow-y-auto text-sm">
+                {payments.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex justify-between gap-2 rounded border px-2 py-1 bg-muted/40"
+                  >
+                    <span className="truncate text-muted-foreground">
+                      {formatDateTime(p.created_at)}
+                      {p.payment_method?.name ? ` · ${p.payment_method.name}` : ""}
+                    </span>
+                    <span className="font-medium shrink-0">${p.amount.toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </>
         )}
@@ -540,6 +594,43 @@ export function OrderSummaryPanel({
 
         <div className="h-px bg-border my-2" />
 
+        {isEditable && !isLoading && effectiveBalance > 0 && onPaymentAmountChange && (
+          <div className="space-y-2">
+            <Label className="text-sm">Monto a cobrar (dinero)</Label>
+            <div className="relative">
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={effectiveBalance}
+                placeholder={effectiveBalance.toFixed(2)}
+                value={paymentAmount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "") {
+                    onPaymentAmountChange("");
+                    return;
+                  }
+                  const num = Number(value);
+                  if (!Number.isNaN(num) && num >= 0) {
+                    onPaymentAmountChange(num);
+                  }
+                }}
+                disabled={!isEditable}
+                className="pr-8"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                $
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {willCloseOnPay
+                ? "Con este monto se salda la cuenta y se cierra."
+                : "Pago parcial: la cuenta sigue abierta hasta cubrir el saldo."}
+            </p>
+          </div>
+        )}
+
         <PaymentMethodSelector
           paymentMethods={paymentMethods}
           selectedPaymentMethodId={selectedPaymentMethodId === "none" ? "none" : selectedPaymentMethodId}
@@ -556,14 +647,17 @@ export function OrderSummaryPanel({
               processing ||
               !isEditable ||
               total === 0 ||
-              selectedPaymentMethodId === "none"
+              effectiveBalance <= 0 ||
+              selectedPaymentMethodId === "none" ||
+              paymentAmount === "" ||
+              (typeof paymentAmount === "number" && paymentAmount <= 0)
             }
             onClick={onProcess}
           >
             {processing && (
               <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {processButtonLabel}
+            {willCloseOnPay ? processButtonLabel : "Registrar pago parcial"}
           </Button>
         )}
 
