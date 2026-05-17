@@ -834,11 +834,15 @@ export function TournamentScheduleDialog({
             selectedPhysicalSlotKeys.length > 0
         );
   const canConfirmDaysMode = !useSlotMode && days.length > 0 && days.every((d) => d.date);
+  /** Slots físicos solo aplican con stream (useSlotMode). Modo días (ej. generar playoffs) no usa selectedPhysicalSlotKeys. */
+  const courtsAndPhysicalSelectionOk = globalScheduleReview
+    ? selectedPhysicalSlotKeys.length > 0
+    : useSlotMode
+      ? selectedCourtIds.length > 0 && selectedPhysicalSlotKeys.length > 0
+      : selectedCourtIds.length > 0;
   const canConfirm =
     (useSlotMode ? canConfirmSlotMode : canConfirmDaysMode) &&
-    (globalScheduleReview
-      ? selectedPhysicalSlotKeys.length > 0
-      : selectedCourtIds.length > 0 && selectedPhysicalSlotKeys.length > 0) &&
+    courtsAndPhysicalSelectionOk &&
     availableSlots >= effectiveMatchCount &&
     !loadingCourts &&
     !loadingSlots &&
