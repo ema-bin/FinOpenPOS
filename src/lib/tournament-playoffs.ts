@@ -9,6 +9,11 @@
  * - Cruces: mejor vs peor disponible (determinístico basado en seed)
  */
 
+import {
+  PREDEFINED_FIRST_ROUND_BRACKETS,
+  type PredefinedFirstRoundMatch,
+} from "./playoff-first-round-brackets";
+
 export type QualifiedTeam = {
   team_id: number;
   from_group_id: number;
@@ -141,63 +146,6 @@ export function calculateFirstRound(totalTeams: number): {
 
   return { firstRoundName, teamsPlaying, teamsWithBye, nextRoundSize };
 }
-
-/**
- * Bracket prefijado: lista de partidos de primera ronda.
- * Cada partido es { team1: "1A", team2: "2B" | null }.
- * "1A" = 1ro grupo A, "2B" = 2do grupo B, "3A" = 3ro grupo A (A=1, B=2, … letra = orden de zona).
- */
-type PredefinedFirstRoundMatch = { team1: string; team2: string | null };
-/** Clave = cantidad inicial de parejas del torneo (no clasificados). */
-const PREDEFINED_FIRST_ROUND_BRACKETS: Record<number, PredefinedFirstRoundMatch[]> = {
-  10: [
-    { team1: "1A", team2: null },
-    { team1: "2B", team2: "2C" },
-    { team1: "1B", team2: "3A" },
-    { team1: "1C", team2: "2A" },
-  ],
-  16: [
-    { team1: "1A", team2: null },
-    { team1: "2C", team2: "2B" },
-    { team1: "1D", team2: null },
-    { team1: "1E", team2: null },
-    { team1: "1B", team2: null },
-    { team1: "2D", team2: "2A" },
-    { team1: "1C", team2: null },
-    { team1: "2E", team2: "3A" },
-  ],
-  17: [
-    { team1: "1A", team2: null },
-    { team1: "2C", team2: "2B" },
-    { team1: "1D", team2: null },
-    { team1: "1E", team2: "3B" },
-    { team1: "1B", team2: null },
-    { team1: "2D", team2: "2A" },
-    { team1: "1C", team2: null },
-    { team1: "2E", team2: "3A" },
-  ],
-  20: [
-    { team1: "1A", team2: null },
-    { team1: "2F", team2: "3B" },
-    { team1: "1D", team2: "2C" },
-    { team1: "1E", team2: "2B" },
-    { team1: "1B", team2: null },
-    { team1: "2E", team2: "2A" },
-    { team1: "1C", team2: "2D" },
-    { team1: "1F", team2: "3A" },
-  ],
-  /** 7 zonas de 3 (21 parejas) → 14 clasificados; el 6.º cruce es 1G vs 2A (no repetir 2G). */
-  21: [
-    { team1: "1A", team2: null },
-    { team1: "2G", team2: "2B" },
-    { team1: "1D", team2: "2C" },
-    { team1: "1E", team2: "2F" },
-    { team1: "1B", team2: null },
-    { team1: "1G", team2: "2A" },
-    { team1: "1C", team2: "2D" },
-    { team1: "1F", team2: "2E" },
-  ],
-};
 
 /** Convierte "1A" -> { pos: 1, group_order: 1 }, "2B" -> { pos: 2, group_order: 2 }, "1G" -> group 7, etc. */
 function parseSlot(slot: string): { pos: number; group_order: number } | null {
