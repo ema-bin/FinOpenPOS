@@ -103,6 +103,7 @@ export default function OrderDetailPage() {
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<
     number | "none"
   >("none");
+  const [paymentAmount, setPaymentAmount] = useState<number | "">("");
 
   // Descuentos
   const [discountPercentage, setDiscountPercentage] = useState<number | null>(null);
@@ -240,6 +241,28 @@ export default function OrderDetailPage() {
   }, [computedTotal, discountPercentage, discountAmount, displayOrder, isOrderOpen]);
 
   const finalTotal = Math.max(0, computedTotal - discountValue);
+
+  const amountPaid = useMemo(() => {
+    if (displayOrder?.amount_paid != null) return displayOrder.amount_paid;
+    return 0;
+  }, [displayOrder?.amount_paid]);
+
+  const balanceDue = useMemo(() => {
+    if (displayOrder?.balance_due != null) return displayOrder.balance_due;
+    return Math.max(0, finalTotal - amountPaid);
+  }, [displayOrder?.balance_due, finalTotal, amountPaid]);
+
+  const orderPayments = displayOrder?.payments ?? [];
+
+  useEffect(() => {
+    if (!isOrderOpen || balanceDue <= 0) return;
+    setPaymentAmount((prev) => {
+      if (prev === "" || (typeof prev === "number" && prev > balanceDue)) {
+        return Math.round(balanceDue * 100) / 100;
+      }
+      return prev;
+    });
+  }, [isOrderOpen, balanceDue, finalTotal]);
 
   // ---- Mutations con UI-first ----
 
@@ -416,15 +439,18 @@ export default function OrderDetailPage() {
       }
       return (await res.json()) as OrderDTO;
     },
-    onMutate: ({ amount: _amount }) => {
+    onMutate: ({ amount }) => {
       if (!order && !orderData) return { previousOrder: null };
       const previousOrder = order ?? orderData!;
+      const willClose = amount >= balanceDue - 0.009;
 
-      setOrder({
-        ...previousOrder,
-        status: "closed",
-        total_amount: finalTotal,
-      });
+      if (willClose) {
+        setOrder({
+          ...previousOrder,
+          status: "closed",
+          total_amount: finalTotal,
+        });
+      }
 
       return { previousOrder };
     },
@@ -437,14 +463,20 @@ export default function OrderDetailPage() {
       );
     },
     onSuccess: (updatedOrder) => {
-      // Actualizar estado local inmediatamente
       applyNormalizedOrder(updatedOrder);
-      // Actualizar cache de React Query para que se refleje en toda la app
       queryClient.setQueryData(["order", orderId], updatedOrder);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Cuenta cobrada y cerrada.");
-      // si querés redirigir:
-      // router.push("/admin/orders");
+      const closed = (updatedOrder as OrderDTO & { closed?: boolean }).closed;
+      if (closed) {
+        toast.success("Cuenta saldada y cerrada.");
+      } else {
+        toast.success("Pago parcial registrado.");
+        setPaymentAmount(
+          updatedOrder.balance_due != null && updatedOrder.balance_due > 0
+            ? Math.round(updatedOrder.balance_due * 100) / 100
+            : ""
+        );
+      }
     },
   });
 
@@ -750,9 +782,19 @@ export default function OrderDetailPage() {
       return;
     }
 
+    const amount =
+      typeof paymentAmount === "number" && paymentAmount > 0
+        ? paymentAmount
+        : balanceDue;
+
+    if (amount > balanceDue + 0.009) {
+      toast.error(`El monto no puede superar el saldo ($${balanceDue.toFixed(2)}).`);
+      return;
+    }
+
     payOrderMutation.mutate({
       paymentMethodId: Number(selectedPaymentMethodId),
-      amount: finalTotal,
+      amount,
       discountPercentage: discountPercentage,
       discountAmount: discountAmount,
     });
@@ -760,7 +802,10 @@ export default function OrderDetailPage() {
     displayOrder,
     orderId,
     selectedPaymentMethodId,
-    computedTotal,
+    paymentAmount,
+    balanceDue,
+    discountPercentage,
+    discountAmount,
     payOrderMutation,
   ]);
 
@@ -901,10 +946,16 @@ export default function OrderDetailPage() {
                 onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
                 loadingPaymentMethods={loadingPM}
                 paymentInfo={paymentInfo}
+                payments={orderPayments}
+                amountPaid={amountPaid}
+                balanceDue={balanceDue}
+                paymentAmount={paymentAmount}
+                onPaymentAmountChange={setPaymentAmount}
                 onProcess={handlePay}
                 onCancel={handleCancel}
                 processing={paying}
                 cancelling={cancelling}
+                processButtonLabel="Cobrar y cerrar cuenta"
                 isDiscountSectionEnabled={isOrderOpen}
               />
             </div>
