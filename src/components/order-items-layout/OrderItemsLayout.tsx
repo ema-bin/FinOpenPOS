@@ -383,12 +383,14 @@ export function OrderSummaryPanel({
   clearButtonLabel = "Limpiar",
   isDiscountSectionEnabled = true,
 }: OrderSummaryPanelProps) {
+  const allowsPartialPayments = Boolean(onPaymentAmountChange);
   const effectiveBalance =
     balanceDue !== undefined ? balanceDue : Math.max(0, finalTotal - amountPaid);
   const willCloseOnPay =
-    typeof paymentAmount === "number" &&
-    paymentAmount > 0 &&
-    paymentAmount >= effectiveBalance - 0.009;
+    !allowsPartialPayments ||
+    (typeof paymentAmount === "number" &&
+      paymentAmount > 0 &&
+      paymentAmount >= effectiveBalance - 0.009);
 
   return (
     <Card className={!isEditable ? "opacity-75" : ""}>
@@ -396,7 +398,9 @@ export function OrderSummaryPanel({
         <CardTitle>Resumen</CardTitle>
         <CardDescription>
           {isEditable
-            ? "Registrá pagos en dinero; al saldar el total se cierra la cuenta."
+            ? allowsPartialPayments
+              ? "Registrá pagos en dinero; al saldar el total se cierra la cuenta."
+              : "Indicá el método de pago y confirmá para cobrar el total de una vez."
             : "Esta cuenta está cerrada. No se pueden realizar modificaciones."}
         </CardDescription>
       </CardHeader>
@@ -649,8 +653,9 @@ export function OrderSummaryPanel({
               total === 0 ||
               effectiveBalance <= 0 ||
               selectedPaymentMethodId === "none" ||
-              paymentAmount === "" ||
-              (typeof paymentAmount === "number" && paymentAmount <= 0)
+              (allowsPartialPayments &&
+                (paymentAmount === "" ||
+                  (typeof paymentAmount === "number" && paymentAmount <= 0)))
             }
             onClick={onProcess}
           >

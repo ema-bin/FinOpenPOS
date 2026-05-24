@@ -1,6 +1,11 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import {
+  fetchOrderIncomePayments,
+  roundMoney,
+  sumPayments,
+} from "@/lib/order-payment-helpers";
 
 // POST /api/orders/quick-sale
 // body: { playerId, items: [{ productId, quantity }], paymentMethodId }
@@ -56,31 +61,53 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1. Buscar o crear orden
-    // Primero verificar si hay una orden abierta
-    const { hasOpen, orderId: existingOrderId } = await repos.orders.hasOpenOrder(playerId);
-    
-    let orderId: number;
-    
-    if (hasOpen && existingOrderId) {
-      // Usar la orden existente
-      orderId = existingOrderId;
-      
-      // Limpiar items existentes de la orden
-      const existingOrder = await repos.orders.findByIdWithItems(existingOrderId);
-      if (existingOrder && existingOrder.items && existingOrder.items.length > 0) {
-        for (const item of existingOrder.items) {
-          await repos.orderItems.delete(item.id);
-        }
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 1. Órden abierta reutilizable sólo si no tiene pagos registrados (anticipos parciales no aplican a venta rápida).
+    const { data: openOrders, error: openErr } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("player_id", playerId)
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+
+    if (openErr) {
+      console.error("quick-sale: list open orders", openErr);
+      return NextResponse.json({ error: "Error listing open orders" }, { status: 500 });
+    }
+
+    let orderId: number | undefined;
+    for (const row of openOrders ?? []) {
+      const txs = await fetchOrderIncomePayments(supabase, row.id);
+      const paid = roundMoney(sumPayments(txs));
+      if (paid <= 0) {
+        orderId = row.id;
+        break;
       }
-    } else {
-      // Crear nueva orden
+    }
+
+    if (orderId === undefined) {
       const newOrder = await repos.orders.create({
         playerId,
         total_amount: 0,
         status: "open",
       });
       orderId = newOrder.id;
+    } else {
+      const existingOrder = await repos.orders.findByIdWithItems(orderId);
+      if (existingOrder?.items?.length) {
+        for (const item of existingOrder.items) {
+          await repos.orderItems.delete(item.id);
+        }
+      }
     }
 
     // 2. Agregar items a la orden
@@ -106,18 +133,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Obtener supabase y usuario (necesario para filtrar por cantina y transacción)
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // 4. Misma lógica que pay: solo ítems de categoría cantina (quitar no cantina y recalcular)
+    // 3. Misma lógica que pay: solo ítems de categoría cantina (quitar no cantina y recalcular)
     const { data: fetchedItems, error: itemsError } = await supabase
       .from("order_items")
       .select(
@@ -184,7 +200,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Recalcular total solo con ítems cantina
+    // 4. Recalcular total solo con ítems cantina
     const total = await repos.orderItems.calculateOrderTotal(orderId);
     await repos.orders.update(orderId, { total_amount: total });
 
@@ -195,7 +211,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 6. Validar método de pago
+    // 5. Validar método de pago
     const { data: paymentMethod, error: pmError } = await supabase
       .from("payment_methods")
       .select("id, name")
@@ -209,7 +225,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 7. Crear transacción
+    // 6. Crear transacción
     const { error: txError } = await supabase.from("transactions").insert({
       order_id: orderId,
       payment_method_id: paymentMethodId,
@@ -228,7 +244,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 8. Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina (igual que pay)
+    // 7. Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina (igual que pay)
     const normalizeProductRecord = (productField: any) => {
       if (!productField) return null;
       return Array.isArray(productField) ? productField[0] ?? null : productField;
@@ -272,7 +288,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 9. Marcar orden como cerrada
+    // 8. Marcar orden como cerrada
     const { error: updateOrderError } = await supabase
       .from("orders")
       .update({
@@ -289,7 +305,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 10. Devolver la orden finalizada
+    // 9. Devolver la orden finalizada
     const finalOrder = await repos.orders.findByIdWithItems(orderId);
     if (!finalOrder) {
       return NextResponse.json(
