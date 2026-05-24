@@ -208,10 +208,27 @@ export interface ScheduleDay {
   endTime: string; // HH:MM
 }
 
+export interface SchedulePhysicalSlotCourtSelection {
+  /**
+   * tournament_group_slots.id si el hueco viene del torneo.
+   * Opcional cuando el día fue agregado a mano (se reusa un id modelo de la misma ventana horaria).
+   */
+  tournamentGroupSlotId?: number;
+  courtId: number;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface ScheduleConfig {
   days: ScheduleDay[];
   matchDuration: number; // minutes
   courtIds: number[];
+  /**
+   * Si está presente con al menos una fila: programar usando solo estas combinaciones (ventana × cancha),
+   * igual que Equipos → generar horarios. Las ventanas se descomponen en turnos playoff.
+   */
+  selectedPhysicalSlots?: SchedulePhysicalSlotCourtSelection[];
 }
 
 // Tournament Registration Payment DTOs

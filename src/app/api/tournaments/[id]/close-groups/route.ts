@@ -5,8 +5,36 @@ import { generatePlayoffs } from "@/lib/tournament-playoffs";
 
 type RouteParams = { params: { id: string } };
 
-import type { ScheduleDay, ScheduleConfig } from "@/models/dto/tournament";
+import type { ScheduleDay, ScheduleConfig, SchedulePhysicalSlotCourtSelection } from "@/models/dto/tournament";
 
+function parsePlayoffScheduleSelections(
+  body: Record<string, unknown>
+): SchedulePhysicalSlotCourtSelection[] {
+  const raw = body.selectedPhysicalSlots;
+  if (!Array.isArray(raw)) return [];
+  const out: SchedulePhysicalSlotCourtSelection[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const slotId = Number(r.tournamentGroupSlotId ?? r.slotId);
+    const courtId = Number(r.courtId);
+    const slotDate = String(r.slotDate ?? "").trim().slice(0, 10);
+    const startTime = String(r.startTime ?? "").trim().slice(0, 5);
+    const endTime = String(r.endTime ?? "").trim().slice(0, 5);
+    if (!Number.isFinite(courtId) || courtId <= 0) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slotDate)) continue;
+    if (!startTime || !endTime) continue;
+    const hasSlotId = Number.isFinite(slotId) && slotId > 0;
+    out.push({
+      tournamentGroupSlotId: hasSlotId ? slotId : undefined,
+      courtId,
+      slotDate,
+      startTime,
+      endTime,
+    });
+  }
+  return out;
+}
 // Función helper para generar slots de tiempo
 function generateTimeSlots(
   days: ScheduleDay[],
@@ -50,6 +78,7 @@ import {
   playoffMatchDurationMinutes,
   slotIntervalMinutesForPlayoffScheduling,
 } from "@/lib/playoff-match-duration";
+import { expandPhysicalWindowsToPlayoffSlotList } from "@/lib/playoff-expand-selected-slots";
 
 // Using Pick from TournamentMatch for internal processing
 type MatchRow = Pick<
@@ -78,15 +107,52 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  // Obtener configuración de horarios del body
-  const body = await req.json().catch(() => ({}));
-  const scheduleConfig: ScheduleConfig | undefined = body.days
-    ? {
-        days: body.days,
-        matchDuration: body.matchDuration || 60,
-        courtIds: body.courtIds || [],
+  // Obtener configuración de horarios del body (grilla legacy o slots del torneo × cancha)
+  const bodyRaw = await req.json().catch(() => ({}));
+  const body = typeof bodyRaw === "object" && bodyRaw !== null ? (bodyRaw as Record<string, unknown>) : {};
+  const selectedPhysicalSlotsFromBody = parsePlayoffScheduleSelections(body);
+  const hasPhysicalScheduling = selectedPhysicalSlotsFromBody.length > 0;
+
+  const bodyDaysUnknown = body.days as unknown;
+  const hasLegacyDaysGrid =
+    Array.isArray(bodyDaysUnknown) &&
+    bodyDaysUnknown.length > 0 &&
+    bodyDaysUnknown.every(
+      (d: unknown) =>
+        d !== null &&
+        typeof d === "object" &&
+        typeof (d as { date?: unknown }).date === "string" &&
+        String((d as { date?: string }).date!).trim().length >= 10
+    );
+
+  let scheduleConfig: ScheduleConfig | undefined;
+  if (hasPhysicalScheduling) {
+    const courtIdsParsed = Array.isArray(body.courtIds)
+      ? (body.courtIds as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    const courtIdsFromSelections: number[] = [];
+    if (courtIdsParsed.length === 0) {
+      const seen = new Map<number, true>();
+      for (const row of selectedPhysicalSlotsFromBody) {
+        if (seen.has(row.courtId)) continue;
+        seen.set(row.courtId, true);
+        courtIdsFromSelections.push(row.courtId);
       }
-    : undefined;
+    }
+    scheduleConfig = {
+      days: [],
+      matchDuration: Number(body.matchDuration) || 60,
+      courtIds:
+        courtIdsParsed.length > 0 ? courtIdsParsed : courtIdsFromSelections,
+      selectedPhysicalSlots: selectedPhysicalSlotsFromBody,
+    };
+  } else if (hasLegacyDaysGrid) {
+    scheduleConfig = {
+      days: body.days as ScheduleDay[],
+      matchDuration: Number(body.matchDuration) || 60,
+      courtIds: Array.isArray(body.courtIds) ? (body.courtIds as number[]) : [],
+    };
+  }
 
   // 1) torneo
   const { data: t, error: terr } = await supabase
@@ -427,38 +493,64 @@ export async function POST(req: Request, { params }: RouteParams) {
   );
   const playoffSlotInterval = slotIntervalMinutesForPlayoffScheduling(playoffMin);
 
-  // Asignar horarios a los matches si se proporcionó configuración
-  let timeSlots: Array<{ date: string; startTime: string; endTime: string }> = [];
+  // Asignar horarios cuando hay slots del torneo por cancha o grilla días × canchas
+  const usePhysicalSelections =
+    scheduleConfig &&
+    (scheduleConfig.selectedPhysicalSlots?.length ?? 0) > 0 &&
+    scheduleConfig.courtIds.length > 0;
 
-  if (scheduleConfig && scheduleConfig.days.length > 0 && scheduleConfig.courtIds.length > 0) {
-    timeSlots = generateTimeSlots(
+  const useLegacyDaysGrid =
+    scheduleConfig &&
+    scheduleConfig.days.length > 0 &&
+    scheduleConfig.courtIds.length > 0 &&
+    !(scheduleConfig.selectedPhysicalSlots?.length);
+
+  let scheduleSlots: Array<{ date: string; startTime: string; court_id: number }> | null = null;
+
+  if (usePhysicalSelections && scheduleConfig?.selectedPhysicalSlots?.length) {
+    scheduleSlots = expandPhysicalWindowsToPlayoffSlotList(
+      scheduleConfig.selectedPhysicalSlots,
+      playoffMin
+    );
+    if (scheduleSlots.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Las ventanas elegidas no generan ningún hueco valido para partidos de playoff (revisa la duracion de eliminatoria y los horarios del torneo).",
+        },
+        { status: 400 }
+      );
+    }
+  } else if (useLegacyDaysGrid && scheduleConfig) {
+    const raw = generateTimeSlots(
       scheduleConfig.days,
       playoffSlotInterval,
       scheduleConfig.courtIds.length
     );
+    scheduleSlots = raw.map((s, idx) => ({
+      date: s.date,
+      startTime: s.startTime,
+      court_id: scheduleConfig!.courtIds[idx % scheduleConfig!.courtIds.length]!,
+    }));
+  }
 
-    // Contar matches que necesitan horarios:
-    // - Matches reales de la primera ronda (tienen ambos team1_id y team2_id)
-    // - Matches de rondas siguientes (tienen source_team1 o source_team2, aunque aún no tengan equipos)
-    // NO contar: byes de la primera ronda (solo tienen team1_id o team2_id, pero no ambos, y no tienen source)
-    const matchesNeedingSchedule = allMatchesWithSchedule.filter(m => {
-      // Es un match real de la primera ronda (tiene ambos equipos)
+  if (scheduleSlots && scheduleSlots.length > 0) {
+    const matchesNeedingSchedule = allMatchesWithSchedule.filter((m) => {
       if (m.team1_id && m.team2_id) return true;
-      // Es un match de una ronda posterior (tiene source, aunque aún no tenga equipos)
       if (m.source_team1 || m.source_team2) return true;
-      // Es un bye de la primera ronda (solo tiene un equipo y no tiene source)
       return false;
     });
-    
-    // Validar que hay suficientes slots
-    if (timeSlots.length < matchesNeedingSchedule.length) {
+
+    if (scheduleSlots.length < matchesNeedingSchedule.length) {
       return NextResponse.json(
-        { error: `No hay suficientes slots disponibles. Se necesitan ${matchesNeedingSchedule.length} slots pero solo hay ${timeSlots.length} disponibles.` },
+        {
+          error: `No hay suficientes slots disponibles. Se necesitan ${matchesNeedingSchedule.length} slots pero solo hay ${scheduleSlots.length} disponibles.`,
+        },
         { status: 400 }
       );
     }
 
-    const calculateEndTime = (startTime: string): string => {
+    const calculateEndTimeFromStart = (startTime: string): string => {
       const dur = playoffMatchDurationMinutes(playoffMin);
       const [startH, startM] = startTime.split(":").map(Number);
       const startMinutes = startH * 60 + startM;
@@ -468,10 +560,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
     };
 
-    // Asignar slots secuencialmente a los matches
-    // Ordenar matches por ronda y posición para asignar horarios lógicamente
-    // Los más fuertes (primeros matches de la primera ronda) deben jugar primero
-    // Crear un array de índices ordenados para mapear los horarios correctamente
     const matchIndices = allMatchesWithSchedule.map((_, index) => index);
     matchIndices.sort((a, b) => {
       const matchA = allMatchesWithSchedule[a];
@@ -486,38 +574,24 @@ export async function POST(req: Request, { params }: RouteParams) {
       const aOrder = roundOrder[matchA.round] || 999;
       const bOrder = roundOrder[matchB.round] || 999;
       if (aOrder !== bOrder) return aOrder - bOrder;
-      
-      // Dentro de la misma ronda, los primeros matches (más fuertes) van primero
-      // Esto da ventaja deportiva a los equipos más fuertes (más descanso)
       return matchA.bracket_pos - matchB.bracket_pos;
     });
 
-    // Asignar horarios a los matches usando los índices ordenados
-    // Asignar horarios a:
-    // - Matches reales de la primera ronda (tienen ambos team1_id y team2_id)
-    // - Matches de rondas siguientes (tienen source_team1 o source_team2)
-    // NO asignar horarios a: byes de la primera ronda (solo tienen un equipo y no tienen source)
     let slotIndex = 0;
     matchIndices.forEach((originalIndex) => {
       const match = allMatchesWithSchedule[originalIndex];
-      
-      // Determinar si este match necesita horario
-      const needsSchedule = 
-        (match.team1_id && match.team2_id) || // Match real de primera ronda
-        (match.source_team1 || match.source_team2); // Match de ronda posterior
-      
-      if (needsSchedule && slotIndex < timeSlots.length) {
-        const slot = timeSlots[slotIndex];
+      const needsSchedule =
+        Boolean(match.team1_id && match.team2_id) ||
+        Boolean(match.source_team1 || match.source_team2);
+
+      if (needsSchedule && slotIndex < scheduleSlots!.length) {
+        const slot = scheduleSlots![slotIndex];
         match.match_date = slot.date;
         match.start_time = slot.startTime;
-        match.end_time = calculateEndTime(slot.startTime);
-        // Los slots se generan con un slot por cancha en cada intervalo
-        // Entonces el índice de la cancha es: slotIndex % numCourts
-        const courtIndex = slotIndex % scheduleConfig.courtIds.length;
-        match.court_id = scheduleConfig.courtIds[courtIndex];
+        match.end_time = calculateEndTimeFromStart(slot.startTime);
+        match.court_id = slot.court_id;
         slotIndex++;
       }
-      // Los matches de bye de la primera ronda mantienen match_date, start_time, end_time y court_id como null
     });
   }
 
