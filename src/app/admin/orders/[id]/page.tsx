@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Loader2Icon,
   ArrowLeftIcon,
@@ -104,6 +106,8 @@ export default function OrderDetailPage() {
     number | "none"
   >("none");
   const [paymentAmount, setPaymentAmount] = useState<number | "">("");
+  /** Opcional: mostrar campo de monto para pagos parciales (por defecto se cobra el saldo completo). */
+  const [allowPartialPayment, setAllowPartialPayment] = useState(false);
 
   // Descuentos
   const [discountPercentage, setDiscountPercentage] = useState<number | null>(null);
@@ -255,14 +259,20 @@ export default function OrderDetailPage() {
   const orderPayments = displayOrder?.payments ?? [];
 
   useEffect(() => {
-    if (!isOrderOpen || balanceDue <= 0) return;
+    if (!allowPartialPayment) {
+      setPaymentAmount("");
+    }
+  }, [allowPartialPayment]);
+
+  useEffect(() => {
+    if (!isOrderOpen || balanceDue <= 0 || !allowPartialPayment) return;
     setPaymentAmount((prev) => {
       if (prev === "" || (typeof prev === "number" && prev > balanceDue)) {
         return Math.round(balanceDue * 100) / 100;
       }
       return prev;
     });
-  }, [isOrderOpen, balanceDue, finalTotal]);
+  }, [isOrderOpen, balanceDue, finalTotal, allowPartialPayment]);
 
   // ---- Mutations con UI-first ----
 
@@ -471,11 +481,8 @@ export default function OrderDetailPage() {
         toast.success("Cuenta saldada y cerrada.");
       } else {
         toast.success("Pago parcial registrado.");
-        setPaymentAmount(
-          updatedOrder.balance_due != null && updatedOrder.balance_due > 0
-            ? Math.round(updatedOrder.balance_due * 100) / 100
-            : ""
-        );
+        setAllowPartialPayment(false);
+        setPaymentAmount("");
       }
     },
   });
@@ -928,7 +935,27 @@ export default function OrderDetailPage() {
           </div>
 
           <div className="lg:col-span-1">
-            <div className="lg:sticky lg:top-4">
+            <div className="lg:sticky lg:top-4 space-y-3">
+              {isOrderOpen && balanceDue > 0 ? (
+                <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
+                  <Checkbox
+                    id="allow-partial-pay"
+                    checked={allowPartialPayment}
+                    onCheckedChange={(checked) =>
+                      setAllowPartialPayment(Boolean(checked))
+                    }
+                  />
+                  <div className="grid gap-1 leading-snug">
+                    <Label htmlFor="allow-partial-pay" className="cursor-pointer font-medium">
+                      Registrar pago parcial
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Si no lo marcás, se cobra el saldo pendiente completo en un solo paso. Activá esta opción sólo si
+                      querés ingresar un monto menor y dejar la cuenta abierta.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               <OrderSummaryPanel
                 total={computedTotal}
                 finalTotal={finalTotal}
@@ -949,8 +976,10 @@ export default function OrderDetailPage() {
                 payments={orderPayments}
                 amountPaid={amountPaid}
                 balanceDue={balanceDue}
-                paymentAmount={paymentAmount}
-                onPaymentAmountChange={setPaymentAmount}
+                paymentAmount={allowPartialPayment ? paymentAmount : ""}
+                onPaymentAmountChange={
+                  allowPartialPayment ? setPaymentAmount : undefined
+                }
                 onProcess={handlePay}
                 onCancel={handleCancel}
                 processing={paying}

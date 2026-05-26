@@ -1,6 +1,11 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { createClient } from "@/lib/supabase/server";
+import {
+  enrichOrderWithPaymentSummary,
+  type OrderForPaymentResponse,
+} from "@/lib/order-response-with-payments";
 
 type RouteParams = { params: { id: string; itemId: string } };
 
@@ -46,13 +51,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const total = await repos.orderItems.calculateOrderTotal(orderId);
     await repos.orders.update(orderId, { total_amount: total });
 
-    // Return updated order
     const updatedOrder = await repos.orders.findByIdWithItems(orderId);
     if (!updatedOrder) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json(updatedOrder);
+    const supabase = createClient();
+    const payload = await enrichOrderWithPaymentSummary(
+      supabase,
+      updatedOrder as unknown as OrderForPaymentResponse
+    );
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -99,13 +108,17 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     const total = await repos.orderItems.calculateOrderTotal(orderId);
     await repos.orders.update(orderId, { total_amount: total });
 
-    // Return updated order
     const updatedOrder = await repos.orders.findByIdWithItems(orderId);
     if (!updatedOrder) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json(updatedOrder);
+    const supabase = createClient();
+    const payload = await enrichOrderWithPaymentSummary(
+      supabase,
+      updatedOrder as unknown as OrderForPaymentResponse
+    );
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
