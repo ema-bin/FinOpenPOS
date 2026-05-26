@@ -28,8 +28,12 @@ export interface UpdateOrderItemInput {
 class OrdersService {
   private baseUrl = "/api/orders";
 
-  async getAll(): Promise<OrderDTO[]> {
-    const response = await fetch(this.baseUrl);
+  async getAll(params?: { status?: OrderStatus }): Promise<OrderDTO[]> {
+    const url =
+      params?.status !== undefined
+        ? `${this.baseUrl}?status=${encodeURIComponent(params.status)}`
+        : this.baseUrl;
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Error al cargar las cuentas");
     }
@@ -141,12 +145,12 @@ class OrdersService {
   }
 
   async getOpenOrdersCount(): Promise<number> {
-    const response = await fetch(this.baseUrl);
-    if (!response.ok) {
+    try {
+      const opens = await this.getAll({ status: "open" });
+      return opens.length;
+    } catch {
       return 0;
     }
-    const orders: OrderDTO[] = await response.json();
-    return orders.filter((o) => o.status === "open").length;
   }
 
   async quickSale(input: {
