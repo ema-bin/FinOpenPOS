@@ -2,10 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
 import { createClient } from '@/lib/supabase/server';
-import {
-  buildOrderPaymentSummary,
-  computeDiscountAndTotal,
-} from '@/lib/order-payment-helpers';
+import { enrichOrderWithPaymentSummary } from '@/lib/order-response-with-payments';
+import type { OrderForPaymentResponse } from '@/lib/order-response-with-payments';
 
 type RouteParams = { params: { id: string } };
 
@@ -32,42 +30,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const items = order.items ?? [];
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.unit_price * item.quantity,
-      0
-    );
-    const { finalTotal } = computeDiscountAndTotal(
-      subtotal,
-      (order as { discount_percentage?: number | null }).discount_percentage,
-      (order as { discount_amount?: number | null }).discount_amount
-    );
-
-    const paymentSummary = await buildOrderPaymentSummary(
+    const payload = await enrichOrderWithPaymentSummary(
       supabase,
-      orderId,
-      finalTotal
+      order as unknown as OrderForPaymentResponse
     );
 
-    let paymentInfo = null;
-    if (order.status === "closed" && paymentSummary.payments.length > 0) {
-      const last = paymentSummary.payments[paymentSummary.payments.length - 1];
-      paymentInfo = {
-        payment_method_id: last.payment_method_id,
-        payment_method: last.payment_method,
-        amount: last.amount,
-      };
-    }
-
-    const orderWithDiscounts = {
-      ...order,
-      discount_percentage: (order as { discount_percentage?: number | null }).discount_percentage ?? null,
-      discount_amount: (order as { discount_amount?: number | null }).discount_amount ?? null,
-      payment_info: paymentInfo,
-      ...paymentSummary,
-    };
-
-    return NextResponse.json(orderWithDiscounts);
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -138,46 +106,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Si la orden está cerrada, obtener información de pago
-    let paymentInfo = null;
-    if (updatedOrder.status === "closed") {
-      const { data: transaction } = await supabase
-        .from("transactions")
-        .select(
-          `
-          id,
-          payment_method_id,
-          amount,
-          payment_method:payment_methods!payment_method_id (
-            id,
-            name
-          )
-        `
-        )
-        .eq("order_id", orderId)
-        .eq("type", "income")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+    const payload = await enrichOrderWithPaymentSummary(
+      supabase,
+      updatedOrder as unknown as OrderForPaymentResponse
+    );
 
-      if (transaction) {
-        paymentInfo = {
-          payment_method_id: transaction.payment_method_id,
-          payment_method: transaction.payment_method,
-          amount: transaction.amount,
-        };
-      }
-    }
-
-    // Incluir campos de descuento y payment_info en la respuesta
-    const orderWithDiscounts = {
-      ...updatedOrder,
-      discount_percentage: (updatedOrder as any).discount_percentage ?? null,
-      discount_amount: (updatedOrder as any).discount_amount ?? null,
-      payment_info: paymentInfo,
-    };
-
-    return NextResponse.json(orderWithDiscounts);
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
