@@ -7,10 +7,7 @@ export class OrdersRepository extends BaseRepository {
    * Get all orders, optionally filtered by status
    */
   async findAll(status?: OrderStatus): Promise<OrderWithPlayer[]> {
-    let query = this.supabase
-      .from("orders")
-      .select(
-        `
+    const select = `
         id,
         player_id,
         total_amount,
@@ -24,20 +21,32 @@ export class OrdersRepository extends BaseRepository {
           first_name,
           last_name
         )
-      `
-      );
+      `;
 
-    if (status) {
-      query = query.eq("status", status);
+    const pageSize = 1000;
+    const all: OrderWithPlayer[] = [];
+    let offset = 0;
+
+    // PostgREST puede limitar filas por respuesta; paginar hasta agotar.
+    for (;;) {
+      let q = this.supabase.from("orders").select(select);
+      if (status) {
+        q = q.eq("status", status);
+      }
+      q = q.order("created_at", { ascending: false }).range(offset, offset + pageSize - 1);
+
+      const { data, error } = await q;
+      if (error) {
+        throw new Error(`Failed to fetch orders: ${error.message}`);
+      }
+
+      const batch = (data ?? []) as unknown as OrderWithPlayer[];
+      if (batch.length === 0) break;
+      all.push(...batch);
+      offset += batch.length;
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to fetch orders: ${error.message}`);
-    }
-
-    return (data ?? []) as unknown as OrderWithPlayer[];
+    return all;
   }
 
   /**

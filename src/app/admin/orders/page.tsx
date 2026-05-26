@@ -62,10 +62,6 @@ import type { ProductCategoryDTO } from "@/models/dto/product-category";
 import { useMemo } from "react";
 
 // ---- fetchers ----
-async function fetchOrders(): Promise<OrderDTO[]> {
-  return ordersService.getAll();
-}
-
 async function fetchPlayers(): Promise<PlayerDTO[]> {
   return playersService.getAll("active");
 }
@@ -177,16 +173,52 @@ export default function OrdersPage() {
     useState<PlayerStatus>("active");
   const [creatingPlayer, setCreatingPlayer] = useState(false);
 
+  /** Filtro de estado aplicado en el servidor (?status); "all" = sin query param (lista completa paginada). */
+  const ordersApiStatus = useMemo((): OrderStatus | undefined => {
+    if (activeTab === "open-accounts") {
+      return statusFilterOpenAccounts === "all" ? undefined : statusFilterOpenAccounts;
+    }
+    if (activeTab === "sales") {
+      return statusFilterSales === "all" ? undefined : statusFilterSales;
+    }
+    return undefined;
+  }, [activeTab, statusFilterOpenAccounts, statusFilterSales]);
+
+  /** Resumen lateral en Ventas sobre todas las órdenes, no sólo sobre la tabla si hay filtro de estado. */
+  const salesSummaryNeedsFullOrders =
+    activeTab === "sales" && ordersApiStatus !== undefined;
+
   // ---- Queries ----
   const {
     data: orders = [],
     isLoading: loadingOrders,
     isError: ordersError,
   } = useQuery({
-    queryKey: ["orders"],
-    queryFn: fetchOrders,
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    queryKey: ["orders", "list", activeTab, ordersApiStatus ?? "all"],
+    queryFn: () =>
+      ordersApiStatus !== undefined
+        ? ordersService.getAll({ status: ordersApiStatus })
+        : ordersService.getAll(),
+    enabled: activeTab === "open-accounts" || activeTab === "sales",
+    staleTime: 1000 * 60 * 5,
   });
+
+  /** Listado estable de todas las abiertas (validar cuenta duplicada, etc.). */
+  const { data: openOrdersOnly = [] } = useQuery({
+    queryKey: ["orders", "list", "status", "open"],
+    queryFn: () => ordersService.getAll({ status: "open" }),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: ordersSalesSummaryFeed = [] } = useQuery({
+    queryKey: ["orders", "sales-summary-feed"],
+    queryFn: () => ordersService.getAll(),
+    enabled: salesSummaryNeedsFullOrders,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const ordersForAnalytics = salesSummaryNeedsFullOrders ? ordersSalesSummaryFeed : orders;
+
 
   const {
     data: players = [],
@@ -431,20 +463,20 @@ export default function OrdersPage() {
     const toTime = new Date(toDate).getTime();
 
     // 1. Cuentas abiertas en el rango (created_at dentro del rango)
-    const openedToday = orders.filter((order) => {
+    const openedToday = ordersForAnalytics.filter((order) => {
       const createdTime = new Date(order.created_at).getTime();
       return createdTime >= fromTime && createdTime <= toTime;
     }).length;
 
     // 2. Cuentas cerradas en el rango (closed_at dentro del rango)
-    const closedToday = orders.filter((order) => {
+    const closedToday = ordersForAnalytics.filter((order) => {
       if (!order.closed_at) return false;
       const closedTime = new Date(order.closed_at).getTime();
       return closedTime >= fromTime && closedTime <= toTime;
     }).length;
 
     // 3. Ventas rápidas (cliente "Venta rápida")
-    const quickSales = orders.filter((order) => {
+    const quickSales = ordersForAnalytics.filter((order) => {
       if (!order.closed_at) return false;
       const closedTime = new Date(order.closed_at).getTime();
       if (closedTime < fromTime || closedTime > toTime) return false;
@@ -503,7 +535,7 @@ export default function OrdersPage() {
 
   // ---- Mutations ----
 
-  // Crear cuenta con optimistic update completo
+  // Crear cuenta
   const createOrderMutation = useMutation({
     mutationFn: async (payload: { playerId: number | null }) => {
       try {
@@ -528,78 +560,27 @@ export default function OrdersPage() {
         throw new Error("No se pudo crear la cuenta. Verificá que el cliente esté seleccionado e intentá nuevamente.");
       }
     },
-    onMutate: async (payload) => {
-      // Cancelar queries en progreso para evitar conflictos
-      await queryClient.cancelQueries({ queryKey: ["orders"] });
-
-      const previousOrders =
-        queryClient.getQueryData<OrderDTO[]>(["orders"]) ?? [];
-
-      // Optimistic update: crear orden temporal con datos del cliente
-      const player = players.find((p) => p.id === payload.playerId);
-      const tempId = -Math.floor(Math.random() * 1_000_000);
-      const optimisticOrder: OrderDTO = {
-        id: tempId,
-        status: "open",
-        total_amount: 0,
-        discount_percentage: 0,
-        discount_amount: 0,
-        created_at: new Date().toISOString(),
-        closed_at: null,
-        items: [],
-        player: player
-          ? {
-              id: player.id,
-              first_name: player.first_name,
-              last_name: player.last_name,
-            }
-          : null,
-      };
-
-      // Actualizar cache inmediatamente
-      queryClient.setQueryData<OrderDTO[]>(["orders"], (old) => [
-        optimisticOrder,
-        ...(old ?? []),
-      ]);
-
-      // NO cerrar el dialog aquí - esperar a que la mutación termine exitosamente
-      // NO navegar aquí - esperar a que la mutación termine exitosamente
-      // Limpiar error previo
+    onMutate: async () => {
+      await queryClient.cancelQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "orders",
+      });
       setOrderError(null);
-
-      return { previousOrders, tempId, optimisticOrder };
     },
-    onError: (err, _vars, ctx) => {
-      // Rollback en caso de error
-      if (ctx?.previousOrders) {
-        queryClient.setQueryData(["orders"], ctx.previousOrders);
-      }
-      
-      // Mostrar error en el dialog (el dialog permanece abierto)
-      const errorMessage = err instanceof Error
-        ? err.message
-        : "Error al crear la cuenta.";
-      
+    onError: (err) => {
+      const errorMessage =
+        err instanceof Error ? err.message : "Error al crear la cuenta.";
       setOrderError(errorMessage);
-      
-      // También mostrar toast para feedback inmediato
       toast.error(errorMessage);
     },
-    onSuccess: (newOrder, _vars, ctx) => {
-      // Limpiar error y cerrar dialog
+    onSuccess: (newOrder) => {
       setOrderError(null);
       setIsNewOrderDialogOpen(false);
       setSelectedPlayerId(null);
-      
-      // Reemplazar orden optimista con la real
-      queryClient.setQueryData<OrderDTO[]>(["orders"], (old) => {
-        if (!old) return [newOrder];
-        // Remover la orden optimista y agregar la real
-        const filtered = old.filter((o) => o.id !== ctx?.tempId);
-        return [newOrder, ...filtered];
+
+      queryClient.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "orders",
       });
 
-      // Navegar a la nueva orden
       router.push(`/admin/orders/${newOrder.id}`);
 
       toast.success("Cuenta creada.");
@@ -612,7 +593,7 @@ export default function OrdersPage() {
       return;
     }
 
-    const alreadyOpen = orders.some(
+    const alreadyOpen = openOrdersOnly.some(
       (o) => o.player?.id === selectedPlayerId && o.status === "open"
     );  
     if (alreadyOpen) {
@@ -623,7 +604,7 @@ export default function OrdersPage() {
     createOrderMutation.mutate({
       playerId: selectedPlayerId,
     });
-  }, [selectedPlayerId, createOrderMutation]);
+  }, [selectedPlayerId, createOrderMutation, openOrdersOnly]);
 
   // Crear cliente rápido
   const createPlayerMutation = useMutation({
@@ -870,8 +851,16 @@ export default function OrdersPage() {
               </div>
             </CardContent>
 
-            <CardFooter className="flex justify-between text-sm text-muted-foreground">
-              <span>Total cuentas: {filteredOrders.length}</span>
+            <CardFooter className="flex flex-col items-stretch gap-1 text-sm text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Total cuentas: {filteredOrders.length}</span>
+              </div>
+              {statusFilterOpenAccounts === "open" ? (
+                <p className="text-xs">
+                  Se piden al servidor solo órdenes con estado <strong>abierta</strong> (paginado), para incluir
+                  cuentas viejas sin depender del listado completo.
+                </p>
+              ) : null}
             </CardFooter>
           </Card>
         </TabsContent>
