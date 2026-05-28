@@ -30,6 +30,7 @@ import PlayoffsViewTab from "./PlayoffsViewTab";
 import ShareGroupScheduleTab from "./ShareGroupScheduleTab";
 import ShareGroupStandingsTab from "./ShareGroupStandingsTab";
 import ShareTournamentFlyerTab from "./ShareTournamentFlyerTab";
+import SharePlayoffsTab from "./SharePlayoffsTab";
 import PlayoffPreviewTab from "./PlayoffPreviewTab";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
@@ -269,10 +270,8 @@ export default function TournamentDetailPage() {
           )}
 
           {activeTab === "share-playoffs" && (
-            <TabsContent value="share-playoffs" className="pt-4">
-              <div className="text-center py-8 text-muted-foreground">
-                Próximamente: Compartir playoffs
-              </div>
+            <TabsContent value="share-playoffs" className="px-0 pt-1 pb-0">
+              <SharePlayoffsTab tournament={tournament} />
             </TabsContent>
           )}
         </Tabs>
