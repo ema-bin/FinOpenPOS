@@ -12,7 +12,7 @@ import {
 } from "@/components/tournament-bracket-share";
 import type { PlayoffRow, TeamDTO, TournamentDTO } from "@/models/dto/tournament";
 
-const SHARE_EXPORT_BG = "#071428";
+const SHARE_EXPORT_BG = "#0f2418";
 
 function scaleCanvasToShareWidth(
   src: HTMLCanvasElement,
@@ -150,7 +150,10 @@ function buildShareBracket(rows: PlayoffRow[]): {
 export default function SharePlayoffsTab({
   tournament,
 }: {
-  tournament: Pick<TournamentDTO, "id">;
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+  >;
 }) {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["tournament-playoffs", tournament.id],
@@ -178,6 +181,14 @@ export default function SharePlayoffsTab({
 
       el.classList.add("minimal-bracket-exporting");
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      await new Promise<void>((resolve) => {
+        const logo = new Image();
+        logo.crossOrigin = "anonymous";
+        logo.onload = () => resolve();
+        logo.onerror = () => resolve();
+        logo.src = "/PCP-logo.png";
+      });
 
       const dataUrl = await toPng(el, {
         pixelRatio: 2,
@@ -263,6 +274,10 @@ export default function SharePlayoffsTab({
           ref={captureRef}
           rounds={bracket.rounds}
           matchesByRound={bracket.matchesByRound}
+          tournamentName={tournament.name}
+          tournamentCategory={tournament.category}
+          isCategorySpecific={tournament.is_category_specific}
+          isPuntuable={tournament.is_puntuable}
         />
       </div>
     </div>

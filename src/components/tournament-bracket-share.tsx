@@ -28,7 +28,18 @@ export type ShareBracketMatch = {
 type BracketShareProps = {
   rounds: string[];
   matchesByRound: Record<string, ShareBracketMatch[]>;
+  tournamentName: string;
+  tournamentCategory?: string | null;
+  isCategorySpecific?: boolean;
+  isPuntuable?: boolean;
 };
+
+function formatCategoryHeaderLabel(category: string): string {
+  const trimmed = category.trim();
+  if (!trimmed) return "";
+  if (/\bCAT\.?$/i.test(trimmed)) return trimmed;
+  return `${trimmed} CAT`;
+}
 
 const DAY_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
@@ -99,7 +110,7 @@ function slotCenterY(
 }
 
 const LINE_STROKE = 3;
-const LINE_COLOR = "rgba(255, 255, 255, 0.92)";
+const LINE_COLOR = "rgba(255, 255, 255, 0.9)";
 
 type LineSegment = { left: number; top: number; width: number; height: number };
 
@@ -212,7 +223,17 @@ function MatchSlot({
 }
 
 export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketShareProps>(
-  function TournamentBracketShare({ rounds, matchesByRound }, ref) {
+  function TournamentBracketShare(
+    {
+      rounds,
+      matchesByRound,
+      tournamentName,
+      tournamentCategory,
+      isCategorySpecific,
+      isPuntuable,
+    },
+    ref,
+  ) {
     const bodyHeight = useMemo(
       () => getBracketBodyHeight(rounds, matchesByRound),
       [rounds, matchesByRound],
@@ -222,8 +243,34 @@ export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketSh
       [rounds, matchesByRound],
     );
 
+    const name = tournamentName.trim() || "Torneo";
+    const categoryLabel = tournamentCategory
+      ? formatCategoryHeaderLabel(tournamentCategory)
+      : "";
+    const showCategoryHeader = !!isCategorySpecific && !!categoryLabel;
+
     return (
       <div ref={ref} className="minimal-bracket-root">
+        <h2 className="minimal-bracket-title">
+          {showCategoryHeader ? (
+            <>
+              <span>{categoryLabel}</span>
+              {isPuntuable ? (
+                <>
+                  <span className="minimal-bracket-title-sep" aria-hidden>
+                    |
+                  </span>
+                  <span className="minimal-bracket-title-puntuable">Puntuable</span>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <span>{name}</span>
+          )}
+        </h2>
+        <div className="minimal-bracket-watermark" aria-hidden>
+          <img src="/PCP-logo.png" alt="" crossOrigin="anonymous" draggable={false} />
+        </div>
         <div
           className="minimal-bracket-body"
           style={{ minHeight: bodyHeight }}
