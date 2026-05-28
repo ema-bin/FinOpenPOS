@@ -1,0 +1,218 @@
+/* Cuadro minimalista para compartir playoffs */
+
+.minimal-bracket-root {
+  --mb-bg-deep: #071428;
+  --mb-bg-mid: #0c2244;
+  --mb-accent: #5eb8e8;
+  --mb-box: #8ec8e8;
+  --mb-box-final: #ffffff;
+  --mb-text: #071428;
+  --mb-col-w-first: 332px;
+  --mb-col-w-late: 112px;
+  --mb-gap-cols: 16px;
+  --mb-slot-unit: 38px;
+
+  position: relative;
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  padding: 6px 8px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: radial-gradient(ellipse 120% 80% at 10% 20%, #1a4a7a 0%, transparent 55%),
+    radial-gradient(ellipse 90% 70% at 90% 80%, #143d66 0%, transparent 50%),
+    linear-gradient(165deg, var(--mb-bg-mid) 0%, var(--mb-bg-deep) 55%, #050d1a 100%);
+  border-radius: 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.minimal-bracket-root::before,
+.minimal-bracket-root::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.3;
+  background: radial-gradient(circle, var(--mb-accent) 0%, transparent 70%);
+}
+
+.minimal-bracket-root::before {
+  width: 160px;
+  height: 160px;
+  top: -50px;
+  left: -30px;
+}
+
+.minimal-bracket-root::after {
+  width: 140px;
+  height: 140px;
+  bottom: -40px;
+  right: -24px;
+}
+
+.minimal-bracket-body {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: max-content;
+}
+
+.minimal-bracket-col {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.minimal-bracket-col--first {
+  width: var(--mb-col-w-first);
+}
+
+.minimal-bracket-col--late {
+  width: var(--mb-col-w-late);
+}
+
+.minimal-bracket-col--first .minimal-team-box {
+  white-space: nowrap;
+}
+
+.minimal-bracket-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 1px 0;
+}
+
+.minimal-bracket-connectors {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.minimal-bracket-line {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 1px;
+}
+
+.minimal-bracket-cols {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+.minimal-bracket-gap {
+  width: var(--mb-gap-cols);
+  flex-shrink: 0;
+}
+
+.minimal-match-paired {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.minimal-match-paired--bye {
+  justify-content: center;
+}
+
+.minimal-team-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--mb-slot-unit);
+  padding: 5px 6px;
+  background: var(--mb-box);
+  color: var(--mb-text);
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+  box-sizing: border-box;
+}
+
+.minimal-team-box--winner {
+  box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.85);
+}
+
+.minimal-match-time {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  font-style: normal;
+  text-align: center;
+  color: #ffffff;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.minimal-time-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 100%;
+  margin: 0 auto;
+  min-height: 40px;
+  padding: 6px 8px;
+  background: var(--mb-box);
+  color: var(--mb-text);
+  border-radius: 6px;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.minimal-time-box--final {
+  background: var(--mb-box-final);
+  min-height: 44px;
+  font-size: 1.08rem;
+}
+
+/* Exportación: menos margen, texto más grande */
+.minimal-bracket-root.minimal-bracket-exporting {
+  padding: 5px 6px;
+}
+
+.minimal-bracket-exporting .minimal-team-box {
+  font-size: 1.12rem;
+  min-height: 42px;
+  padding: 6px 8px;
+  line-height: 1.2;
+}
+
+.minimal-bracket-exporting .minimal-time-box {
+  font-size: 1.18rem;
+  min-height: 44px;
+  padding: 7px 8px;
+}
+
+.minimal-bracket-exporting .minimal-time-box--final {
+  font-size: 1.22rem;
+}
+
+.minimal-bracket-exporting .minimal-match-time {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.minimal-bracket-exporting {
+  --mb-slot-unit: 42px;
+}
