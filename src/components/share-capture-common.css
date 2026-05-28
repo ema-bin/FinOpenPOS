@@ -1,0 +1,36 @@
+.share-capture-title {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem 0.5rem;
+  margin: 0 0 10px;
+  padding: 0 4px;
+  font-size: 2.65rem;
+  font-weight: 800;
+  line-height: 1.12;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.share-capture-title-sep {
+  font-weight: 600;
+  opacity: 0.55;
+  padding: 0 0.1rem;
+}
+
+.share-capture-title-puntuable {
+  color: #f0923a;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.minimal-bracket-exporting .share-capture-title,
+.share-group-schedule-exporting .share-capture-title {
+  font-size: 3.1rem;
+  margin-bottom: 12px;
+}

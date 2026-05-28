@@ -7,6 +7,7 @@
 
 import React, { useMemo } from "react";
 import { formatTime } from "@/lib/date-utils";
+import { ShareTournamentTitle } from "@/components/share-tournament-title";
 import "./playoffs-bracket-minimal.css";
 
 export type ShareBracketMatch = {
@@ -33,13 +34,6 @@ type BracketShareProps = {
   isCategorySpecific?: boolean;
   isPuntuable?: boolean;
 };
-
-function formatCategoryHeaderLabel(category: string): string {
-  const trimmed = category.trim();
-  if (!trimmed) return "";
-  if (/\bCAT\.?$/i.test(trimmed)) return trimmed;
-  return `${trimmed} CAT`;
-}
 
 const DAY_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
@@ -243,31 +237,14 @@ export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketSh
       [rounds, matchesByRound],
     );
 
-    const name = tournamentName.trim() || "Torneo";
-    const categoryLabel = tournamentCategory
-      ? formatCategoryHeaderLabel(tournamentCategory)
-      : "";
-    const showCategoryHeader = !!isCategorySpecific && !!categoryLabel;
-
     return (
       <div ref={ref} className="minimal-bracket-root">
-        <h2 className="minimal-bracket-title">
-          {showCategoryHeader ? (
-            <>
-              <span>{categoryLabel}</span>
-              {isPuntuable ? (
-                <>
-                  <span className="minimal-bracket-title-sep" aria-hidden>
-                    |
-                  </span>
-                  <span className="minimal-bracket-title-puntuable">Puntuable</span>
-                </>
-              ) : null}
-            </>
-          ) : (
-            <span>{name}</span>
-          )}
-        </h2>
+        <ShareTournamentTitle
+          tournamentName={tournamentName}
+          tournamentCategory={tournamentCategory}
+          isCategorySpecific={isCategorySpecific}
+          isPuntuable={isPuntuable}
+        />
         <div className="minimal-bracket-watermark" aria-hidden>
           <img src="/PCP-logo.png" alt="" crossOrigin="anonymous" draggable={false} />
         </div>
