@@ -1,0 +1,60 @@
+.share-capture-title {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem 0.5rem;
+  margin: 0 0 10px;
+  padding: 0 4px;
+  font-size: 2.65rem;
+  font-weight: 800;
+  line-height: 1.12;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.share-capture-title--single {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.share-capture-title--single > span {
+  white-space: nowrap;
+}
+
+.share-capture-title--stacked {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.12rem;
+  line-height: 1.05;
+  white-space: normal;
+}
+
+.share-capture-title-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.08rem;
+}
+
+.share-capture-title-line {
+  display: block;
+}
+
+.share-capture-title-puntuable {
+  color: #f0923a;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.minimal-bracket-exporting .share-capture-title,
+.share-group-schedule-exporting .share-capture-title {
+  font-size: 3.1rem;
+  margin-bottom: 12px;
+}

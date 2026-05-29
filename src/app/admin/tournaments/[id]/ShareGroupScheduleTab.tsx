@@ -14,10 +14,18 @@ import { formatDate, formatTime } from "@/lib/date-utils";
 import type { TournamentDTO, GroupsApiResponse, MatchDTO } from "@/models/dto/tournament";
 import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { CourtDTO } from "@/models/dto/court";
 import { Logo } from "@/components/Logo";
+import { ShareTournamentTitle } from "@/components/share-tournament-title";
+import {
+  buildGroupColorIndexMap,
+  getShareZoneBadgeClassName,
+  resolveZoneColorIndex,
+} from "@/lib/group-zone-colors";
+import { SHARE_EXPORT_BG, scaleCanvasToShareWidth } from "@/lib/share-image-export";
+import "@/components/group-schedule-share.css";
+import "@/components/share-portrait-capture.css";
 
 async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiResponse> {
   return tournamentsService.getGroups(tournamentId);
@@ -42,44 +50,11 @@ function teamLabel(team: MatchDTO["team1"], matchOrder?: number | null, isTeam1?
   return `${p1} / ${p2}`;
 }
 
-// Función para obtener el día de la semana en español
-function getDayOfWeek(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  const days = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
-  return days[date.getDay()];
-}
+const DAY_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
-// Función para obtener el color del grupo basado en su nombre
-function getGroupColor(groupName: string, allGroups: Array<{ id: number; name: string }>): {
-  bg: string;
-  border: string;
-  badgeBg: string;
-  badgeText: string;
-} {
-  // Encontrar el índice del grupo en la lista ordenada
-  const sortedGroups = [...allGroups].sort((a, b) => a.name.localeCompare(b.name));
-  const groupIndex = sortedGroups.findIndex(g => g.name === groupName);
-  
-  const colorSchemes = [
-    // Azules
-    { bg: "bg-blue-50", border: "border-blue-500", badgeBg: "bg-blue-100", badgeText: "text-blue-800" },
-    // Verdes
-    { bg: "bg-green-50", border: "border-green-500", badgeBg: "bg-green-100", badgeText: "text-green-800" },
-    // Amarillos
-    { bg: "bg-amber-50", border: "border-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-800" },
-    // Naranjas
-    { bg: "bg-orange-50", border: "border-orange-500", badgeBg: "bg-orange-100", badgeText: "text-orange-800" },
-    // Púrpuras
-    { bg: "bg-purple-50", border: "border-purple-500", badgeBg: "bg-purple-100", badgeText: "text-purple-800" },
-    // Rosas
-    { bg: "bg-pink-50", border: "border-pink-500", badgeBg: "bg-pink-100", badgeText: "text-pink-800" },
-    // Cyan
-    { bg: "bg-cyan-50", border: "border-cyan-500", badgeBg: "bg-cyan-100", badgeText: "text-cyan-800" },
-    // Indigo
-    { bg: "bg-indigo-50", border: "border-indigo-500", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" },
-  ];
-  
-  return colorSchemes[groupIndex % colorSchemes.length] || colorSchemes[0];
+function getDayShort(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return DAY_SHORT[date.getDay()] ?? "";
 }
 
 interface MatchByDate {
@@ -87,16 +62,19 @@ interface MatchByDate {
   matches: Array<{
     match: MatchDTO;
     groupName: string;
-    courtName: string | null;
   }>;
 }
 
 export default function ShareGroupScheduleTab({
   tournament,
 }: {
-  tournament: Pick<TournamentDTO, "id" | "name" | "category">;
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+  >;
 }) {
   const scheduleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [copyingDate, setCopyingDate] = useState<string | null>(null);
 
   const {
     data,
@@ -112,25 +90,18 @@ export default function ShareGroupScheduleTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const adsToShow = advertisements;
-  const adsPerBlock = 10; // 2 filas × 5 por fila
-  const adsTop = adsToShow.slice(0, adsPerBlock);
-  const adsBottom = adsToShow.slice(adsPerBlock, adsPerBlock * 2);
+  const ADS_TOP_COUNT = 9; // 3 filas × 3
+  const ADS_BOTTOM_COUNT = 10; // 3 + 3 + 4
+  const adsTop = advertisements.slice(0, ADS_TOP_COUNT);
+  const adsBottom = advertisements.slice(ADS_TOP_COUNT, ADS_TOP_COUNT + ADS_BOTTOM_COUNT);
+  const adsBottomRow1 = adsBottom.slice(0, 3);
+  const adsBottomRow2 = adsBottom.slice(3, 6);
+  const adsBottomRow3 = adsBottom.slice(6, 10);
 
-  // Obtener canchas para mostrar nombres
-  const { data: courts = [] } = useQuery<CourtDTO[]>({
-    queryKey: ["courts"],
-    queryFn: async () => {
-      const response = await fetch("/api/courts?onlyActive=true");
-      if (!response.ok) throw new Error("Failed to fetch courts");
-      return response.json();
-    },
-  });
-
-  const courtMap = new Map<number, string>();
-  courts.forEach((court) => {
-    courtMap.set(court.id, court.name);
-  });
+  const groupColorIndexMap = useMemo(
+    () => (data?.groups ? buildGroupColorIndexMap(data.groups) : new Map<number, number>()),
+    [data?.groups],
+  );
 
   // Organizar partidos por fecha y hora
   const matchesByDate = (() => {
@@ -154,8 +125,6 @@ export default function ShareGroupScheduleTab({
         ? groupsMap.get(match.tournament_group_id) || "Sin zona"
         : "Sin zona";
 
-      const courtName = match.court_id ? courtMap.get(match.court_id) || null : null;
-
       if (!grouped.has(match.match_date)) {
         grouped.set(match.match_date, []);
       }
@@ -163,7 +132,6 @@ export default function ShareGroupScheduleTab({
       grouped.get(match.match_date)!.push({
         match,
         groupName,
-        courtName,
       });
     });
 
@@ -190,86 +158,70 @@ export default function ShareGroupScheduleTab({
       return;
     }
 
+    setCopyingDate(date);
     try {
-      const domtoimage = await import("dom-to-image");
-      const toPng = domtoimage.default?.toPng || (domtoimage as any).toPng;
-      
-      if (!toPng) {
-        throw new Error("dom-to-image no está disponible");
-      }
-      
-      // Scroll al elemento para asegurar que esté visible
-      dayRef.scrollIntoView({ behavior: "smooth", block: "center" });
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { toPng } = await import("html-to-image");
 
-      // Asegurar que todas las imágenes estén cargadas antes de capturar
-      const images = dayRef.querySelectorAll('img');
+      dayRef.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      dayRef.classList.add("share-group-schedule-exporting");
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      const images = dayRef.querySelectorAll("img");
       await Promise.all(
-        Array.from(images).map((img) => {
-          if (img.complete) return Promise.resolve();
-          return new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            // Timeout después de 5 segundos
-            setTimeout(resolve, 5000);
-          });
-        })
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) resolve();
+              else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                setTimeout(resolve, 5000);
+              }
+            }),
+        ),
       );
 
-      const elementWidth = dayRef.offsetWidth;
-      const elementHeight = dayRef.scrollHeight;
-
       const dataUrl = await toPng(dayRef, {
-        quality: 1.0,
-        width: elementWidth + 20,
-        height: elementHeight,
-        style: {
-          transform: "scale(1)",
-          transformOrigin: "top left",
-        },
+        pixelRatio: 2,
+        backgroundColor: SHARE_EXPORT_BG,
+        cacheBust: true,
         filter: (node: Node) => {
           if (node instanceof HTMLElement) {
-            return !node.closest("button") || !node.textContent?.includes("Copiar");
+            return !node.closest("[data-share-schedule-exclude]");
           }
           return true;
         },
       });
 
-      const outW = 1080;
-      const outH = 1920;
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.onerror = reject;
-        i.src = dataUrl;
-      });
-      const canvas = document.createElement("canvas");
-      canvas.width = outW;
-      canvas.height = outH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas no disponible");
-      const scale = Math.min(outW / img.width, outH / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (outW - w) / 2;
-      const y = (outH - h) / 2;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, outW, outH);
-      ctx.drawImage(img, x, y, w, h);
+      dayRef.classList.remove("share-group-schedule-exporting");
 
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = dataUrl;
+      });
+
+      const raw = document.createElement("canvas");
+      raw.width = img.width;
+      raw.height = img.height;
+      raw.getContext("2d")!.drawImage(img, 0, 0);
+
+      const canvas = scaleCanvasToShareWidth(raw, 1080, 0, SHARE_EXPORT_BG);
       const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+        canvas.toBlob((b) => resolve(b), "image/png", 1),
       );
       if (!blob) throw new Error("Error al generar imagen");
 
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
-
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       toast.success("Imagen copiada al portapapeles");
     } catch (error) {
       console.error("Error copying image to clipboard:", error);
       toast.error("Error al copiar la imagen al portapapeles");
+    } finally {
+      setCopyingDate(null);
     }
   };
 
@@ -315,158 +267,141 @@ export default function ShareGroupScheduleTab({
         className="px-0 pt-4"
         style={{ overflow: "visible", maxHeight: "none" }}
       >
-        <div className="w-full space-y-6" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="w-full space-y-4" style={{ overflow: "visible", maxHeight: "none" }}>
           {matchesByDate.map(({ date, matches }) => (
-            <div key={date} className="max-w-2xl mx-auto">
-              {/* Botón de copiar fuera del área capturable */}
-              <div className="flex justify-end mb-2">
+            <div key={date} className="mx-auto w-max max-w-full">
+              <div className="mb-1 flex justify-end" data-share-schedule-exclude>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleCopyImageToClipboard(date)}
                   className="h-8"
+                  disabled={copyingDate === date}
                 >
-                  <CopyIcon className="h-3 w-3 mr-1" />
-                  Copiar
+                  {copyingDate === date ? (
+                    <Loader2Icon className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <CopyIcon className="mr-1 h-3 w-3" />
+                  )}
+                  Copiar imagen
                 </Button>
               </div>
-              
-              {/* Contenedor capturable */}
+
               <div
                 data-date={date}
                 ref={(el) => {
                   if (el) scheduleRefs.current.set(date, el);
+                  else scheduleRefs.current.delete(date);
                 }}
-                className="bg-white/80 dark:bg-slate-900/60 p-6 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-2xl shadow-slate-200/60 dark:shadow-slate-900/80 backdrop-blur"
-                style={{
-                  fontFamily: "system-ui, -apple-system, sans-serif",
-                  overflow: "visible",
-                  maxHeight: "none",
-                  height: "auto",
-                  display: "block",
-                  minHeight: "auto",
-                }}
+                className="share-group-schedule-root share-portrait-capture"
               >
-                {/* Header */}
-                <div className="mb-4 pb-3 border-b-2 border-gray-300">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 text-center">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                        {tournament.name}
-                      </h1>
-                      {tournament.category && (
-                        <p className="text-base text-gray-600">{tournament.category}</p>
-                      )}
-                      <p className="text-lg font-semibold text-gray-800 mt-1">
-                        📅 HORARIOS DE ZONA
-                      </p>
-                      <p className="text-base font-bold text-gray-700 mt-2">
-                        {getDayOfWeek(date).toUpperCase()} - {formatDate(date)}
+                <div className="share-group-schedule-inner">
+                  <div className="share-group-schedule-header">
+                    <div className="share-group-schedule-header-text">
+                      <ShareTournamentTitle
+                        tournamentName={tournament.name}
+                        tournamentCategory={tournament.category}
+                        isCategorySpecific={tournament.is_category_specific}
+                        isPuntuable={tournament.is_puntuable}
+                      />
+                      <p className="share-group-schedule-date">
+                        {getDayShort(date)} — {formatDate(date)}
                       </p>
                     </div>
-                    <div className="flex-shrink-0">
-                      <Logo className="h-28" />
-                    </div>
+                    <Logo className="share-group-schedule-logo" />
                   </div>
-                </div>
 
-              {/* 2 filas de publicidades arriba (5 por fila) */}
-              {(adsTop.length > 0) && (
-                <div className="grid grid-cols-5 gap-x-1 gap-y-1 mb-1">
-                  {adsTop.map((ad: AdvertisementDTO) => (
-                    <div
-                      key={ad.id}
-                      className="aspect-[4/3] max-h-20 border rounded-lg overflow-hidden bg-white/80 dark:bg-slate-900/60 flex items-center justify-center p-2 shadow-md border-gray-200/60"
-                    >
-                      {ad.target_url && ad.target_url.startsWith("http") ? (
-                        <a
-                          href={ad.target_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-full h-full flex items-center justify-center"
-                          title={ad.name}
-                        >
-                          <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
-                        </a>
-                      ) : (
-                        <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
+                  {adsTop.length > 0 && (
+                    <div className="share-group-schedule-ads share-group-schedule-ads--top">
+                      {adsTop.map((ad: AdvertisementDTO) => (
+                        <div key={ad.id} className="share-group-schedule-ad-cell">
+                          <img
+                            src={ad.image_url}
+                            alt={ad.name}
+                            crossOrigin="anonymous"
+                            draggable={false}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="share-group-schedule-matches">
+                    {matches.map(({ match, groupName }) => {
+                      const time = match.start_time ? formatTime(match.start_time) : "";
+                      const team1 = teamLabel(match.team1, match.match_order, true);
+                      const team2 = teamLabel(match.team2, match.match_order, false);
+                      const zoneColorIndex = resolveZoneColorIndex(
+                        match.tournament_group_id,
+                        groupName,
+                        groupColorIndexMap,
+                      );
+
+                      return (
+                        <div key={match.id} className="share-group-schedule-row">
+                          <span className="share-group-schedule-time">{time}</span>
+                          <span
+                            className={`share-group-schedule-zone ${getShareZoneBadgeClassName(zoneColorIndex)}`}
+                          >
+                            {groupName}
+                          </span>
+                          <span className="share-group-schedule-teams">
+                            {team1}
+                            <span className="share-group-schedule-vs"> vs </span>
+                            {team2}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {adsBottom.length > 0 && (
+                    <div className="share-group-schedule-ads share-group-schedule-ads--bottom">
+                      {adsBottomRow1.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
+                          {adsBottomRow1.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {adsBottomRow2.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
+                          {adsBottomRow2.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {adsBottomRow3.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--4">
+                          {adsBottomRow3.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-
-              {/* Schedule for this day */}
-              <div className="space-y-2">
-                {matches.map(({ match, groupName, courtName }) => {
-                  const time = match.start_time ? formatTime(match.start_time) : "";
-                  const team1 = teamLabel(match.team1, match.match_order, true);
-                  const team2 = teamLabel(match.team2, match.match_order, false);
-                  const groupColor = data?.groups ? getGroupColor(groupName, data.groups) : {
-                    bg: "bg-gray-50",
-                    border: "border-gray-500",
-                    badgeBg: "bg-gray-100",
-                    badgeText: "text-gray-800"
-                  };
-
-                  return (
-                    <div
-                      key={match.id}
-                      className={`${groupColor.bg} rounded-lg border-l-4 ${groupColor.border} flex items-center gap-3 w-full`}
-                      style={{ 
-                        minHeight: "64px",
-                        padding: "14px 16px",
-                        boxSizing: "border-box",
-                        alignItems: "center",
-                        lineHeight: "1.5",
-                        overflow: "visible"
-                      }}
-                    >
-                      <span className="text-base font-bold text-gray-900 whitespace-nowrap flex-shrink-0">
-                        🕐 {time}
-                      </span>
-                      <span className={`px-2 py-1.5 ${groupColor.badgeBg} ${groupColor.badgeText} rounded text-xs font-semibold whitespace-nowrap flex-shrink-0`}>
-                        {groupName}
-                      </span>
-                      {courtName && (
-                        <span className="px-2 py-1.5 bg-gray-200 text-gray-700 rounded text-xs whitespace-nowrap flex-shrink-0">
-                          {courtName}
-                        </span>
-                      )}
-                      <div className="flex items-center gap-2 text-gray-800 flex-1 min-w-0 overflow-visible">
-                        <span className="font-semibold whitespace-nowrap">{team1}</span>
-                        <span className="text-gray-500 flex-shrink-0">vs</span>
-                        <span className="font-semibold whitespace-nowrap">{team2}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {/* 2 filas de publicidades abajo (5 por fila) */}
-              {(adsBottom.length > 0) && (
-                <div className="mt-2 grid grid-cols-5 gap-x-1 gap-y-1">
-                  {adsBottom.map((ad: AdvertisementDTO) => (
-                    <div
-                      key={ad.id}
-                      className="aspect-[4/3] max-h-20 border rounded-lg overflow-hidden bg-white/80 dark:bg-slate-900/60 flex items-center justify-center p-2 shadow-md border-gray-200/60"
-                    >
-                      {ad.target_url && ad.target_url.startsWith("http") ? (
-                        <a
-                          href={ad.target_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-full h-full flex items-center justify-center"
-                          title={ad.name}
-                        >
-                          <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
-                        </a>
-                      ) : (
-                        <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
               </div>
             </div>
           ))}
