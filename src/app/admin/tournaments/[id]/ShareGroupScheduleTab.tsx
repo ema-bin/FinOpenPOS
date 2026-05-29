@@ -25,6 +25,7 @@ import {
 } from "@/lib/group-zone-colors";
 import { SHARE_EXPORT_BG, scaleCanvasToShareWidth } from "@/lib/share-image-export";
 import "@/components/group-schedule-share.css";
+import "@/components/share-portrait-capture.css";
 
 async function fetchTournamentGroups(tournamentId: number): Promise<GroupsApiResponse> {
   return tournamentsService.getGroups(tournamentId);
@@ -89,10 +90,13 @@ export default function ShareGroupScheduleTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const adsToShow = advertisements;
-  const adsPerBlock = 10; // 2 filas × 5 por fila
-  const adsTop = adsToShow.slice(0, adsPerBlock);
-  const adsBottom = adsToShow.slice(adsPerBlock, adsPerBlock * 2);
+  const ADS_TOP_COUNT = 9; // 3 filas × 3
+  const ADS_BOTTOM_COUNT = 10; // 3 + 3 + 4
+  const adsTop = advertisements.slice(0, ADS_TOP_COUNT);
+  const adsBottom = advertisements.slice(ADS_TOP_COUNT, ADS_TOP_COUNT + ADS_BOTTOM_COUNT);
+  const adsBottomRow1 = adsBottom.slice(0, 3);
+  const adsBottomRow2 = adsBottom.slice(3, 6);
+  const adsBottomRow3 = adsBottom.slice(6, 10);
 
   const groupColorIndexMap = useMemo(
     () => (data?.groups ? buildGroupColorIndexMap(data.groups) : new Map<number, number>()),
@@ -289,7 +293,7 @@ export default function ShareGroupScheduleTab({
                   if (el) scheduleRefs.current.set(date, el);
                   else scheduleRefs.current.delete(date);
                 }}
-                className="share-group-schedule-root"
+                className="share-group-schedule-root share-portrait-capture"
               >
                 <div className="share-group-schedule-inner">
                   <div className="share-group-schedule-header">
@@ -308,7 +312,7 @@ export default function ShareGroupScheduleTab({
                   </div>
 
                   {adsTop.length > 0 && (
-                    <div className="share-group-schedule-ads">
+                    <div className="share-group-schedule-ads share-group-schedule-ads--top">
                       {adsTop.map((ad: AdvertisementDTO) => (
                         <div key={ad.id} className="share-group-schedule-ad-cell">
                           <img
@@ -353,16 +357,48 @@ export default function ShareGroupScheduleTab({
 
                   {adsBottom.length > 0 && (
                     <div className="share-group-schedule-ads share-group-schedule-ads--bottom">
-                      {adsBottom.map((ad: AdvertisementDTO) => (
-                        <div key={ad.id} className="share-group-schedule-ad-cell">
-                          <img
-                            src={ad.image_url}
-                            alt={ad.name}
-                            crossOrigin="anonymous"
-                            draggable={false}
-                          />
+                      {adsBottomRow1.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
+                          {adsBottomRow1.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      {adsBottomRow2.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
+                          {adsBottomRow2.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {adsBottomRow3.length > 0 && (
+                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--4">
+                          {adsBottomRow3.map((ad: AdvertisementDTO) => (
+                            <div key={ad.id} className="share-group-schedule-ad-cell">
+                              <img
+                                src={ad.image_url}
+                                alt={ad.name}
+                                crossOrigin="anonymous"
+                                draggable={false}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

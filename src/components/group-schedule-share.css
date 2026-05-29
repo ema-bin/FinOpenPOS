@@ -2,6 +2,200 @@
 
 /* Compartir horarios de zona — móvil, marca PCP */
 
+/* Título y logo alineados con compartir posiciones/resultados */
+.share-group-schedule-root.share-portrait-capture {
+  --share-capture-max-width: 400px;
+  --sch-title: 2.15rem;
+  --sch-date: 1rem;
+  --sch-logo-width: 6.25rem;
+  --sch-ad-img: 26px;
+  --sch-gap: 2px;
+  --sch-pad-top: 40px;
+
+  display: block;
+  width: var(--share-capture-max-width);
+  max-width: var(--share-capture-max-width);
+  box-sizing: border-box;
+  padding: 4px 5px;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-inner {
+  padding-top: var(--sch-pad-top);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-header {
+  gap: 6px;
+  margin-bottom: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads--top {
+  gap: var(--sch-gap);
+  margin-bottom: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads--bottom {
+  gap: var(--sch-gap);
+  margin-top: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads-row--3,
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads-row--4 {
+  gap: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ad-cell {
+  min-height: calc(var(--sch-ad-img) + 6px);
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ad-cell img {
+  height: var(--sch-ad-img);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-matches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 6px;
+  padding: 3px 5px;
+  border-radius: 5px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-time {
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-zone {
+  font-size: 0.46rem;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-teams {
+  flex: none;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  font-size: 0.55rem;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-header-text {
+  max-width: calc(100% - var(--sch-logo-width) - 0.35rem);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-header-text .share-capture-title {
+  font-size: var(--sch-title) !important;
+  line-height: 1.08;
+  letter-spacing: 0.03em;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.share-group-schedule-root.share-portrait-capture
+  .share-group-schedule-header-text
+  .share-capture-title--stacked {
+  flex-wrap: nowrap;
+  white-space: normal;
+  width: 100%;
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-date {
+  font-size: var(--sch-date);
+}
+
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-logo {
+  width: var(--sch-logo-width) !important;
+  max-width: var(--sch-logo-width) !important;
+  height: calc(var(--sch-title) * 1.08 + var(--sch-date) * 1.35 + 12px) !important;
+  max-height: calc(var(--sch-title) * 1.08 + var(--sch-date) * 1.35 + 12px) !important;
+}
+
+.share-group-schedule-root.share-portrait-capture:has(.share-capture-title--stacked)
+  .share-group-schedule-logo {
+  height: calc(var(--sch-title) * 2.12 + var(--sch-date) * 1.35 + 14px) !important;
+  max-height: calc(var(--sch-title) * 2.12 + var(--sch-date) * 1.35 + 14px) !important;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting {
+  --sch-title: 2.45rem;
+  --sch-date: 1.15rem;
+  --sch-logo-width: 7rem;
+  --sch-ad-img: 28px;
+  --sch-pad-top: 48px;
+  width: var(--share-capture-max-width) !important;
+  max-width: var(--share-capture-max-width) !important;
+}
+
+/* Evitar reglas legacy de export que inflan altura en layout portrait */
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-header {
+  margin-bottom: var(--sch-gap);
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-header-text
+  .share-capture-title {
+  font-size: var(--sch-title) !important;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-date {
+  font-size: var(--sch-date);
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-logo {
+  width: var(--sch-logo-width) !important;
+  max-width: var(--sch-logo-width) !important;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-ad-cell {
+  min-height: calc(var(--sch-ad-img) + 6px);
+  padding: 3px 4px;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-ad-cell
+  img {
+  height: var(--sch-ad-img);
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-row {
+  padding: 4px 5px;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-time {
+  font-size: 0.7rem;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-zone {
+  font-size: 0.48rem;
+}
+
+.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
+  .share-group-schedule-teams {
+  font-size: 0.58rem;
+}
+
 .share-group-schedule-root {
   --mb-green-deep: #0f2418;
   --mb-green-mid: #1a3d28;
@@ -95,17 +289,38 @@
 }
 
 .share-group-schedule-ads {
+  width: 100%;
+  min-width: 0;
+}
+
+.share-group-schedule-ads--top {
   display: grid;
-  grid-template-columns: repeat(5, minmax(92px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 5px;
-  width: 100%;
-  min-width: 480px;
 }
 
 .share-group-schedule-ads--bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 5px;
   margin-bottom: 0;
+}
+
+.share-group-schedule-ads-row--3,
+.share-group-schedule-ads-row--4 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.share-group-schedule-ads-row--3 .share-group-schedule-ad-cell {
+  grid-column: span 4;
+}
+
+.share-group-schedule-ads-row--4 .share-group-schedule-ad-cell {
+  grid-column: span 3;
 }
 
 .share-group-schedule-ad-cell {

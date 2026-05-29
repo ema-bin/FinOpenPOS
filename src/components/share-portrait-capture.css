@@ -8,30 +8,16 @@
   box-sizing: border-box;
 }
 
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads {
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads--top,
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads-row--3,
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads-row--4 {
   min-width: 0 !important;
   width: 100%;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 3px;
 }
 
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-row {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-teams {
-  flex: 1 1 100%;
-  width: 100%;
-  max-width: 100%;
-  font-size: 0.92rem;
-  line-height: 1.25;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-date {
-  font-size: 1rem;
+.share-group-schedule-root.share-portrait-capture .share-group-schedule-ads--top {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .share-group-schedule-root.share-portrait-capture .share-group-schedule-header {
@@ -41,63 +27,10 @@
 .share-group-schedule-root.share-portrait-capture .share-group-schedule-header-text {
   flex: 1;
   min-width: 0;
-  max-width: calc(100% - 5.5rem);
   padding-right: 6px;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-header-text .share-capture-title {
-  font-size: 2rem;
-  flex-wrap: wrap;
-  max-width: 100%;
-  margin-bottom: 0 !important;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-logo {
-  width: 5.25rem !important;
-  max-width: 5.25rem !important;
-  height: calc(2rem * 1.1 + 2px + 1rem * 1.15) !important;
-  max-height: calc(2rem * 1.1 + 2px + 1rem * 1.15) !important;
-  flex-shrink: 0;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-ad-cell {
-  min-height: 52px;
-  padding: 5px 6px;
-}
-
-.share-group-schedule-root.share-portrait-capture .share-group-schedule-ad-cell img {
-  height: 42px;
 }
 
 .share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting {
   max-width: none;
   width: var(--share-capture-max-width);
-}
-
-.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
-  .share-group-schedule-header-text
-  .share-capture-title {
-  font-size: 2.35rem !important;
-}
-
-.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
-  .share-group-schedule-date {
-  font-size: 1.15rem;
-}
-
-.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
-  .share-group-schedule-logo {
-  width: 7rem !important;
-  max-width: 7rem !important;
-}
-
-.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
-  .share-group-schedule-ad-cell
-  img {
-  height: 48px;
-}
-
-.share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
-  .share-group-schedule-teams {
-  font-size: 1rem;
 }
