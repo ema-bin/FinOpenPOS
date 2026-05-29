@@ -1,0 +1,404 @@
+@import "./share-capture-common.css";
+
+/* Compartir posiciones y resultados — sistema visual unificado */
+
+.share-group-standings-root {
+  --st-title: 2.15rem;
+  --st-zone: 0.76rem;
+  --st-table: 0.74rem;
+  --st-result-meta: 0.54rem;
+  --st-result-body: 0.7rem;
+  --st-ad-img: 34px;
+  --st-logo-width: 6.25rem;
+  --st-radius: 8px;
+  --st-pad-top: 40px;
+  --st-gap: 8px;
+  --st-gap-sm: 5px;
+  --st-surface: #ffffff;
+  --st-surface-border: rgba(255, 255, 255, 0.12);
+
+  --mb-green-deep: #0f2418;
+  --mb-green-mid: #1a3d28;
+  --mb-green-header: #1e3d2a;
+  --mb-orange: #d97a1a;
+  --mb-orange-soft: #e8923f;
+  --mb-text-on-orange: #ffffff;
+  --mb-stat-win: #1b6b3a;
+  --mb-stat-loss: #a83232;
+
+  position: relative;
+  padding: 0 12px 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: radial-gradient(ellipse 100% 70% at 15% 12%, #2a4a1c 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 90% 88%, rgba(217, 122, 26, 0.18) 0%, transparent 50%),
+    linear-gradient(168deg, var(--mb-green-mid) 0%, var(--mb-green-deep) 55%, #081810 100%);
+  border-radius: var(--st-radius);
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.share-group-standings-root.share-portrait-capture {
+  --share-capture-max-width: 400px;
+  width: var(--share-capture-max-width);
+  max-width: var(--share-capture-max-width);
+}
+
+.share-group-standings-inner,
+.share-group-standings-header,
+.share-group-standings-ads,
+.share-group-standings-section,
+.share-group-standings-table-wrap,
+.share-group-standings-results {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.share-group-standings-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--st-gap);
+  align-items: stretch;
+  padding-top: var(--st-pad-top);
+}
+
+/* —— Encabezado —— */
+.share-group-standings-header {
+  margin-bottom: 0;
+  align-items: flex-start;
+  gap: var(--st-gap-sm);
+  padding-bottom: var(--st-gap-sm);
+  border-bottom: 1px solid var(--st-surface-border);
+}
+
+.share-group-standings-header .share-group-schedule-header-text {
+  gap: 0;
+}
+
+.share-group-standings-title-block {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.28rem;
+  width: 100%;
+}
+
+.share-group-standings-title-block .share-capture-title {
+  margin: 0 !important;
+  padding: 0;
+  font-size: var(--st-title) !important;
+  line-height: 1.08;
+  letter-spacing: 0.03em;
+  max-width: 100%;
+}
+
+.share-group-standings-title-block .share-capture-title--single {
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+.share-group-standings-title-block .share-capture-title--stacked {
+  white-space: normal;
+  width: 100%;
+}
+
+.share-group-standings-header .share-group-schedule-zone {
+  display: inline-block;
+  margin: 0;
+  flex-shrink: 0;
+  font-size: var(--st-zone);
+  padding: 3px 10px;
+  border-radius: calc(var(--st-radius) - 2px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: middle;
+}
+
+.share-group-standings-header .share-group-schedule-zone--0 {
+  background-color: var(--mb-green-mid) !important;
+  color: #ffffff !important;
+}
+
+.share-group-standings-header .share-group-schedule-zone--1 {
+  background-color: #1e4a7a !important;
+  color: #ffffff !important;
+}
+
+/* Logo alineado al bloque título + zona (zona siempre en renglón aparte) */
+.share-group-standings-root .share-group-schedule-logo {
+  width: var(--st-logo-width) !important;
+  max-width: var(--st-logo-width) !important;
+  height: calc(var(--st-title) * 1.08 + var(--st-zone) * 1.35 + 12px) !important;
+  max-height: calc(var(--st-title) * 1.08 + var(--st-zone) * 1.35 + 12px) !important;
+}
+
+.share-group-standings-header:has(.share-capture-title--stacked) .share-group-schedule-logo,
+.share-group-standings-root:has(.share-capture-title--stacked) .share-group-schedule-logo {
+  height: calc(var(--st-title) * 2.12 + var(--st-zone) * 1.35 + 14px) !important;
+  max-height: calc(var(--st-title) * 2.12 + var(--st-zone) * 1.35 + 14px) !important;
+}
+
+/* —— Sponsors (misma grilla 12 col para alinear 3 y 4) —— */
+.share-group-standings-ads {
+  width: 100%;
+  min-width: 0;
+}
+
+.share-group-standings-ads--top {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--st-gap-sm);
+  margin: 0;
+}
+
+.share-group-standings-ads--bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--st-gap-sm);
+  margin: 0;
+}
+
+.share-group-standings-ads-row--3,
+.share-group-standings-ads-row--4 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--st-gap-sm);
+}
+
+.share-group-standings-ads-row--3 .share-group-standings-ad-cell {
+  grid-column: span 4;
+}
+
+.share-group-standings-ads-row--4 .share-group-standings-ad-cell {
+  grid-column: span 3;
+}
+
+.share-group-standings-ad-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--st-ad-img) + 10px);
+  padding: 6px;
+  background: var(--st-surface);
+  border-radius: calc(var(--st-radius) - 2px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.share-group-standings-ad-cell img {
+  display: block;
+  width: 100%;
+  height: var(--st-ad-img);
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* —— Tabla —— */
+.share-group-standings-section {
+  margin: 0;
+}
+
+.share-group-standings-table-wrap {
+  background: var(--st-surface);
+  border-radius: var(--st-radius);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.share-group-standings-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--st-table);
+  line-height: 1.2;
+}
+
+.share-group-standings-table th:nth-child(2),
+.share-group-standings-table td:nth-child(2) {
+  width: 44%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.share-group-standings-table thead tr {
+  background: var(--mb-green-header);
+  color: #ffffff;
+}
+
+.share-group-standings-table th {
+  padding: 6px 5px;
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.share-group-standings-table th:first-child,
+.share-group-standings-table td:first-child {
+  width: 1.35rem;
+}
+
+.share-group-standings-table th:first-child {
+  text-align: center;
+}
+
+.share-group-standings-table th:nth-child(n + 3) {
+  text-align: center;
+}
+
+.share-group-standings-table tbody tr {
+  border-bottom: 1px solid #eceee9;
+}
+
+.share-group-standings-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.share-group-standings-table td {
+  padding: 6px 5px;
+  color: #1a1f1c;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.share-group-standings-table td:first-child {
+  text-align: center;
+  font-weight: 700;
+  color: var(--mb-green-deep);
+}
+
+.share-group-standings-table td:nth-child(n + 3) {
+  text-align: center;
+}
+
+.share-group-standings-table .share-group-standings-team {
+  font-weight: 700;
+  font-size: 1em;
+  line-height: 1.18;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.share-group-standings-table .share-group-standings-wins {
+  color: var(--mb-stat-win);
+  font-weight: 700;
+}
+
+.share-group-standings-table .share-group-standings-losses {
+  color: var(--mb-stat-loss);
+  font-weight: 700;
+}
+
+/* —— Resultados —— */
+.share-group-standings-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--st-gap-sm);
+}
+
+.share-group-standings-result-row {
+  padding: 7px 9px;
+  background: linear-gradient(180deg, var(--mb-orange-soft) 0%, var(--mb-orange) 100%);
+  color: var(--mb-text-on-orange);
+  border-radius: var(--st-radius);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.share-group-standings-result-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.share-group-standings-result-meta {
+  font-size: var(--st-result-meta);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.88;
+  white-space: nowrap;
+}
+
+.share-group-standings-result-teams {
+  font-size: var(--st-result-body);
+  font-weight: 700;
+  line-height: 1.22;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.share-group-standings-result-teams .share-group-standings-vs {
+  font-weight: 600;
+  opacity: 0.8;
+  padding: 0 0.2rem;
+}
+
+.share-group-standings-result-score,
+.share-group-standings-result-pending {
+  font-size: calc(var(--st-result-body) * 0.95);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.share-group-standings-result-pending {
+  opacity: 0.9;
+  font-style: italic;
+}
+
+/* —— Export —— */
+.share-group-standings-root.share-group-standings-exporting {
+  --st-title: 2.45rem;
+  --st-zone: 0.82rem;
+  --st-table: 0.8rem;
+  --st-result-meta: 0.56rem;
+  --st-result-body: 0.72rem;
+  --st-ad-img: 36px;
+  --st-logo-width: 7rem;
+  overflow: visible;
+  --st-pad-top: 48px;
+  padding: 0 12px 18px;
+  width: var(--share-capture-max-width, 400px) !important;
+  max-width: var(--share-capture-max-width, 400px) !important;
+}
+
+.share-group-standings-root.share-group-standings-exporting .share-group-standings-inner {
+  padding-top: var(--st-pad-top);
+}
+
+/* Prioridad sobre share-capture-common y schedule CSS */
+.share-group-standings-root.share-portrait-capture .share-group-standings-title-block .share-capture-title {
+  font-size: var(--st-title) !important;
+  margin-bottom: 0 !important;
+}
+
+.share-group-standings-root.share-portrait-capture .share-group-schedule-logo {
+  width: var(--st-logo-width) !important;
+  max-width: var(--st-logo-width) !important;
+}
+
+.share-group-standings-root.share-portrait-capture .share-group-schedule-header-text {
+  max-width: calc(100% - var(--st-logo-width) - 0.35rem) !important;
+}
+
+.share-group-standings-root.share-group-standings-exporting .share-group-standings-ad-cell {
+  min-height: calc(var(--st-ad-img) + 12px);
+}
+
+.share-group-standings-root.share-group-standings-exporting .share-group-schedule-logo {
+  width: var(--st-logo-width) !important;
+  max-width: var(--st-logo-width) !important;
+}
+
+.share-group-standings-root.share-group-standings-exporting .share-group-standings-table th,
+.share-group-standings-root.share-group-standings-exporting .share-group-standings-table td {
+  padding: 7px 6px;
+}
+
+.share-group-standings-root.share-group-standings-exporting .share-group-standings-result-row {
+  padding: 8px 10px;
+}

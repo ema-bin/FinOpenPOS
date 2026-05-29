@@ -24,21 +24,26 @@ export function ShareTournamentTitle({
     isCategorySpecific,
     tournamentCategory,
   );
+  const stackedCategoryPuntuable = showCategoryHeader && !!isPuntuable;
+  const titleLayoutClass = stackedCategoryPuntuable
+    ? "share-capture-title--stacked"
+    : "share-capture-title--single";
 
   return (
-    <h2 className={`share-capture-title ${className}`.trim()}>
+    <h2
+      className={`share-capture-title ${titleLayoutClass} ${className}`.trim()}
+    >
       {showCategoryHeader ? (
-        <>
+        stackedCategoryPuntuable ? (
+          <span className="share-capture-title-lines">
+            <span className="share-capture-title-line">{categoryLabel}</span>
+            <span className="share-capture-title-line share-capture-title-puntuable">
+              Puntuable
+            </span>
+          </span>
+        ) : (
           <span>{categoryLabel}</span>
-          {isPuntuable ? (
-            <>
-              <span className="share-capture-title-sep" aria-hidden>
-                |
-              </span>
-              <span className="share-capture-title-puntuable">Puntuable</span>
-            </>
-          ) : null}
-        </>
+        )
       ) : (
         <span>{name}</span>
       )}
