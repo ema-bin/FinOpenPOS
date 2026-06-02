@@ -4,9 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { closeOpenOrder } from "@/lib/order-close";
 import {
   buildOrderPaymentSummary,
+  canCloseOrderWithoutPayment,
   computeDiscountAndTotal,
   fetchOrderIncomePayments,
   isFullyPaid,
+  isMoneyGt,
+  isOrderAlreadyPaidInFull,
   resolveOrderDiscounts,
   roundMoney,
   sumPayments,
@@ -191,67 +194,10 @@ export async function POST(request: Request, { params }: RouteParams) {
     const paidSoFar = roundMoney(sumPayments(existingPayments));
     const balanceDue = roundMoney(Math.max(0, finalTotal - paidSoFar));
 
-    if (balanceDue <= 0) {
+    if (isOrderAlreadyPaidInFull(balanceDue, finalTotal, paidSoFar)) {
       return NextResponse.json(
         { error: "La cuenta ya está saldada. Podés cerrarla desde el sistema." },
         { status: 400 }
-      );
-    }
-
-    const amount =
-      amountInput !== null && !Number.isNaN(amountInput) && amountInput > 0
-        ? roundMoney(amountInput)
-        : balanceDue;
-
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "Invalid amount to charge" },
-        { status: 400 }
-      );
-    }
-
-    if (amount > balanceDue + 0.009) {
-      return NextResponse.json(
-        {
-          error: `El monto no puede superar el saldo pendiente ($${balanceDue.toFixed(2)})`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const { data: paymentMethod, error: pmError } = await supabase
-      .from("payment_methods")
-      .select("id, name")
-      .eq("id", paymentMethodId)
-      .single();
-
-    if (pmError || !paymentMethod) {
-      return NextResponse.json(
-        { error: "Payment method not found" },
-        { status: 404 }
-      );
-    }
-
-    const description =
-      discountValue > 0
-        ? `Pago cuenta #${orderId} (${paymentMethod.name}) - Descuento: $${discountValue.toFixed(2)}`
-        : `Pago cuenta #${orderId} (${paymentMethod.name})`;
-
-    const { error: txError } = await supabase.from("transactions").insert({
-      order_id: orderId,
-      payment_method_id: paymentMethodId,
-      amount,
-      user_uid: user.id,
-      type: "income",
-      status: "completed",
-      description,
-    });
-
-    if (txError) {
-      console.error("Error creating transaction:", txError);
-      return NextResponse.json(
-        { error: "Error creating transaction" },
-        { status: 500 }
       );
     }
 
@@ -276,8 +222,74 @@ export async function POST(request: Request, { params }: RouteParams) {
       }
     }
 
+    const closeWithoutCharge = canCloseOrderWithoutPayment(
+      balanceDue,
+      finalTotal,
+      paidSoFar
+    );
+
+    let amount = 0;
+    if (!closeWithoutCharge) {
+      amount =
+        amountInput !== null && !Number.isNaN(amountInput) && amountInput > 0
+          ? roundMoney(amountInput)
+          : balanceDue;
+
+      if (amount <= 0) {
+        return NextResponse.json(
+          { error: "Invalid amount to charge" },
+          { status: 400 }
+        );
+      }
+
+      if (isMoneyGt(amount, balanceDue)) {
+        return NextResponse.json(
+          {
+            error: `El monto no puede superar el saldo pendiente ($${balanceDue.toFixed(2)})`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const { data: paymentMethod, error: pmError } = await supabase
+        .from("payment_methods")
+        .select("id, name")
+        .eq("id", paymentMethodId)
+        .single();
+
+      if (pmError || !paymentMethod) {
+        return NextResponse.json(
+          { error: "Payment method not found" },
+          { status: 404 }
+        );
+      }
+
+      const description =
+        discountValue > 0
+          ? `Pago cuenta #${orderId} (${paymentMethod.name}) - Descuento: $${discountValue.toFixed(2)}`
+          : `Pago cuenta #${orderId} (${paymentMethod.name})`;
+
+      const { error: txError } = await supabase.from("transactions").insert({
+        order_id: orderId,
+        payment_method_id: paymentMethodId,
+        amount,
+        user_uid: user.id,
+        type: "income",
+        status: "completed",
+        description,
+      });
+
+      if (txError) {
+        console.error("Error creating transaction:", txError);
+        return NextResponse.json(
+          { error: "Error creating transaction" },
+          { status: 500 }
+        );
+      }
+    }
+
     const newPaidTotal = roundMoney(paidSoFar + amount);
-    const willClose = isFullyPaid(newPaidTotal, finalTotal);
+    const willClose = closeWithoutCharge || isFullyPaid(newPaidTotal, finalTotal);
 
     if (willClose) {
       await closeOpenOrder(

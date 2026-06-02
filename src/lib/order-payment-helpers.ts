@@ -17,7 +17,8 @@ export function computeDiscountAndTotal(
   if (
     discountPercentage != null &&
     !Number.isNaN(discountPercentage) &&
-    discountPercentage > 0
+    discountPercentage > 0 &&
+    discountPercentage <= 100
   ) {
     discountValue = (subtotal * discountPercentage) / 100;
   }
@@ -106,16 +107,56 @@ export async function fetchOrderIncomePayments(
   });
 }
 
-export function sumPayments(payments: OrderPaymentRow[]): number {
-  return payments.reduce((sum, p) => sum + p.amount, 0);
-}
-
+/** Redondeo a centavos (2 decimales). Usar antes de comparar montos. */
 export function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export function sumPayments(payments: OrderPaymentRow[]): number {
+  return roundMoney(payments.reduce((sum, p) => sum + p.amount, 0));
+}
+
+export function isMoneyZero(amount: number): boolean {
+  return roundMoney(amount) <= 0;
+}
+
+export function isMoneyPositive(amount: number): boolean {
+  return roundMoney(amount) > 0;
+}
+
+export function isMoneyGte(a: number, b: number): boolean {
+  return roundMoney(a) >= roundMoney(b);
+}
+
+export function isMoneyGt(a: number, b: number): boolean {
+  return roundMoney(a) > roundMoney(b);
+}
+
 export function isFullyPaid(amountPaid: number, finalTotal: number): boolean {
-  return roundMoney(amountPaid) >= roundMoney(finalTotal) - 0.009;
+  return isMoneyGte(amountPaid, finalTotal);
+}
+
+/** Cuenta sin saldo pendiente: 100% descuento o ya cubierta (no confundir con “ya saldada” con plata). */
+export function canCloseOrderWithoutPayment(
+  balanceDue: number,
+  finalTotal: number,
+  paidSoFar: number
+): boolean {
+  if (isMoneyPositive(balanceDue)) return false;
+  if (isMoneyPositive(paidSoFar) && isMoneyPositive(finalTotal)) return false;
+  return isFullyPaid(paidSoFar, finalTotal);
+}
+
+export function isOrderAlreadyPaidInFull(
+  balanceDue: number,
+  finalTotal: number,
+  paidSoFar: number
+): boolean {
+  return (
+    isMoneyZero(balanceDue) &&
+    isMoneyPositive(paidSoFar) &&
+    isMoneyPositive(finalTotal)
+  );
 }
 
 export type OrderPaymentSummary = {
