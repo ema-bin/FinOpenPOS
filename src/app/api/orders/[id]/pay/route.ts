@@ -7,6 +7,7 @@ import {
   computeDiscountAndTotal,
   fetchOrderIncomePayments,
   isFullyPaid,
+  resolveOrderDiscounts,
   roundMoney,
   sumPayments,
 } from "@/lib/order-payment-helpers";
@@ -131,15 +132,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     body.amount !== undefined && body.amount !== null
       ? Number(body.amount)
       : null;
-  const discountPercentage =
-    body.discount_percentage !== undefined && body.discount_percentage !== null
-      ? Number(body.discount_percentage)
-      : null;
-  const discountAmount =
-    body.discount_amount !== undefined && body.discount_amount !== null
-      ? Number(body.discount_amount)
-      : null;
-
   if (!paymentMethodId || Number.isNaN(paymentMethodId)) {
     return NextResponse.json(
       { error: "Invalid paymentMethodId" },
@@ -186,14 +178,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    const effectiveDiscountPct =
-      discountPercentage !== null && !Number.isNaN(discountPercentage)
-        ? discountPercentage
-        : order.discount_percentage;
-    const effectiveDiscountAmt =
-      discountAmount !== null && !Number.isNaN(discountAmount)
-        ? discountAmount
-        : order.discount_amount;
+    const { discountPercentage: effectiveDiscountPct, discountAmount: effectiveDiscountAmt } =
+      resolveOrderDiscounts(order, body as Record<string, unknown>);
 
     const { discountValue, finalTotal } = computeDiscountAndTotal(
       subtotal,
@@ -269,15 +255,25 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    const discountUpdate: Record<string, number | null> = {};
-    if (discountPercentage !== null && !Number.isNaN(discountPercentage)) {
-      discountUpdate.discount_percentage = discountPercentage;
-    }
-    if (discountAmount !== null && !Number.isNaN(discountAmount)) {
-      discountUpdate.discount_amount = discountAmount;
-    }
-    if (Object.keys(discountUpdate).length > 0) {
-      await supabase.from("orders").update(discountUpdate).eq("id", orderId);
+    if (
+      "discount_percentage" in body ||
+      "discount_amount" in body
+    ) {
+      const { error: discountError } = await supabase
+        .from("orders")
+        .update({
+          discount_percentage: effectiveDiscountPct,
+          discount_amount: effectiveDiscountAmt,
+        })
+        .eq("id", orderId);
+
+      if (discountError) {
+        console.error("Error saving order discounts:", discountError);
+        return NextResponse.json(
+          { error: "Error saving order discounts" },
+          { status: 500 }
+        );
+      }
     }
 
     const newPaidTotal = roundMoney(paidSoFar + amount);

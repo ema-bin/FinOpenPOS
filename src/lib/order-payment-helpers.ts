@@ -28,8 +28,42 @@ export function computeDiscountAndTotal(
   ) {
     discountValue = discountAmount;
   }
-  const finalTotal = Math.max(0, subtotal - discountValue);
+  discountValue = roundMoney(discountValue);
+  const finalTotal = roundMoney(Math.max(0, subtotal - discountValue));
   return { discountValue, finalTotal };
+}
+
+/** Lee descuentos del body; `null` explícito limpia el valor (no usa el guardado en DB). */
+export function parseDiscountBodyField(
+  body: Record<string, unknown>,
+  key: "discount_percentage" | "discount_amount"
+): number | null | undefined {
+  if (!(key in body)) return undefined;
+  const raw = body[key];
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = Number(raw);
+  if (Number.isNaN(n) || n <= 0) return null;
+  if (key === "discount_percentage" && n > 100) return null;
+  return n;
+}
+
+export function resolveOrderDiscounts(
+  stored: {
+    discount_percentage?: number | null;
+    discount_amount?: number | null;
+  },
+  body?: Record<string, unknown> | null
+): { discountPercentage: number | null; discountAmount: number | null } {
+  const pctFromBody = body
+    ? parseDiscountBodyField(body, "discount_percentage")
+    : undefined;
+  const amtFromBody = body ? parseDiscountBodyField(body, "discount_amount") : undefined;
+  return {
+    discountPercentage:
+      pctFromBody !== undefined ? pctFromBody : (stored.discount_percentage ?? null),
+    discountAmount:
+      amtFromBody !== undefined ? amtFromBody : (stored.discount_amount ?? null),
+  };
 }
 
 export async function fetchOrderIncomePayments(

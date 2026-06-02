@@ -252,9 +252,15 @@ export default function OrderDetailPage() {
   }, [displayOrder?.amount_paid]);
 
   const balanceDue = useMemo(() => {
+    const fromTotals = Math.max(
+      0,
+      Math.round((finalTotal - amountPaid) * 100) / 100
+    );
+    // Cuenta abierta: saldo según descuento actual en UI (balance_due del GET queda desactualizado)
+    if (isOrderOpen) return fromTotals;
     if (displayOrder?.balance_due != null) return displayOrder.balance_due;
-    return Math.max(0, finalTotal - amountPaid);
-  }, [displayOrder?.balance_due, finalTotal, amountPaid]);
+    return fromTotals;
+  }, [isOrderOpen, displayOrder?.balance_due, finalTotal, amountPaid]);
 
   const orderPayments = displayOrder?.payments ?? [];
 
