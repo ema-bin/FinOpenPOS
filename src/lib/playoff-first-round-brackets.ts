@@ -61,11 +61,11 @@ export const PREDEFINED_FIRST_ROUND_BRACKETS: Record<number, PredefinedFirstRoun
   ],
   15: [
     { team1: "1A", team2: null },
-    { team1: "2D", team2: "2B" },
+    { team1: "2C", team2: "2B" },
     { team1: "1D", team2: null },
     { team1: "1E", team2: null },
     { team1: "1B", team2: null },
-    { team1: "2C", team2: "2A" },
+    { team1: "2D", team2: "2A" },
     { team1: "1C", team2: null },
     { team1: "2E", team2: null },
   ],
