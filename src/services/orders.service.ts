@@ -157,13 +157,21 @@ class OrdersService {
     playerId: number;
     items: Array<{ productId: number; quantity: number }>;
     paymentMethodId: number;
+    discountPercentage?: number | null;
+    discountAmount?: number | null;
   }): Promise<OrderDTO> {
     const response = await fetch(`${this.baseUrl}/quick-sale`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        playerId: input.playerId,
+        items: input.items,
+        paymentMethodId: input.paymentMethodId,
+        discount_percentage: input.discountPercentage,
+        discount_amount: input.discountAmount,
+      }),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

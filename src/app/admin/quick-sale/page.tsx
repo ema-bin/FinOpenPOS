@@ -36,6 +36,7 @@ import {
   OrderProductSelectorPanel,
   OrderSummaryPanel,
 } from "@/components/order-items-layout/OrderItemsLayout";
+import { computeDiscountAndTotal, roundMoney } from "@/lib/order-payment-helpers";
 
 // Función para obtener o crear el cliente genérico de venta rápida
 async function getOrCreateQuickSalePlayer(): Promise<PlayerDTO> {
@@ -97,6 +98,8 @@ export default function QuickSalePage() {
     return Array.from(map.values());
   }, [cart]);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<number | "none">("none");
+  const [discountPercentage, setDiscountPercentage] = useState<number | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Cargar cliente genérico
@@ -183,9 +186,13 @@ export default function QuickSalePage() {
     return products.filter((product) => product.name.toLowerCase().includes(term));
   }, [products, productFilter]);
 
-  const total = aggregatedCart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
+  const total = roundMoney(
+    aggregatedCart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+  );
+
+  const { discountValue, finalTotal } = useMemo(
+    () => computeDiscountAndTotal(total, discountPercentage, discountAmount),
+    [total, discountPercentage, discountAmount]
   );
 
   // Procesar venta
@@ -208,11 +215,13 @@ export default function QuickSalePage() {
         // Procesar venta rápida en una sola llamada API
         const order = await ordersService.quickSale({
           playerId: quickSalePlayer.id,
-        items: aggregatedCart.map((item) => ({
+          items: aggregatedCart.map((item) => ({
             productId: item.product.id,
             quantity: item.quantity,
           })),
           paymentMethodId: selectedPaymentMethodId as number,
+          discountPercentage,
+          discountAmount,
         });
 
         return order;
@@ -230,6 +239,8 @@ export default function QuickSalePage() {
       // Limpiar carrito y resetear
       setCart([]);
       setSelectedPaymentMethodId("none");
+      setDiscountPercentage(null);
+      setDiscountAmount(null);
       toast.success("Venta procesada correctamente");
       
       // Invalidar queries para refrescar datos
@@ -374,8 +385,12 @@ export default function QuickSalePage() {
               <div className="lg:sticky lg:top-4">
                 <OrderSummaryPanel
                   total={total}
-                  finalTotal={total}
-                  discountValue={0}
+                  finalTotal={finalTotal}
+                  discountValue={discountValue}
+                  discountPercentage={discountPercentage}
+                  discountAmount={discountAmount}
+                  onDiscountPercentageChange={setDiscountPercentage}
+                  onDiscountAmountChange={setDiscountAmount}
                   isEditable={!isProcessing}
                   paymentMethods={paymentMethods}
                   selectedPaymentMethodId={selectedPaymentMethodId}
@@ -386,6 +401,8 @@ export default function QuickSalePage() {
                   onClear={() => {
                     setCart([]);
                     setSelectedPaymentMethodId("none");
+                    setDiscountPercentage(null);
+                    setDiscountAmount(null);
                   }}
                   processButtonLabel={isProcessing ? "Procesando..." : "Procesar venta"}
                   clearButtonLabel="Limpiar"

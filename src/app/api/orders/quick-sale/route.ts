@@ -1,8 +1,12 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { closeOpenOrder } from "@/lib/order-close";
 import {
+  computeDiscountAndTotal,
   fetchOrderIncomePayments,
+  isMoneyPositive,
+  resolveOrderDiscounts,
   roundMoney,
   sumPayments,
 } from "@/lib/order-payment-helpers";
@@ -200,16 +204,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Recalcular total solo con ítems cantina
-    const total = await repos.orderItems.calculateOrderTotal(orderId);
-    await repos.orders.update(orderId, { total_amount: total });
+    // 4. Subtotal (ítems cantina) y descuento
+    const subtotal = roundMoney(await repos.orderItems.calculateOrderTotal(orderId));
 
-    if (total <= 0) {
+    if (!isMoneyPositive(subtotal)) {
       return NextResponse.json(
         { error: "Order total is zero" },
         { status: 400 }
       );
     }
+
+    const { discountPercentage, discountAmount } = resolveOrderDiscounts(
+      { discount_percentage: null, discount_amount: null },
+      body as Record<string, unknown>
+    );
+
+    const { discountValue, finalTotal } = computeDiscountAndTotal(
+      subtotal,
+      discountPercentage,
+      discountAmount
+    );
 
     // 5. Validar método de pago
     const { data: paymentMethod, error: pmError } = await supabase
@@ -225,87 +239,43 @@ export async function POST(request: Request) {
       );
     }
 
-    // 6. Crear transacción
-    const { error: txError } = await supabase.from("transactions").insert({
-      order_id: orderId,
-      payment_method_id: paymentMethodId,
-      amount: total,
-      user_uid: user.id,
-      type: "income",
-      status: "completed",
-      description: `Quick sale for order #${orderId} (${paymentMethod.name})`,
-    });
+    // 6. Cobro (omitido si el total final es $0, ej. 100% descuento)
+    if (isMoneyPositive(finalTotal)) {
+      const description =
+        discountValue > 0
+          ? `Venta rápida #${orderId} (${paymentMethod.name}) - Descuento: $${discountValue.toFixed(2)}`
+          : `Venta rápida #${orderId} (${paymentMethod.name})`;
 
-    if (txError) {
-      console.error("Error creating transaction:", txError);
-      return NextResponse.json(
-        { error: "Error creating transaction" },
-        { status: 500 }
-      );
+      const { error: txError } = await supabase.from("transactions").insert({
+        order_id: orderId,
+        payment_method_id: paymentMethodId,
+        amount: finalTotal,
+        user_uid: user.id,
+        type: "income",
+        status: "completed",
+        description,
+      });
+
+      if (txError) {
+        console.error("Error creating transaction:", txError);
+        return NextResponse.json(
+          { error: "Error creating transaction" },
+          { status: 500 }
+        );
+      }
     }
 
-    // 7. Crear movimientos de stock tipo 'sale' solo para ítems de categoría cantina (igual que pay)
-    const normalizeProductRecord = (productField: any) => {
-      if (!productField) return null;
-      return Array.isArray(productField) ? productField[0] ?? null : productField;
-    };
+    // 7. Cerrar cuenta (stock + estado + descuentos guardados)
+    await closeOpenOrder(
+      supabase,
+      orderId,
+      user.id,
+      finalTotal,
+      discountPercentage,
+      discountAmount
+    );
 
-    type StockMovementPayload = {
-      product_id: number;
-      movement_type: "sale";
-      quantity: number;
-      unit_cost: number;
-      notes: string;
-      user_uid: string;
-    };
-
-    const stockMovementsPayload = revenueItems
-      .map((item: any) => {
-        const product = normalizeProductRecord(item.product);
-        if (product && product.uses_stock === false) {
-          return null;
-        }
-        return {
-          product_id: item.product_id,
-          movement_type: "sale",
-          quantity: item.quantity,
-          unit_cost: item.unit_price,
-          notes: `Quick sale (order #${orderId})`,
-          user_uid: user.id,
-        };
-      })
-      .filter((movement): movement is StockMovementPayload => movement !== null);
-
-    const { error: smError } = await supabase
-      .from("stock_movements")
-      .insert(stockMovementsPayload);
-
-    if (smError) {
-      console.error("Error inserting stock movements (sale):", smError);
-      return NextResponse.json(
-        { error: "Error inserting stock movements" },
-        { status: 500 }
-      );
-    }
-
-    // 8. Marcar orden como cerrada
-    const { error: updateOrderError } = await supabase
-      .from("orders")
-      .update({
-        status: "closed",
-        closed_at: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-
-    if (updateOrderError) {
-      console.error("Error updating order status:", updateOrderError);
-      return NextResponse.json(
-        { error: "Error updating order status" },
-        { status: 500 }
-      );
-    }
-
-    // 9. Devolver la orden finalizada
+    // 8. Devolver la orden finalizada
     const finalOrder = await repos.orders.findByIdWithItems(orderId);
     if (!finalOrder) {
       return NextResponse.json(
