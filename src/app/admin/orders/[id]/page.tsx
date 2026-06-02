@@ -25,6 +25,12 @@ import {
   OrderSummaryPanel,
 } from "@/components/order-items-layout/OrderItemsLayout";
 import { formatDateTime } from "@/lib/date-utils";
+import {
+  canCloseOrderWithoutPayment,
+  isMoneyGt,
+  isMoneyGte,
+  roundMoney,
+} from "@/lib/order-payment-helpers";
 
 async function fetchOrder(orderId: number): Promise<OrderDTO> {
   return ordersService.getById(orderId);
@@ -244,7 +250,7 @@ export default function OrderDetailPage() {
     return 0;
   }, [computedTotal, discountPercentage, discountAmount, displayOrder, isOrderOpen]);
 
-  const finalTotal = Math.max(0, computedTotal - discountValue);
+  const finalTotal = roundMoney(Math.max(0, computedTotal - discountValue));
 
   const amountPaid = useMemo(() => {
     if (displayOrder?.amount_paid != null) return displayOrder.amount_paid;
@@ -252,9 +258,15 @@ export default function OrderDetailPage() {
   }, [displayOrder?.amount_paid]);
 
   const balanceDue = useMemo(() => {
+    const fromTotals = Math.max(
+      0,
+      Math.round((finalTotal - amountPaid) * 100) / 100
+    );
+    // Cuenta abierta: saldo según descuento actual en UI (balance_due del GET queda desactualizado)
+    if (isOrderOpen) return fromTotals;
     if (displayOrder?.balance_due != null) return displayOrder.balance_due;
-    return Math.max(0, finalTotal - amountPaid);
-  }, [displayOrder?.balance_due, finalTotal, amountPaid]);
+    return fromTotals;
+  }, [isOrderOpen, displayOrder?.balance_due, finalTotal, amountPaid]);
 
   const orderPayments = displayOrder?.payments ?? [];
 
@@ -452,7 +464,7 @@ export default function OrderDetailPage() {
     onMutate: ({ amount }) => {
       if (!order && !orderData) return { previousOrder: null };
       const previousOrder = order ?? orderData!;
-      const willClose = amount >= balanceDue - 0.009;
+      const willClose = isMoneyGte(amount, balanceDue);
 
       if (willClose) {
         setOrder({
@@ -794,7 +806,13 @@ export default function OrderDetailPage() {
         ? paymentAmount
         : balanceDue;
 
-    if (amount > balanceDue + 0.009) {
+    const closingWithoutCharge = canCloseOrderWithoutPayment(
+      balanceDue,
+      finalTotal,
+      amountPaid
+    );
+
+    if (!closingWithoutCharge && isMoneyGt(amount, balanceDue)) {
       toast.error(`El monto no puede superar el saldo ($${balanceDue.toFixed(2)}).`);
       return;
     }
@@ -813,6 +831,8 @@ export default function OrderDetailPage() {
     balanceDue,
     discountPercentage,
     discountAmount,
+    amountPaid,
+    finalTotal,
     payOrderMutation,
   ]);
 

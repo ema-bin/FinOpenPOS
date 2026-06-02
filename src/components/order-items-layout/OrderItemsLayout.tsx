@@ -2,6 +2,12 @@
 
 import { useMemo } from "react";
 import {
+  isMoneyGte,
+  isMoneyPositive,
+  isMoneyZero,
+  roundMoney,
+} from "@/lib/order-payment-helpers";
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -386,11 +392,19 @@ export function OrderSummaryPanel({
   const allowsPartialPayments = Boolean(onPaymentAmountChange);
   const effectiveBalance =
     balanceDue !== undefined ? balanceDue : Math.max(0, finalTotal - amountPaid);
+  const roundedTotal = roundMoney(total);
+  const roundedFinal = roundMoney(finalTotal);
+  const roundedBalance = roundMoney(effectiveBalance);
+  const canCloseWithZeroBalance =
+    isMoneyPositive(roundedTotal) &&
+    isMoneyZero(roundedFinal) &&
+    isMoneyZero(roundedBalance);
   const willCloseOnPay =
+    canCloseWithZeroBalance ||
     !allowsPartialPayments ||
     (typeof paymentAmount === "number" &&
       paymentAmount > 0 &&
-      paymentAmount >= effectiveBalance - 0.009);
+      isMoneyGte(paymentAmount, roundedBalance));
 
   return (
     <Card className={!isEditable ? "opacity-75" : ""}>
@@ -426,7 +440,8 @@ export function OrderSummaryPanel({
               <span>Subtotal</span>
               <span>${total.toFixed(2)}</span>
             </div>
-            {discountValue > 0 && (
+            {(discountValue > 0 ||
+              (isMoneyZero(roundedFinal) && isMoneyPositive(roundedTotal))) && (
               <div className="flex justify-between text-sm text-red-600">
                 <span>Descuento</span>
                 <span>-${discountValue.toFixed(2)}</span>
@@ -651,9 +666,10 @@ export function OrderSummaryPanel({
               processing ||
               !isEditable ||
               total === 0 ||
-              effectiveBalance <= 0 ||
+              (isMoneyZero(roundedBalance) && !canCloseWithZeroBalance) ||
               selectedPaymentMethodId === "none" ||
               (allowsPartialPayments &&
+                !canCloseWithZeroBalance &&
                 (paymentAmount === "" ||
                   (typeof paymentAmount === "number" && paymentAmount <= 0)))
             }
@@ -662,7 +678,11 @@ export function OrderSummaryPanel({
             {processing && (
               <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {willCloseOnPay ? processButtonLabel : "Registrar pago parcial"}
+            {canCloseWithZeroBalance
+              ? "Cerrar cuenta (sin cobro)"
+              : willCloseOnPay
+                ? processButtonLabel
+                : "Registrar pago parcial"}
           </Button>
         )}
 
