@@ -84,6 +84,53 @@ export class PlayerTournamentPointsRepository extends BaseRepository {
   }
 
   /**
+   * Point rows for one player in a year (optionally filtered by category ids), with tournament info.
+   */
+  async findByPlayerYearAndCategories(
+    playerId: number,
+    year: number,
+    categoryIds: number[]
+  ): Promise<
+    Array<{
+      tournament_id: number;
+      category_id: number;
+      points: number;
+      round_reached: string;
+      tournament_name: string;
+      is_grand_prix: boolean;
+    }>
+  > {
+    if (categoryIds.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from("player_tournament_points")
+      .select(
+        "tournament_id, category_id, points, round_reached, tournament:tournaments!tournament_id(name, is_grand_prix)"
+      )
+      .eq("player_id", playerId)
+      .eq("year", year)
+      .in("category_id", categoryIds)
+      .order("points", { ascending: false });
+    if (error) {
+      throw new Error(`Failed to fetch player breakdown: ${error.message}`);
+    }
+    return (data ?? []).map((row) => {
+      const t = row.tournament as
+        | { name: string; is_grand_prix: boolean }
+        | { name: string; is_grand_prix: boolean }[]
+        | null;
+      const tournament = Array.isArray(t) ? t[0] : t;
+      return {
+        tournament_id: row.tournament_id as number,
+        category_id: row.category_id as number,
+        points: row.points as number,
+        round_reached: row.round_reached as string,
+        tournament_name: tournament?.name ?? "Torneo",
+        is_grand_prix: Boolean(tournament?.is_grand_prix),
+      };
+    });
+  }
+
+  /**
    * Check if points were already saved for this tournament (avoid duplicate run).
    */
   async hasPointsForTournament(tournamentId: number): Promise<boolean> {

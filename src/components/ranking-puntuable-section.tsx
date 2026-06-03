@@ -71,6 +71,24 @@ type RankingResponse = {
   rows: RankingRow[];
 };
 
+type PlayerBreakdownEntry = {
+  tournament_id: number;
+  tournament_name: string;
+  round_reached: string;
+  points_raw: number;
+  points_counted: number;
+  from_lower_category: boolean;
+  is_grand_prix: boolean;
+};
+
+type PlayerBreakdownResponse = {
+  player_id: number;
+  first_name: string;
+  last_name: string;
+  total_points: number;
+  entries: PlayerBreakdownEntry[];
+};
+
 export function RankingPuntuableSection() {
   const currentYear = new Date().getFullYear();
   const [sharing, setSharing] = useState(false);
@@ -83,6 +101,7 @@ export function RankingPuntuableSection() {
   const [pageBlobs, setPageBlobs] = useState<Blob[]>([]);
   const [pageImgUrls, setPageImgUrls] = useState<string[]>([]);
   const [copying, setCopying] = useState(false);
+  const [breakdownPlayer, setBreakdownPlayer] = useState<RankingRow | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
   const [previewH, setPreviewH] = useState(569);
@@ -155,6 +174,29 @@ export function RankingPuntuableSection() {
   const effectiveCategoryId = selectedCategoryId ?? categories[0]?.id ?? null;
   const categoryName =
     categories.find((c) => c.id === effectiveCategoryId)?.name ?? "Categoría";
+
+  const { data: breakdown, isLoading: loadingBreakdown } = useQuery<PlayerBreakdownResponse>(
+    {
+      queryKey: [
+        "ranking-player-breakdown",
+        breakdownPlayer?.player_id,
+        effectiveCategoryId,
+        currentYear,
+      ],
+      queryFn: async () => {
+        if (breakdownPlayer == null || effectiveCategoryId == null) {
+          throw new Error("Missing params");
+        }
+        const res = await fetch(
+          `/api/ranking/player-breakdown?category_id=${effectiveCategoryId}&player_id=${breakdownPlayer.player_id}&year=${currentYear}`
+        );
+        if (!res.ok) throw new Error("Failed to fetch breakdown");
+        return res.json();
+      },
+      enabled: breakdownPlayer != null && effectiveCategoryId != null,
+      staleTime: 1000 * 60,
+    }
+  );
 
   const { data: pointRules = [], isLoading: loadingRules } = useQuery<
     TournamentRankingPointRule[]
@@ -602,6 +644,87 @@ export function RankingPuntuableSection() {
             </DialogContent>
           </Dialog>
 
+          <Dialog
+            open={breakdownPlayer != null}
+            onOpenChange={(open) => {
+              if (!open) setBreakdownPlayer(null);
+            }}
+          >
+            <DialogContent className="max-w-lg max-h-[85vh] flex flex-col gap-0">
+              <DialogHeader>
+                <DialogTitle>
+                  {breakdownPlayer
+                    ? `${breakdownPlayer.first_name} ${breakdownPlayer.last_name}`
+                    : "Detalle"}
+                </DialogTitle>
+                <DialogDescription>
+                  Torneos y puntos que suman en {categoryName} ({currentYear}
+                  ). Los torneos de categoría inferior cuentan al 50% si el
+                  jugador ascendió.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="overflow-y-auto min-h-0 flex-1 py-2">
+                {loadingBreakdown ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : breakdown && breakdown.entries.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Torneo</TableHead>
+                        <TableHead>Ronda</TableHead>
+                        <TableHead className="text-right w-20">Puntos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {breakdown.entries.map((entry) => (
+                        <TableRow key={entry.tournament_id}>
+                          <TableCell className="font-medium">
+                            <span className="block">{entry.tournament_name}</span>
+                            {entry.is_grand_prix && (
+                              <span className="text-xs text-muted-foreground">
+                                Grand Prix
+                              </span>
+                            )}
+                            {entry.from_lower_category && (
+                              <span className="text-xs text-muted-foreground block">
+                                50% (cat. inferior)
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {ROUND_LABELS[entry.round_reached] ??
+                              entry.round_reached}
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">
+                            {entry.points_counted}
+                            {entry.from_lower_category &&
+                              entry.points_raw !== entry.points_counted && (
+                                <span className="block text-xs font-normal text-muted-foreground">
+                                  de {entry.points_raw}
+                                </span>
+                              )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Sin torneos que sumen en esta categoría.
+                  </p>
+                )}
+              </div>
+              {breakdown && breakdown.entries.length > 0 && (
+                <div className="flex justify-between border-t pt-3 text-sm font-medium">
+                  <span>Total en ranking</span>
+                  <span className="tabular-nums">{breakdown.total_points}</span>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
           {loadingRanking ? (
             <div className="flex items-center justify-center py-12">
               <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -625,7 +748,13 @@ export function RankingPuntuableSection() {
                       {row.position}
                     </TableCell>
                     <TableCell className="text-base min-w-[300px]">
-                      {row.first_name} {row.last_name}
+                      <button
+                        type="button"
+                        className="text-left cursor-pointer hover:underline underline-offset-2 text-foreground"
+                        onClick={() => setBreakdownPlayer(row)}
+                      >
+                        {row.first_name} {row.last_name}
+                      </button>
                     </TableCell>
                     <TableCell className="text-right text-base w-24 pr-2">
                       {row.total_points}
