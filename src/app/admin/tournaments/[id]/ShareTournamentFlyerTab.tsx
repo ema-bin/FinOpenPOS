@@ -21,11 +21,8 @@ import {
 } from "lucide-react";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
-import {
-  CopyImageError,
-  copyImageFromUrl,
-  downloadImageFromUrl,
-} from "@/lib/copy-image-url";
+import { CopyImageError, copyPngBlobToClipboard } from "@/lib/copy-image-url";
+import { useTournamentFlyerBlob } from "@/hooks/use-tournament-flyer-blob";
 import { toast } from "sonner";
 
 export default function ShareTournamentFlyerTab({
@@ -41,6 +38,11 @@ export default function ShareTournamentFlyerTab({
 
   const currentUrl = tournament.promo_flyer_url?.trim() || null;
   const displayUrl = previewUrl ?? currentUrl;
+  const {
+    pngBlob: flyerPngBlob,
+    loading: flyerPngLoading,
+    ready: flyerPngReady,
+  } = useTournamentFlyerBlob(tournament.id, Boolean(currentUrl), currentUrl ?? undefined);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -98,33 +100,21 @@ export default function ShareTournamentFlyerTab({
   };
 
   const handleCopyImage = async () => {
-    const url = displayUrl;
-    if (!url) {
-      toast.error("No hay flier para copiar");
+    if (!flyerPngBlob) {
+      toast.error(
+        flyerPngLoading ? "Preparando flier para copiar…" : "Subí un flier primero"
+      );
       return;
     }
     setCopying(true);
-    const proxyUrl = `/api/tournaments/${tournament.id}/promo-flyer/blob`;
     try {
-      await copyImageFromUrl(url, { fetchUrl: proxyUrl });
+      await copyPngBlobToClipboard(flyerPngBlob);
       toast.success("Flier copiado al portapapeles");
     } catch (err) {
       console.error("copy flyer:", err);
-      try {
-        await downloadImageFromUrl(url, `flier-${tournament.name}.png`, {
-          fetchUrl: proxyUrl,
-        });
-        toast.message(
-          err instanceof CopyImageError && err.code === "clipboard"
-            ? "No se pudo copiar; se descargó el flier."
-            : "Se descargó el flier.",
-          { description: "Subilo a WhatsApp o pegá la imagen si el navegador lo permite." }
-        );
-      } catch {
-        toast.error(
-          err instanceof CopyImageError ? err.message : "No se pudo copiar la imagen"
-        );
-      }
+      toast.error(
+        err instanceof CopyImageError ? err.message : "No se pudo copiar la imagen"
+      );
     } finally {
       setCopying(false);
     }
@@ -201,14 +191,14 @@ export default function ShareTournamentFlyerTab({
                 variant="outline"
                 size="sm"
                 onClick={handleCopyImage}
-                disabled={copying}
+                disabled={copying || !currentUrl || !flyerPngReady}
               >
-                {copying ? (
+                {copying || flyerPngLoading ? (
                   <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
                   <CopyIcon className="h-4 w-4 mr-1" />
                 )}
-                Copiar imagen
+                {flyerPngLoading ? "Preparando…" : "Copiar imagen"}
               </Button>
               {currentUrl && (
                 <>
