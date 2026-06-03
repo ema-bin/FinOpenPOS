@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon } from "lucide-react";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTime, formatTimeRange } from "@/lib/date-utils";
 import { toHHMM } from "@/lib/build-schedule-days-from-slots";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import type { MatchDTO, TeamDTO, GroupDTO, TournamentGroupSlotSummary } from "@/models/dto/tournament";
@@ -1393,7 +1393,7 @@ export function GroupScheduleViewer({
                         <TableCell>
                           {rowItem.startTime ? (
                             <>
-                              {formatTime(rowItem.startTime)}
+                              {formatTimeRange(rowItem.startTime, rowItem.endTime)}
                               {rowItem.type === "free" &&
                                 rowItem.courtId != null &&
                                 (courtMap.has(rowItem.courtId) ? (

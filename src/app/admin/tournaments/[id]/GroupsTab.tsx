@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import { TournamentScheduleDialog, ScheduleConfig } from "@/components/tournament-schedule-dialog";
 import {
@@ -160,9 +160,11 @@ export default function GroupsTab({
 }) {
   const queryClient = useQueryClient();
   const [closingGroups, setClosingGroups] = useState(false);
+  const groupDurationMinutes = Math.max(15, tournament.match_duration ?? 60);
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
+  const [editEndTime, setEditEndTime] = useState<string>("");
   const [editCourtId, setEditCourtId] = useState<string>("none");
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [deletingGroups, setDeletingGroups] = useState(false);
@@ -280,7 +282,11 @@ export default function GroupsTab({
     setEditingMatchId(match.id);
     // Convertir fecha a formato YYYY-MM-DD para el input
     setEditDate(match.match_date ? match.match_date.split("T")[0] : "");
-    setEditTime(match.start_time || "");
+    const start = match.start_time || "";
+    setEditTime(start);
+    setEditEndTime(
+      resolveMatchEndTime(start, match.end_time, groupDurationMinutes) || ""
+    );
     setEditCourtId(match.court_id ? String(match.court_id) : "none");
   };
 
@@ -288,24 +294,32 @@ export default function GroupsTab({
     setEditingMatchId(null);
     setEditDate("");
     setEditTime("");
+    setEditEndTime("");
     setEditCourtId("none");
   };
 
   const handleSaveSchedule = async (matchId: number) => {
     try {
       if (!editDate || !editTime) {
-        alert("Fecha y hora son requeridos");
+        alert("Fecha y hora de inicio son requeridos");
         return;
       }
-      
+
+      const endTime =
+        editEndTime.trim() ||
+        resolveMatchEndTime(editTime, null, groupDurationMinutes) ||
+        editTime;
+
       await tournamentMatchesService.scheduleMatch(matchId, {
         date: editDate,
         start_time: editTime,
+        end_time: endTime,
         court_id: editCourtId === "none" ? undefined : Number(editCourtId),
       });
       setEditingMatchId(null);
       setEditDate("");
       setEditTime("");
+      setEditEndTime("");
       setEditCourtId("none");
       load();
     } catch (err: any) {
@@ -623,20 +637,38 @@ export default function GroupsTab({
                   >
                     <div className={`${groupColor.bg} border-b px-4 py-2`}>
                       {editingMatchId === match.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Input
                             type="date"
                             value={editDate}
                             onChange={(e) => setEditDate(e.target.value)}
-                            className="h-7 text-xs"
+                            className="h-7 text-xs w-[130px]"
                           />
-                          <Input
-                            type="time"
-                            value={editTime}
-                            onChange={(e) => setEditTime(e.target.value)}
-                            className="h-7 text-xs"
-                            step="60"
-                          />
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground shrink-0">Inicio</span>
+                            <Input
+                              type="time"
+                              value={editTime}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              className="h-7 text-xs w-[100px]"
+                              step="60"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground shrink-0">Fin</span>
+                            <Input
+                              type="time"
+                              value={editEndTime}
+                              onChange={(e) => setEditEndTime(e.target.value)}
+                              className="h-7 text-xs w-[100px]"
+                              step="60"
+                            />
+                          </div>
+                          {(editTime || editEndTime) && (
+                            <span className="text-[10px] font-medium text-muted-foreground">
+                              {formatTimeRange(editTime, editEndTime)}
+                            </span>
+                          )}
                           <Select value={editCourtId} onValueChange={setEditCourtId}>
                             <SelectTrigger className="h-7 w-[150px] text-xs">
                               <SelectValue placeholder="Cancha" />
@@ -692,8 +724,13 @@ export default function GroupsTab({
                                   ? courtMap.get(match.court_id)
                                   : null;
                                 const courtText = courtName ? ` - ${courtName}` : "";
-                                return `${dayName} ${formatDate(match.match_date)} ${formatTime(
-                                  match.start_time
+                                return `${dayName} ${formatDate(match.match_date)} ${formatTimeRange(
+                                  match.start_time,
+                                  resolveMatchEndTime(
+                                    match.start_time,
+                                    match.end_time,
+                                    groupDurationMinutes
+                                  )
                                 )}${courtText}`;
                               })()}
                             </span>

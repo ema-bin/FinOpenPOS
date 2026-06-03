@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Bracket, IRoundProps, ISeedProps, Seed } from "@oliverlooney/react-brackets";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTimeRange } from "@/lib/date-utils";
 
 type Match = {
   id: number;
@@ -17,6 +17,7 @@ type Match = {
   sourceTeam2?: string | null;
   matchDate?: string | null;
   startTime?: string | null;
+  endTime?: string | null;
 };
 
 type BracketProps = {
@@ -61,8 +62,9 @@ export function TournamentBracketV2({ rounds, matchesByRound, onMatchClick, sele
       if (match.matchDate) {
         scheduleParts.push(formatDate(match.matchDate));
       }
-      if (match.startTime) {
-        scheduleParts.push(formatTime(match.startTime));
+      const timeRange = formatTimeRange(match.startTime, match.endTime);
+      if (timeRange) {
+        scheduleParts.push(timeRange);
       }
       const scheduleText = scheduleParts.length > 0 ? scheduleParts.join(' • ') : '';
       
