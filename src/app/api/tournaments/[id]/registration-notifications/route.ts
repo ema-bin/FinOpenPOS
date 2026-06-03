@@ -149,11 +149,7 @@ function buildResponse(
   }
 ) {
   const flyer_url = resolveTournamentPromoFlyerUrl(input.tournament);
-  const default_message = buildDefaultRegistrationInviteMessage({
-    tournamentName: input.tournament.name,
-    categoryName: input.categoryName,
-    registrationFee: input.tournament.registration_fee,
-  });
+  const default_message = buildDefaultRegistrationInviteMessage();
 
   const unregistered = input.rows
     .filter((p) => !input.enrolledIds.has(p.id as number))

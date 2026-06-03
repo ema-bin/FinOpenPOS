@@ -1,17 +1,7 @@
-export function buildDefaultRegistrationInviteMessage(input: {
-  tournamentName: string;
-  categoryName: string | null;
-  registrationFee?: number;
-}): string {
-  const categoryPart = input.categoryName ? ` (${input.categoryName})` : "";
-  const fee =
-    input.registrationFee != null && input.registrationFee > 0
-      ? ` Cuota de inscripción: $${input.registrationFee}.`
-      : "";
-  return (
-    `Hola {nombre}! Te escribimos desde PCP. Todavía no estás inscripto/a en el torneo "${input.tournamentName}"${categoryPart}.${fee} ` +
-    `¿Te sumás? Cualquier duda respondemos por acá. ¡Saludos!`
-  );
+import { TOURNAMENT_REGISTRATION_INVITE_TEMPLATE } from "@/templates/whatsapp/tournament-registration-invite.template";
+
+export function buildDefaultRegistrationInviteMessage(): string {
+  return TOURNAMENT_REGISTRATION_INVITE_TEMPLATE;
 }
 
 /** Aplica placeholders del mensaje (nombre). Quita restos de {flier} si quedaron en plantillas viejas. */
