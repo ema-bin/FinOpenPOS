@@ -117,6 +117,7 @@ export default function TournamentDetailPage() {
                 ? tournament.category
                 : tournament.category ?? "Sin categoría"}
               {tournament.is_puntuable && " • Puntuable"}
+              {tournament.is_puntuable && tournament.is_grand_prix && " • Grand Prix"}
               {" • "}
               {tournament.status}
             </span>

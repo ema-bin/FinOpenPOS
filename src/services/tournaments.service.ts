@@ -18,6 +18,7 @@ export interface CreateTournamentInput {
   description?: string | null;
   category_id?: number | null;
   is_puntuable?: boolean;
+  is_grand_prix?: boolean;
   is_category_specific?: boolean;
   is_suma_13_damas?: boolean;
   has_super_tiebreak?: boolean;
@@ -101,6 +102,7 @@ class TournamentsService {
       description: string | null;
       category_id: number | null;
       is_puntuable: boolean;
+      is_grand_prix?: boolean;
       is_category_specific: boolean;
       is_suma_13_damas: boolean;
       start_date: string | null;

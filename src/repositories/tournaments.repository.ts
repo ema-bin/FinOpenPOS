@@ -96,6 +96,7 @@ export class TournamentsRepository extends BaseRepository {
         description: input.description ?? null,
         category_id: input.category_id ?? null,
         is_puntuable: input.is_puntuable ?? false,
+        is_grand_prix: input.is_grand_prix ?? false,
         is_category_specific: input.is_category_specific ?? false,
         is_suma_13_damas: input.is_suma_13_damas ?? false,
         start_date: input.start_date ?? null,

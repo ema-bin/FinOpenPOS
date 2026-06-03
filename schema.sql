@@ -523,6 +523,7 @@ CREATE TABLE tournaments (
     description TEXT,
     category_id SMALLINT REFERENCES categories(id),  -- categoría del torneo si is_category_specific o is_suma_13_damas
     is_puntuable        BOOLEAN NOT NULL DEFAULT FALSE,  -- si suma para ranking/puntos
+    is_grand_prix       BOOLEAN NOT NULL DEFAULT FALSE,  -- torneo Grand Prix: puntos ×2 en ranking (solo si puntuable)
     is_category_specific BOOLEAN NOT NULL DEFAULT FALSE,  -- si el torneo es de una categoría específica (libre)
     is_suma_13_damas    BOOLEAN NOT NULL DEFAULT FALSE,  -- torneo damas: ambas mujeres y categorías suman >= 13
     start_date  DATE,

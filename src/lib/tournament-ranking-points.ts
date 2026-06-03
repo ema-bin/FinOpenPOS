@@ -40,7 +40,7 @@ export async function computeAndSaveTournamentRankingPoints(
 
   const { data: tournament, error: tErr } = await supabase
     .from("tournaments")
-    .select("id, is_puntuable, category_id, start_date, end_date")
+    .select("id, is_puntuable, is_grand_prix, category_id, start_date, end_date")
     .eq("id", tournamentId)
     .single();
   if (tErr || !tournament) {
@@ -52,6 +52,7 @@ export async function computeAndSaveTournamentRankingPoints(
 
   const categoryId = tournament.category_id as number;
   const year = getTournamentYear(tournament);
+  const pointsMultiplier = tournament.is_grand_prix ? 2 : 1;
 
   const { data: teams, error: teamsErr } = await supabase
     .from("tournament_teams")
@@ -136,11 +137,12 @@ export async function computeAndSaveTournamentRankingPoints(
   for (const t of teamList) {
     const entry = teamToPoints.get(t.id);
     if (!entry) continue;
+    const points = entry.points * pointsMultiplier;
     rows.push({
       tournament_id: tournamentId,
       player_id: t.player1_id,
       category_id: categoryId,
-      points: entry.points,
+      points,
       round_reached: entry.round_reached,
       year,
     });
@@ -148,7 +150,7 @@ export async function computeAndSaveTournamentRankingPoints(
       tournament_id: tournamentId,
       player_id: t.player2_id,
       category_id: categoryId,
-      points: entry.points,
+      points,
       round_reached: entry.round_reached,
       year,
     });

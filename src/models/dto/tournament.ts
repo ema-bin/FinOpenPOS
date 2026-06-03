@@ -12,6 +12,7 @@ export interface TournamentDTO {
   category_id: number | null;
   category: string | null; // nombre desde join, para mostrar
   is_puntuable: boolean;
+  is_grand_prix: boolean;
   is_category_specific: boolean;
   is_suma_13_damas: boolean;
   status: TournamentStatus;
@@ -32,6 +33,7 @@ export interface TournamentListItem {
   category_id: number | null;
   category: string | null;
   is_puntuable: boolean;
+  is_grand_prix: boolean;
   is_category_specific: boolean;
   is_suma_13_damas: boolean;
   status: TournamentStatus;
