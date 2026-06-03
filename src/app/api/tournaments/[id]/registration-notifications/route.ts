@@ -164,10 +164,14 @@ function buildResponse(
         has_phone: Boolean(phone?.trim()),
         whatsapp_url: buildWhatsAppUrl(
           phone,
-          applyRegistrationMessagePlaceholders(default_message, {
-            first_name: p.first_name as string,
-            last_name: p.last_name as string,
-          }),
+          applyRegistrationMessagePlaceholders(
+            default_message,
+            {
+              first_name: p.first_name as string,
+              last_name: p.last_name as string,
+            },
+            { categoryName: input.categoryName }
+          ),
           "app"
         ),
       };

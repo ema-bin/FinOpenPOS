@@ -68,7 +68,8 @@ export function defaultWhatsAppLinkTarget(): WhatsAppLinkTarget {
 
 export function personalizeWhatsAppMessage(
   template: string,
-  player: { first_name: string; last_name: string }
+  player: { first_name: string; last_name: string },
+  options?: { categoryName?: string | null }
 ): string {
-  return applyRegistrationMessagePlaceholders(template, player);
+  return applyRegistrationMessagePlaceholders(template, player, options);
 }

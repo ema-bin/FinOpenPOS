@@ -100,11 +100,13 @@ export default function RegistrationNotificationsTab({
       ...p,
       whatsapp_url: buildWhatsAppUrl(
         p.phone,
-        personalizeWhatsAppMessage(effectiveTemplate, p),
+        personalizeWhatsAppMessage(effectiveTemplate, p, {
+          categoryName: data.category_name,
+        }),
         linkTarget
       ),
     }));
-  }, [data?.players, effectiveTemplate, linkTarget]);
+  }, [data?.players, data?.category_name, effectiveTemplate, linkTarget]);
 
   const handleCopyFlyer = async () => {
     if (!flyerUrl) {
@@ -238,7 +240,7 @@ export default function RegistrationNotificationsTab({
               placeholder="Mensaje de invitación..."
             />
             <p className="text-xs text-muted-foreground">
-              Placeholder: {"{nombre}"}. Enviar abre WhatsApp Desktop (no una
+              Placeholders: {"{nombre}"}, {"{categoria}"}. Enviar abre WhatsApp Desktop (no una
               pestaña del navegador). Un chat por jugador.
             </p>
             <Button
@@ -248,7 +250,9 @@ export default function RegistrationNotificationsTab({
               onClick={() => {
                 const sample = data.players[0];
                 const text = sample
-                  ? personalizeWhatsAppMessage(effectiveTemplate, sample)
+                  ? personalizeWhatsAppMessage(effectiveTemplate, sample, {
+                      categoryName: data.category_name,
+                    })
                   : effectiveTemplate;
                 navigator.clipboard.writeText(text);
                 toast.success("Mensaje de ejemplo copiado");
