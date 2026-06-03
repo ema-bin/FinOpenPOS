@@ -48,12 +48,24 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return date;
     };
 
-    const normalizedBody = {
+    const normalizedBody: Record<string, unknown> = {
       ...body,
       start_date: body.start_date !== undefined ? normalizeDate(body.start_date) : undefined,
       end_date: body.end_date !== undefined ? normalizeDate(body.end_date) : undefined,
       registration_deadline: body.registration_deadline !== undefined ? normalizeDate(body.registration_deadline) : undefined,
     };
+
+    if (body.is_grand_prix !== undefined || body.is_puntuable !== undefined) {
+      const existing = await repos.tournaments.findById(id);
+      const puntuable =
+        body.is_puntuable !== undefined ? Boolean(body.is_puntuable) : (existing?.is_puntuable ?? false);
+      const grandPrix =
+        body.is_grand_prix !== undefined ? Boolean(body.is_grand_prix) : (existing?.is_grand_prix ?? false);
+      normalizedBody.is_grand_prix = puntuable && grandPrix;
+      if (body.is_puntuable === false) {
+        normalizedBody.is_grand_prix = false;
+      }
+    }
 
     const tournament = await repos.tournaments.update(id, normalizedBody);
 
