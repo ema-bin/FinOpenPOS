@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTournamentFlyerBlob } from "@/hooks/use-tournament-flyer-blob";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -30,11 +31,7 @@ import {
   defaultWhatsAppLinkTarget,
   personalizeWhatsAppMessage,
 } from "@/lib/whatsapp";
-import {
-  CopyImageError,
-  copyImageFromUrl,
-  downloadImageFromUrl,
-} from "@/lib/copy-image-url";
+import { CopyImageError, copyPngBlobToClipboard } from "@/lib/copy-image-url";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -126,6 +123,11 @@ export default function RegistrationNotificationsTab({
     messageTemplate ?? data?.default_message ?? "";
   const flyerUrl = data?.flyer_url ?? undefined;
   const hasFlyer = Boolean(flyerUrl);
+  const {
+    pngBlob: flyerPngBlob,
+    loading: flyerBlobLoading,
+    ready: flyerBlobReady,
+  } = useTournamentFlyerBlob(tournament.id, hasFlyer, flyerUrl);
 
   const linkTarget = defaultWhatsAppLinkTarget();
 
@@ -152,36 +154,27 @@ export default function RegistrationNotificationsTab({
   );
 
   const handleCopyFlyer = async () => {
-    if (!flyerUrl) {
-      toast.error("Subí un flier en la pestaña Flier Promoción");
+    if (!flyerPngBlob) {
+      toast.error(
+        flyerBlobLoading
+          ? "Esperá a que cargue el flier…"
+          : "Subí el flier en Flier Promoción"
+      );
       return;
     }
     setCopyingFlyer(true);
-    const proxyUrl = `/api/tournaments/${tournament.id}/promo-flyer/blob`;
     try {
-      await copyImageFromUrl(flyerUrl, { fetchUrl: proxyUrl });
+      await copyPngBlobToClipboard(flyerPngBlob);
       toast.success(
-        "Flier copiado. En WhatsApp pegalo como imagen después de abrir el chat."
+        "Flier copiado. En WhatsApp pegalo como imagen (Ctrl+V) después de abrir el chat."
       );
     } catch (err) {
       console.error("copy flyer:", err);
-      try {
-        await downloadImageFromUrl(flyerUrl, `flier-${tournament.name}.png`, {
-          fetchUrl: proxyUrl,
-        });
-        toast.message(
-          err instanceof CopyImageError && err.code === "clipboard"
-            ? "No se pudo copiar al portapapeles; se descargó el flier."
-            : "Se descargó el flier (la copia directa falló).",
-          { description: "Subilo manualmente a WhatsApp o pegá si tu navegador lo permite." }
-        );
-      } catch {
-        toast.error(
-          err instanceof CopyImageError
-            ? err.message
-            : "No se pudo copiar el flier"
-        );
-      }
+      toast.error(
+        err instanceof CopyImageError
+          ? err.message
+          : "No se pudo copiar el flier"
+      );
     } finally {
       setCopyingFlyer(false);
     }
@@ -281,18 +274,20 @@ export default function RegistrationNotificationsTab({
                     size="sm"
                     className="w-fit"
                     onClick={handleCopyFlyer}
-                    disabled={copyingFlyer}
+                    disabled={copyingFlyer || !flyerBlobReady}
                   >
-                    {copyingFlyer ? (
+                    {copyingFlyer || flyerBlobLoading ? (
                       <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
                     ) : (
                       <ImageIcon className="h-4 w-4 mr-1" />
                     )}
-                    Copiar imagen del flier
+                    {flyerBlobLoading
+                      ? "Preparando…"
+                      : "Copiar imagen del flier"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Copiá el flier, abrí WhatsApp con Enviar y pegá la imagen en
-                    el chat (el mensaje de texto va aparte).
+                    El flier se prepara al cargar la pestaña. Copiá, abrí
+                    WhatsApp con Enviar y pegá con Ctrl+V.
                   </p>
                 </div>
               </div>
