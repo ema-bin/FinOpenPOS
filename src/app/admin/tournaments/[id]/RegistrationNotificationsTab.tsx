@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/table";
 import { Loader2Icon, MessageCircleIcon, CopyIcon, ImageIcon } from "lucide-react";
 import type { TournamentDTO } from "@/models/dto/tournament";
-import { Switch } from "@/components/ui/switch";
 import {
   buildWhatsAppUrl,
   personalizeWhatsAppMessage,
@@ -79,7 +78,6 @@ export default function RegistrationNotificationsTab({
   >;
 }) {
   const [messageTemplate, setMessageTemplate] = useState<string | null>(null);
-  const [includeFlyerLink, setIncludeFlyerLink] = useState(true);
   const [copyingFlyer, setCopyingFlyer] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
@@ -93,24 +91,16 @@ export default function RegistrationNotificationsTab({
   const flyerUrl = data?.flyer_url ?? null;
   const hasFlyer = Boolean(flyerUrl);
 
-  useEffect(() => {
-    if (!hasFlyer) setIncludeFlyerLink(false);
-    else if (data?.default_message?.includes("{flier}")) setIncludeFlyerLink(true);
-  }, [hasFlyer, data?.default_message]);
-
   const playersWithLinks = useMemo(() => {
     if (!data?.players) return [];
     return data.players.map((p) => ({
       ...p,
       whatsapp_url: buildWhatsAppUrl(
         p.phone,
-        personalizeWhatsAppMessage(effectiveTemplate, p, {
-          flyerUrl,
-          includeFlyer: includeFlyerLink,
-        })
+        personalizeWhatsAppMessage(effectiveTemplate, p)
       ),
     }));
-  }, [data?.players, effectiveTemplate, flyerUrl, includeFlyerLink]);
+  }, [data?.players, effectiveTemplate]);
 
   const handleCopyFlyer = async () => {
     if (!flyerUrl) {
@@ -192,65 +182,46 @@ export default function RegistrationNotificationsTab({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="include-flyer">Incluir flier en el mensaje</Label>
-                <p className="text-xs text-muted-foreground">
-                  Agrega el link público al flier (placeholder {"{flier}"})
-                </p>
-              </div>
-              <Switch
-                id="include-flyer"
-                checked={includeFlyerLink && hasFlyer}
-                onCheckedChange={setIncludeFlyerLink}
-                disabled={!hasFlyer}
-              />
-            </div>
-            {!hasFlyer && (
+            <Label>Flier (opcional)</Label>
+            {!hasFlyer ? (
               <p className="text-xs text-muted-foreground">
-                Subí el flier en la pestaña <strong>Flier Promoción</strong>{" "}
-                (sección Compartir) para incluirlo en el mensaje.
+                Subí el flier en <strong>Flier Promoción</strong> para poder
+                copiarlo y pegarlo en WhatsApp.
               </p>
-            )}
-            <div className="flex flex-wrap items-start gap-3">
-              {flyerUrl && (
-                <a
-                  href={flyerUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block shrink-0 rounded-md border overflow-hidden w-24 bg-white"
-                >
+            ) : (
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="shrink-0 rounded-md border overflow-hidden w-24 bg-white">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    key={flyerUrl}
                     src={flyerUrl}
                     alt="Vista previa del flier"
                     className="w-full h-auto"
                   />
-                </a>
-              )}
-              <div className="flex flex-col gap-2 min-w-0 flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-fit"
-                  onClick={handleCopyFlyer}
-                  disabled={!hasFlyer || copyingFlyer}
-                >
-                  {copyingFlyer ? (
-                    <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <ImageIcon className="h-4 w-4 mr-1" />
-                  )}
-                  Copiar imagen del flier
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  WhatsApp no permite adjuntar la imagen automáticamente: el
-                  mensaje lleva el link al flier. Si querés enviar la imagen,
-                  copiala y pegala en el chat después de pulsar Enviar.
-                </p>
+                </div>
+                <div className="flex flex-col gap-2 min-w-0 flex-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-fit"
+                    onClick={handleCopyFlyer}
+                    disabled={copyingFlyer}
+                  >
+                    {copyingFlyer ? (
+                      <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4 mr-1" />
+                    )}
+                    Copiar imagen del flier
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Copiá el flier, abrí WhatsApp con Enviar y pegá la imagen en
+                    el chat (el mensaje de texto va aparte).
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -263,8 +234,7 @@ export default function RegistrationNotificationsTab({
               placeholder="Mensaje de invitación..."
             />
             <p className="text-xs text-muted-foreground">
-              Placeholders: {"{nombre}"}, {"{flier}"} (link al flier del
-              torneo). Un chat por jugador.
+              Placeholder: {"{nombre}"}. Un chat por jugador.
             </p>
             <Button
               type="button"
@@ -273,10 +243,7 @@ export default function RegistrationNotificationsTab({
               onClick={() => {
                 const sample = data.players[0];
                 const text = sample
-                  ? personalizeWhatsAppMessage(effectiveTemplate, sample, {
-                      flyerUrl,
-                      includeFlyer: includeFlyerLink,
-                    })
+                  ? personalizeWhatsAppMessage(effectiveTemplate, sample)
                   : effectiveTemplate;
                 navigator.clipboard.writeText(text);
                 toast.success("Mensaje de ejemplo copiado");

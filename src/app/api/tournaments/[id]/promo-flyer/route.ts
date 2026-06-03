@@ -81,6 +81,8 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
+    await supabaseStorageService.removeTournamentPromoFlyers(tournamentId);
+
     const updated = await repos.tournaments.update(tournamentId, {
       promo_flyer_url: null,
     });

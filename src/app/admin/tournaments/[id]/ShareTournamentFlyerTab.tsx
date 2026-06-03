@@ -41,12 +41,18 @@ export default function ShareTournamentFlyerTab({
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
       tournamentsService.uploadPromoFlyer(tournament.id, file),
-    onSuccess: () => {
+    onSuccess: async (data) => {
       toast.success("Flier subido");
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPendingFile(null);
       setPreviewUrl(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      const newUrl = data.promo_flyer_url ?? data.url;
+      queryClient.setQueryData<TournamentDTO | undefined>(
+        ["tournament", tournament.id],
+        (prev) => (prev ? { ...prev, promo_flyer_url: newUrl } : prev)
+      );
+      await queryClient.refetchQueries({ queryKey: ["tournament", tournament.id] });
       queryClient.invalidateQueries({
         queryKey: ["tournament-registration-notifications", tournament.id],
       });
@@ -207,6 +213,7 @@ export default function ShareTournamentFlyerTab({
             <div className="rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                key={displayUrl}
                 src={displayUrl}
                 alt={`Flier ${tournament.name}`}
                 className="w-full h-auto max-h-[70vh] object-contain"

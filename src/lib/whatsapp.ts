@@ -45,8 +45,7 @@ export function buildWhatsAppUrl(
 
 export function personalizeWhatsAppMessage(
   template: string,
-  player: { first_name: string; last_name: string },
-  options?: { flyerUrl?: string | null; includeFlyer?: boolean }
+  player: { first_name: string; last_name: string }
 ): string {
-  return applyRegistrationMessagePlaceholders(template, player, options);
+  return applyRegistrationMessagePlaceholders(template, player);
 }

@@ -153,7 +153,6 @@ function buildResponse(
     tournamentName: input.tournament.name,
     categoryName: input.categoryName,
     registrationFee: input.tournament.registration_fee,
-    includeFlyerLink: Boolean(flyer_url),
   });
 
   const unregistered = input.rows
@@ -169,14 +168,10 @@ function buildResponse(
         has_phone: Boolean(phone?.trim()),
         whatsapp_url: buildWhatsAppUrl(
           phone,
-          applyRegistrationMessagePlaceholders(
-            default_message,
-            {
-              first_name: p.first_name as string,
-              last_name: p.last_name as string,
-            },
-            { flyerUrl: flyer_url, includeFlyer: true }
-          )
+          applyRegistrationMessagePlaceholders(default_message, {
+            first_name: p.first_name as string,
+            last_name: p.last_name as string,
+          })
         ),
       };
     })

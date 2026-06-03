@@ -60,8 +60,8 @@ class SupabaseStorageService {
   }
 
   /**
-   * Flier de promoción del torneo. Ruta: tournament_promo_flyers / {tournamentId} / flyer.{ext}
-   * Bucket público (mismo patrón que advertisements).
+   * Flier de promoción del torneo. Ruta: tournament_promo_flyers / {tournamentId} / {timestamp}-{uuid}.{ext}
+   * Archivo nuevo en cada subida (evita caché del navegador/CDN al reemplazar).
    */
   async uploadTournamentPromoFlyer(
     file: File,
@@ -69,11 +69,22 @@ class SupabaseStorageService {
   ): Promise<string> {
     const rawExt = (file.name.split(".").pop() ?? "png").toLowerCase();
     const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "png";
-    const path = `${tournamentId}/flyer.${ext}`;
+    const folder = String(tournamentId);
+
+    const { data: existing } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .list(folder);
+    if (existing?.length) {
+      const toRemove = existing.map((o) => `${folder}/${o.name}`);
+      await this.client.storage.from("tournament_promo_flyers").remove(toRemove);
+    }
+
+    const filename = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const path = `${folder}/${filename}`;
 
     const { data, error } = await this.client.storage
       .from("tournament_promo_flyers")
-      .upload(path, file, { cacheControl: "3600", upsert: true });
+      .upload(path, file, { cacheControl: "300" });
 
     if (error || !data) {
       throw error ?? new Error("Upload failed");
@@ -84,6 +95,17 @@ class SupabaseStorageService {
       .getPublicUrl(data.path);
 
     return publicData.publicUrl;
+  }
+
+  /** Elimina todos los fliers guardados de un torneo. */
+  async removeTournamentPromoFlyers(tournamentId: number): Promise<void> {
+    const folder = String(tournamentId);
+    const { data: existing } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .list(folder);
+    if (!existing?.length) return;
+    const paths = existing.map((o) => `${folder}/${o.name}`);
+    await this.client.storage.from("tournament_promo_flyers").remove(paths);
   }
 }
 
