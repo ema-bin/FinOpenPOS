@@ -149,6 +149,7 @@ export default function PlayoffsViewTab({
     sourceTeam2?: string | null;
     matchDate?: string | null;
     startTime?: string | null;
+    endTime?: string | null;
     status?: string;
   }>> = {};
 
