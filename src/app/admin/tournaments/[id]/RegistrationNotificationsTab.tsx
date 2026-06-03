@@ -120,7 +120,7 @@ export default function RegistrationNotificationsTab({
 
   const effectiveTemplate =
     messageTemplate ?? data?.default_message ?? "";
-  const flyerUrl = data?.flyer_url ?? null;
+  const flyerUrl = data?.flyer_url ?? undefined;
   const hasFlyer = Boolean(flyerUrl);
 
   const linkTarget = defaultWhatsAppLinkTarget();
