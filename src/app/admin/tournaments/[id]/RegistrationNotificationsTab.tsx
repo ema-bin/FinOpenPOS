@@ -30,7 +30,11 @@ import {
   defaultWhatsAppLinkTarget,
   personalizeWhatsAppMessage,
 } from "@/lib/whatsapp";
-import { copyImageFromUrl } from "@/lib/copy-image-url";
+import {
+  CopyImageError,
+  copyImageFromUrl,
+  downloadImageFromUrl,
+} from "@/lib/copy-image-url";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -153,13 +157,31 @@ export default function RegistrationNotificationsTab({
       return;
     }
     setCopyingFlyer(true);
+    const proxyUrl = `/api/tournaments/${tournament.id}/promo-flyer/blob`;
     try {
-      await copyImageFromUrl(flyerUrl);
+      await copyImageFromUrl(flyerUrl, { fetchUrl: proxyUrl });
       toast.success(
         "Flier copiado. En WhatsApp pegalo como imagen después de abrir el chat."
       );
-    } catch {
-      toast.error("No se pudo copiar el flier");
+    } catch (err) {
+      console.error("copy flyer:", err);
+      try {
+        await downloadImageFromUrl(flyerUrl, `flier-${tournament.name}.png`, {
+          fetchUrl: proxyUrl,
+        });
+        toast.message(
+          err instanceof CopyImageError && err.code === "clipboard"
+            ? "No se pudo copiar al portapapeles; se descargó el flier."
+            : "Se descargó el flier (la copia directa falló).",
+          { description: "Subilo manualmente a WhatsApp o pegá si tu navegador lo permite." }
+        );
+      } catch {
+        toast.error(
+          err instanceof CopyImageError
+            ? err.message
+            : "No se pudo copiar el flier"
+        );
+      }
     } finally {
       setCopyingFlyer(false);
     }
