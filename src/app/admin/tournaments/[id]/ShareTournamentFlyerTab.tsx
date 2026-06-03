@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
-import { copyImageFromUrl } from "@/lib/copy-image-url";
+import {
+  CopyImageError,
+  copyImageFromUrl,
+  downloadImageFromUrl,
+} from "@/lib/copy-image-url";
 import { toast } from "sonner";
 
 export default function ShareTournamentFlyerTab({
@@ -100,11 +104,27 @@ export default function ShareTournamentFlyerTab({
       return;
     }
     setCopying(true);
+    const proxyUrl = `/api/tournaments/${tournament.id}/promo-flyer/blob`;
     try {
-      await copyImageFromUrl(url);
+      await copyImageFromUrl(url, { fetchUrl: proxyUrl });
       toast.success("Flier copiado al portapapeles");
-    } catch {
-      toast.error("No se pudo copiar la imagen");
+    } catch (err) {
+      console.error("copy flyer:", err);
+      try {
+        await downloadImageFromUrl(url, `flier-${tournament.name}.png`, {
+          fetchUrl: proxyUrl,
+        });
+        toast.message(
+          err instanceof CopyImageError && err.code === "clipboard"
+            ? "No se pudo copiar; se descargó el flier."
+            : "Se descargó el flier.",
+          { description: "Subilo a WhatsApp o pegá la imagen si el navegador lo permite." }
+        );
+      } catch {
+        toast.error(
+          err instanceof CopyImageError ? err.message : "No se pudo copiar la imagen"
+        );
+      }
     } finally {
       setCopying(false);
     }
