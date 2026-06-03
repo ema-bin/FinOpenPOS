@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2Icon } from "lucide-react";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTimeRange } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 
 import type {
@@ -323,7 +323,7 @@ export default function StandingsTab({ tournament }: { tournament: Pick<Tourname
                                     const dayName = dayNames[date.getDay()].toUpperCase();
                                     const courtName = match.court_id ? courtMap.get(match.court_id) : null;
                                     const courtText = courtName ? ` - ${courtName}` : "";
-                                    return `${dayName} ${formatDate(match.match_date)} ${formatTime(match.start_time)}${courtText}`;
+                                    return `${dayName} ${formatDate(match.match_date)} ${formatTimeRange(match.start_time, match.end_time)}${courtText}`;
                                   })()}
                                 </span>
                               )}

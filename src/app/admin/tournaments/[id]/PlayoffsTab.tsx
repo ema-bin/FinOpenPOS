@@ -21,7 +21,8 @@ import {
 import { Loader2Icon, PencilIcon, CheckIcon, XIcon, TrashIcon, PlayIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { MatchResultForm } from "@/components/match-result-form";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
+import { playoffMatchDurationMinutes } from "@/lib/playoff-match-duration";
 import {
   Dialog,
   DialogContent,
@@ -68,12 +69,19 @@ async function fetchTournamentPlayoffs(tournamentId: number): Promise<PlayoffRow
 export default function PlayoffsTab({
   tournament,
 }: {
-  tournament: Pick<TournamentDTO, "id" | "has_super_tiebreak" | "status">;
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "has_super_tiebreak" | "status" | "match_duration" | "match_duration_quarters_onwards"
+  >;
 }) {
   const queryClient = useQueryClient();
+  const playoffDurationMinutes = playoffMatchDurationMinutes(
+    tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+  );
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
+  const [editEndTime, setEditEndTime] = useState<string>("");
   const [editCourtId, setEditCourtId] = useState<string>("none");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -119,7 +127,11 @@ export default function PlayoffsTab({
     if (row?.match) {
       setEditingMatchId(matchId);
       setEditDate(row.match.match_date ? row.match.match_date.split("T")[0] : "");
-      setEditTime(row.match.start_time || "");
+      const start = row.match.start_time || "";
+      setEditTime(start);
+      setEditEndTime(
+        resolveMatchEndTime(start, row.match.end_time, playoffDurationMinutes) || ""
+      );
       setEditCourtId(row.match.court_id ? String(row.match.court_id) : "none");
     }
   };
@@ -128,24 +140,32 @@ export default function PlayoffsTab({
     setEditingMatchId(null);
     setEditDate("");
     setEditTime("");
+    setEditEndTime("");
     setEditCourtId("none");
   };
 
   const handleSaveSchedule = async (matchId: number) => {
     try {
       if (!editDate || !editTime) {
-        alert("Fecha y hora son requeridos");
+        alert("Fecha y hora de inicio son requeridos");
         return;
       }
-      
+
+      const endTime =
+        editEndTime.trim() ||
+        resolveMatchEndTime(editTime, null, playoffDurationMinutes) ||
+        editTime;
+
       await tournamentMatchesService.scheduleMatch(matchId, {
         date: editDate,
         start_time: editTime,
+        end_time: endTime,
         court_id: editCourtId === "none" ? undefined : Number(editCourtId),
       });
       setEditingMatchId(null);
       setEditDate("");
       setEditTime("");
+      setEditEndTime("");
       setEditCourtId("none");
       load(); // load() ahora invalida cache
     } catch (err: any) {
@@ -377,20 +397,38 @@ export default function PlayoffsTab({
               {/* Header con ronda, fecha, hora y estado */}
               <div className={`${roundColor.bg} border-b px-4 py-2`}>
                 {isEditing ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
                       type="date"
                       value={editDate}
                       onChange={(e) => setEditDate(e.target.value)}
-                      className="h-7 text-xs"
+                      className="h-7 text-xs w-[130px]"
                     />
-                    <Input
-                      type="time"
-                      value={editTime}
-                      onChange={(e) => setEditTime(e.target.value)}
-                      className="h-7 text-xs"
-                      step="60"
-                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground shrink-0">Inicio</span>
+                      <Input
+                        type="time"
+                        value={editTime}
+                        onChange={(e) => setEditTime(e.target.value)}
+                        className="h-7 text-xs w-[100px]"
+                        step="60"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground shrink-0">Fin</span>
+                      <Input
+                        type="time"
+                        value={editEndTime}
+                        onChange={(e) => setEditEndTime(e.target.value)}
+                        className="h-7 text-xs w-[100px]"
+                        step="60"
+                      />
+                    </div>
+                    {(editTime || editEndTime) && (
+                      <span className="text-[10px] font-medium text-muted-foreground">
+                        {formatTimeRange(editTime, editEndTime)}
+                      </span>
+                    )}
                     <Select value={editCourtId} onValueChange={setEditCourtId}>
                       <SelectTrigger className="h-7 w-[150px] text-xs">
                         <SelectValue placeholder="Cancha" />
@@ -433,7 +471,15 @@ export default function PlayoffsTab({
                     )}
                     {match.start_time && (
                       <span className="text-muted-foreground">
-                        🕐 {formatTime(match.start_time)}
+                        🕐{" "}
+                        {formatTimeRange(
+                          match.start_time,
+                          resolveMatchEndTime(
+                            match.start_time,
+                            match.end_time,
+                            playoffDurationMinutes
+                          )
+                        )}
                         {match.court_id && courtMap.get(match.court_id) && (
                           <span className="ml-1">- {courtMap.get(match.court_id)}</span>
                         )}

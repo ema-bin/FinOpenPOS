@@ -51,6 +51,36 @@ export function formatTime(timeStr: string | null | undefined): string {
   return `${hours}:${minutes}`;
 }
 
+/** Rango horario para partidos (ej. 14:00 – 15:00). Solo inicio si no hay fin distinto. */
+export function formatTimeRange(
+  start: string | null | undefined,
+  end: string | null | undefined
+): string {
+  const startFmt = formatTime(start);
+  if (!startFmt) return "";
+  const endFmt = formatTime(end);
+  if (!endFmt || endFmt === startFmt) return startFmt;
+  return `${startFmt} – ${endFmt}`;
+}
+
+/** Fin efectivo para mostrar/guardar si en DB solo hay start_time. */
+export function resolveMatchEndTime(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  durationMinutes: number
+): string | null {
+  if (!start) return null;
+  const trimmed = start.trim();
+  if (!trimmed) return null;
+  if (end && formatTime(end)) return formatTime(end);
+  const mins = Math.max(15, durationMinutes || 60);
+  const [h, m] = trimmed.split(":").map(Number);
+  const total = h * 60 + m + mins;
+  const endH = Math.floor(total / 60) % 24;
+  const endM = total % 60;
+  return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+}
+
 /**
  * Formats a datetime string to dd/mm/yyyy HH:MM format
  * Uses the browser's local timezone for display

@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/card";
 import { Loader2Icon } from "lucide-react";
 import { TournamentBracketV2 } from "@/components/tournament-bracket-v2";
-import { formatDate, formatTime } from "@/lib/date-utils";
+import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
+import { playoffMatchDurationMinutes } from "@/lib/playoff-match-duration";
 import type { PlayoffRow, TeamDTO, TournamentDTO } from "@/models/dto/tournament";
 
 // Using Pick from TournamentDTO
@@ -56,7 +57,17 @@ async function fetchTournamentPlayoffs(tournamentId: number): Promise<PlayoffRow
   return tournamentsService.getPlayoffs(tournamentId);
 }
 
-export default function PlayoffsViewTab({ tournament }: { tournament: Pick<TournamentDTO, "id"> }) {
+export default function PlayoffsViewTab({
+  tournament,
+}: {
+  tournament: Pick<
+    TournamentDTO,
+    "id" | "match_duration" | "match_duration_quarters_onwards"
+  >;
+}) {
+  const playoffDurationMinutes = playoffMatchDurationMinutes(
+    tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60
+  );
   // React Query para compartir cache con GroupsTab y PlayoffsTab
   const {
     data: rows = [],
@@ -190,6 +201,13 @@ export default function PlayoffsViewTab({ tournament }: { tournament: Pick<Tourn
       sourceTeam2: isBye ? null : r.source_team2,
       matchDate: isBye ? null : match.match_date, // Los byes de primera ronda no tienen fecha/hora, pero los demás sí
       startTime: isBye ? null : match.start_time,
+      endTime: isBye
+        ? null
+        : resolveMatchEndTime(
+            match.start_time,
+            match.end_time,
+            playoffDurationMinutes
+          ),
       status: match.status,
     });
   });
@@ -307,7 +325,16 @@ export default function PlayoffsViewTab({ tournament }: { tournament: Pick<Tourn
                                 {match.start_time && (
                                   <div className="flex items-center gap-2 text-sm font-semibold">
                                     <span>🕐</span>
-                                    <span>{formatTime(match.start_time)}</span>
+                                    <span>
+                                      {formatTimeRange(
+                                        match.start_time,
+                                        resolveMatchEndTime(
+                                          match.start_time,
+                                          match.end_time,
+                                          playoffDurationMinutes
+                                        )
+                                      )}
+                                    </span>
                                   </div>
                                 )}
                               </div>
