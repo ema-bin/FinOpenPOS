@@ -21,6 +21,7 @@ export interface TournamentDTO {
   /** Playoffs (todas las rondas); si falta (API vieja), usar match_duration */
   match_duration_quarters_onwards?: number;
   registration_fee: number;
+  promo_flyer_url?: string | null;
   start_date?: string | null;
   end_date?: string | null;
 }

@@ -58,6 +58,33 @@ class SupabaseStorageService {
 
     return publicData.publicUrl;
   }
+
+  /**
+   * Flier de promoción del torneo. Ruta: tournament_promo_flyers / {tournamentId} / flyer.{ext}
+   * Bucket público (mismo patrón que advertisements).
+   */
+  async uploadTournamentPromoFlyer(
+    file: File,
+    tournamentId: number
+  ): Promise<string> {
+    const rawExt = (file.name.split(".").pop() ?? "png").toLowerCase();
+    const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "png";
+    const path = `${tournamentId}/flyer.${ext}`;
+
+    const { data, error } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .upload(path, file, { cacheControl: "3600", upsert: true });
+
+    if (error || !data) {
+      throw error ?? new Error("Upload failed");
+    }
+
+    const { data: publicData } = this.client.storage
+      .from("tournament_promo_flyers")
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
+  }
 }
 
 export const supabaseStorageService = new SupabaseStorageService();

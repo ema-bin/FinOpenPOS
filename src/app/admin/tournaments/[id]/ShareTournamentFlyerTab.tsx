@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardHeader,
@@ -9,233 +10,221 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2Icon, CopyIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Loader2Icon,
+  CopyIcon,
+  UploadIcon,
+  Trash2Icon,
+  ExternalLinkIcon,
+} from "lucide-react";
 import type { TournamentDTO } from "@/models/dto/tournament";
+import { tournamentsService } from "@/services";
+import { copyImageFromUrl } from "@/lib/copy-image-url";
 import { toast } from "sonner";
 
 export default function ShareTournamentFlyerTab({
   tournament,
 }: {
-  tournament: Pick<TournamentDTO, "id" | "name" | "description">;
+  tournament: Pick<TournamentDTO, "id" | "name" | "promo_flyer_url">;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      console.log("Canvas ref no disponible");
+  const currentUrl = tournament.promo_flyer_url?.trim() || null;
+  const displayUrl = previewUrl ?? currentUrl;
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) =>
+      tournamentsService.uploadPromoFlyer(tournament.id, file),
+    onSuccess: () => {
+      toast.success("Flier subido");
+      setPendingFile(null);
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["tournament-registration-notifications", tournament.id],
+      });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => tournamentsService.removePromoFlyer(tournament.id),
+    onSuccess: () => {
+      toast.success("Flier eliminado");
+      setPendingFile(null);
+      setPreviewUrl(null);
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["tournament-registration-notifications", tournament.id],
+      });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const onFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPendingFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    },
+    [previewUrl]
+  );
+
+  const handleUpload = () => {
+    if (!pendingFile) {
+      toast.error("Elegí una imagen primero");
       return;
     }
+    uploadMutation.mutate(pendingFile);
+  };
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      console.log("No se pudo obtener el contexto 2d del canvas");
+  const handleCopyImage = async () => {
+    const url = displayUrl;
+    if (!url) {
+      toast.error("No hay flier para copiar");
       return;
     }
-
-    // Resetear estado
-    setImageLoaded(false);
-
-    const img = new Image();
-    
-    img.onload = () => {
-      console.log("Imagen cargada:", img.width, "x", img.height);
-      try {
-        // Establecer dimensiones del canvas iguales a la imagen
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        // Dibujar la imagen de fondo
-        ctx.drawImage(img, 0, 0);
-
-        // Configurar fuente y estilo para el nombre del torneo
-        // Basado en la descripción de la imagen, el texto "NOMBRE TORNEO" está en la parte superior media
-        // Usar una fuente bold, sans-serif, color verde oscuro (similar a #1a5f2e o más oscuro)
-        ctx.fillStyle = "#0d3d1f"; // Verde muy oscuro para mejor contraste
-        ctx.font = "bold 250px Anton, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        // Posición para "NOMBRE TORNEO" - en la parte superior media según la descripción
-        // Aproximadamente en el 20-25% de la altura
-        const tournamentNameY = canvas.height * 0.38;
-        const tournamentNameX = canvas.width / 2;
-
-        // Agregar sombra sutil para mejor legibilidad
-        ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-        ctx.shadowBlur = 400;
-        ctx.shadowOffsetX = 200;
-        ctx.shadowOffsetY = 200;
-
-        // Dibujar el nombre del torneo
-        ctx.fillText(tournament.name.toUpperCase(), tournamentNameX, tournamentNameY);
-
-        // Resetear sombra
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-
-        // Configurar para "DIAS A JUGAR" (descripción)
-        // Está en la parte inferior media según la descripción
-        ctx.font = "bold 142px Poppins, sans-serif";
-        const descriptionY = canvas.height * 0.77; // Aproximadamente 78% desde arriba
-        const descriptionX = canvas.width / 2;
-
-        // Usar la descripción del torneo, o una fecha formateada si no hay descripción
-        const descriptionText = tournament.description 
-          ? tournament.description.toUpperCase()
-          : "INFORMACIÓN DEL TORNEO";
-
-        // Si el texto es muy largo, dividirlo en múltiples líneas
-        const maxWidth = canvas.width * 0.8;
-        const words = descriptionText.split(" ");
-        let line = "";
-        let y = descriptionY;
-
-        for (let i = 0; i < words.length; i++) {
-          const testLine = line + words[i] + " ";
-          const metrics = ctx.measureText(testLine);
-          const testWidth = metrics.width;
-
-          if (testWidth > maxWidth && i > 0) {
-            ctx.fillText(line, descriptionX, y);
-            line = words[i] + " ";
-            y += 50; // Espaciado entre líneas
-          } else {
-            line = testLine;
-          }
-        }
-        ctx.fillText(line, descriptionX, y);
-
-        setImageLoaded(true);
-        console.log("Canvas renderizado correctamente");
-      } catch (error) {
-        console.error("Error drawing on canvas:", error);
-        toast.error("Error al renderizar la imagen");
-      }
-    };
-
-    img.onerror = (error) => {
-      console.error("Error loading image:", error, img.src);
-      toast.error("Error al cargar la imagen de fondo. Verificá que la imagen existe en /public/PCP-tournament-inscription.jpg");
-    };
-
-    // Cargar la imagen desde el folder public
-    // Intentar con diferentes rutas por si hay problemas de CORS
-    const imagePath = "/PCP-tournament-inscription.jpg";
-    console.log("Intentando cargar imagen desde:", imagePath);
-    img.src = imagePath;
-  }, [tournament.name, tournament.description]);
-
-  const handleCopyImageToClipboard = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !imageLoaded) {
-      toast.error("La imagen aún no está lista");
-      return;
-    }
-
-    setIsGenerating(true);
+    setCopying(true);
     try {
-      // Convertir canvas a blob
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          toast.error("Error al generar la imagen");
-          setIsGenerating(false);
-          return;
-        }
-
-        try {
-          // Copiar al portapapeles
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              "image/png": blob,
-            }),
-          ]);
-
-          toast.success("Flier copiado al portapapeles");
-        } catch (error) {
-          console.error("Error copying to clipboard:", error);
-          toast.error("Error al copiar la imagen al portapapeles");
-        } finally {
-          setIsGenerating(false);
-        }
-      }, "image/png");
-    } catch (error) {
-      console.error("Error generating image:", error);
-      toast.error("Error al generar la imagen");
-      setIsGenerating(false);
+      await copyImageFromUrl(url);
+      toast.success("Flier copiado al portapapeles");
+    } catch {
+      toast.error("No se pudo copiar la imagen");
+    } finally {
+      setCopying(false);
     }
+  };
+
+  const handleCopyLink = () => {
+    const url = currentUrl;
+    if (!url) {
+      toast.error("Subí un flier primero");
+      return;
+    }
+    navigator.clipboard.writeText(url);
+    toast.success("Link del flier copiado");
   };
 
   return (
     <Card className="border-none shadow-none p-0">
       <CardHeader className="px-0 pt-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Compartir flier de promoción</CardTitle>
-            <CardDescription>
-              Compartí el flier promocional del torneo en redes sociales
-            </CardDescription>
-          </div>
-        </div>
+        <CardTitle>Flier de promoción</CardTitle>
+        <CardDescription>
+          Subí el flier que generaste por fuera (PNG, JPG o WebP). Se guarda en
+          Supabase y se usa en notificaciones WhatsApp y para compartir.
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="px-0 pt-4">
-        <div className="space-y-4">
-
-          {/* Vista previa usando el canvas renderizado */}
-          <div className="max-w-2xl mx-auto">
-            <div className="flex justify-end mb-2">
+      <CardContent className="px-0 pt-4 space-y-4">
+        <div className="space-y-2 max-w-md">
+          <Label htmlFor="flyer-file">Imagen del flier</Label>
+          <Input
+            id="flyer-file"
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={onFileChange}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleUpload}
+              disabled={!pendingFile || uploadMutation.isPending}
+            >
+              {uploadMutation.isPending ? (
+                <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <UploadIcon className="h-4 w-4 mr-1" />
+              )}
+              {currentUrl ? "Reemplazar flier" : "Subir flier"}
+            </Button>
+            {currentUrl && (
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleCopyImageToClipboard}
-                disabled={!imageLoaded || isGenerating}
-                className="h-8"
+                onClick={() => removeMutation.mutate()}
+                disabled={removeMutation.isPending}
               >
-                {isGenerating ? (
-                  <>
-                    <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
-                    Generando...
-                  </>
+                {removeMutation.isPending ? (
+                  <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
-                  <>
-                    <CopyIcon className="h-3 w-3 mr-1" />
-                    Copiar
-                  </>
+                  <Trash2Icon className="h-4 w-4 mr-1" />
                 )}
+                Quitar
               </Button>
-            </div>
-
-            {/* Vista previa del canvas */}
-            <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden">
-              <div className="relative">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-auto"
-                  style={{ 
-                    display: imageLoaded ? "block" : "none",
-                    maxWidth: "100%",
-                    height: "auto"
-                  }}
-                />
-                {!imageLoaded && (
-                  <div className="h-96 w-full flex items-center justify-center absolute inset-0">
-                    <div className="text-center">
-                      <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Cargando imagen...</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
+
+        {displayUrl ? (
+          <div className="max-w-2xl space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopyImage}
+                disabled={copying}
+              >
+                {copying ? (
+                  <Loader2Icon className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <CopyIcon className="h-4 w-4 mr-1" />
+                )}
+                Copiar imagen
+              </Button>
+              {currentUrl && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                  >
+                    <CopyIcon className="h-4 w-4 mr-1" />
+                    Copiar link
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <a href={currentUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLinkIcon className="h-4 w-4 mr-1" />
+                      Abrir
+                    </a>
+                  </Button>
+                </>
+              )}
+            </div>
+            <div className="rounded-lg border-2 border-gray-200 shadow-lg overflow-hidden bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={displayUrl}
+                alt={`Flier ${tournament.name}`}
+                className="w-full h-auto max-h-[70vh] object-contain"
+              />
+            </div>
+            {pendingFile && !uploadMutation.isPending && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Vista previa sin guardar. Pulsá &quot;Reemplazar flier&quot; para
+                subir.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-8 text-center border rounded-lg border-dashed">
+            Todavía no hay flier. Generá la imagen donde quieras y subila acá.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
-

@@ -540,6 +540,7 @@ CREATE TABLE tournaments (
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
     -- Canchas usadas al generar horarios de fase de grupos (mismo conjunto que el scheduler: slots × canchas)
     group_schedule_court_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    promo_flyer_url       TEXT,  -- flier de promoción (Supabase Storage, bucket tournament_promo_flyers)
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
