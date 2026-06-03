@@ -24,6 +24,7 @@ import { Loader2Icon, MessageCircleIcon, CopyIcon, ImageIcon } from "lucide-reac
 import type { TournamentDTO } from "@/models/dto/tournament";
 import {
   buildWhatsAppUrl,
+  defaultWhatsAppLinkTarget,
   personalizeWhatsAppMessage,
 } from "@/lib/whatsapp";
 import { copyImageFromUrl } from "@/lib/copy-image-url";
@@ -91,16 +92,19 @@ export default function RegistrationNotificationsTab({
   const flyerUrl = data?.flyer_url ?? null;
   const hasFlyer = Boolean(flyerUrl);
 
+  const linkTarget = defaultWhatsAppLinkTarget();
+
   const playersWithLinks = useMemo(() => {
     if (!data?.players) return [];
     return data.players.map((p) => ({
       ...p,
       whatsapp_url: buildWhatsAppUrl(
         p.phone,
-        personalizeWhatsAppMessage(effectiveTemplate, p)
+        personalizeWhatsAppMessage(effectiveTemplate, p),
+        linkTarget
       ),
     }));
-  }, [data?.players, effectiveTemplate]);
+  }, [data?.players, effectiveTemplate, linkTarget]);
 
   const handleCopyFlyer = async () => {
     if (!flyerUrl) {
@@ -234,7 +238,8 @@ export default function RegistrationNotificationsTab({
               placeholder="Mensaje de invitación..."
             />
             <p className="text-xs text-muted-foreground">
-              Placeholder: {"{nombre}"}. Un chat por jugador.
+              Placeholder: {"{nombre}"}. Enviar abre WhatsApp Desktop (no una
+              pestaña del navegador). Un chat por jugador.
             </p>
             <Button
               type="button"
@@ -296,11 +301,7 @@ export default function RegistrationNotificationsTab({
                               size="sm"
                               asChild
                             >
-                              <a
-                                href={p.whatsapp_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
+                              <a href={p.whatsapp_url}>
                                 <MessageCircleIcon className="h-4 w-4 mr-1" />
                                 Enviar
                               </a>

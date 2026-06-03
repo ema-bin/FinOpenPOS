@@ -171,7 +171,8 @@ function buildResponse(
           applyRegistrationMessagePlaceholders(default_message, {
             first_name: p.first_name as string,
             last_name: p.last_name as string,
-          })
+          }),
+          "app"
         ),
       };
     })
