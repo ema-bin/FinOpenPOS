@@ -540,6 +540,7 @@ CREATE TABLE tournaments (
     registration_fee    NUMERIC(10, 2) DEFAULT 0,
     -- Canchas usadas al generar horarios de fase de grupos (mismo conjunto que el scheduler: slots × canchas)
     group_schedule_court_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    promo_flyer_url       TEXT,  -- flier de promoción (Supabase Storage, bucket tournament_promo_flyers)
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -815,6 +816,22 @@ CREATE TABLE player_tournament_points (
 
 CREATE INDEX idx_player_tournament_points_category_year ON player_tournament_points(category_id, year);
 CREATE INDEX idx_player_tournament_points_player_year ON player_tournament_points(player_id, year);
+
+-- =========================================================
+-- TOURNAMENT_REGISTRATION_NOTIFIED (invitación WhatsApp enviada)
+-- =========================================================
+
+CREATE TABLE tournament_registration_notified (
+    id              BIGSERIAL PRIMARY KEY,
+    tournament_id   BIGINT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    user_uid        UUID NOT NULL,
+    notified_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tournament_id, player_id)
+);
+
+CREATE INDEX idx_tournament_registration_notified_tournament
+    ON tournament_registration_notified(tournament_id);
 
 -- =========================================================
 -- REGISTRATION_PRICING_SETTINGS (configuración global de cuotas)

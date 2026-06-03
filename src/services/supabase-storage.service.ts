@@ -58,6 +58,55 @@ class SupabaseStorageService {
 
     return publicData.publicUrl;
   }
+
+  /**
+   * Flier de promoción del torneo. Ruta: tournament_promo_flyers / {tournamentId} / {timestamp}-{uuid}.{ext}
+   * Archivo nuevo en cada subida (evita caché del navegador/CDN al reemplazar).
+   */
+  async uploadTournamentPromoFlyer(
+    file: File,
+    tournamentId: number
+  ): Promise<string> {
+    const rawExt = (file.name.split(".").pop() ?? "png").toLowerCase();
+    const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "png";
+    const folder = String(tournamentId);
+
+    const { data: existing } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .list(folder);
+    if (existing?.length) {
+      const toRemove = existing.map((o) => `${folder}/${o.name}`);
+      await this.client.storage.from("tournament_promo_flyers").remove(toRemove);
+    }
+
+    const filename = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const path = `${folder}/${filename}`;
+
+    const { data, error } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .upload(path, file, { cacheControl: "300" });
+
+    if (error || !data) {
+      throw error ?? new Error("Upload failed");
+    }
+
+    const { data: publicData } = this.client.storage
+      .from("tournament_promo_flyers")
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
+  }
+
+  /** Elimina todos los fliers guardados de un torneo. */
+  async removeTournamentPromoFlyers(tournamentId: number): Promise<void> {
+    const folder = String(tournamentId);
+    const { data: existing } = await this.client.storage
+      .from("tournament_promo_flyers")
+      .list(folder);
+    if (!existing?.length) return;
+    const paths = existing.map((o) => `${folder}/${o.name}`);
+    await this.client.storage.from("tournament_promo_flyers").remove(paths);
+  }
 }
 
 export const supabaseStorageService = new SupabaseStorageService();

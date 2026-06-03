@@ -95,6 +95,54 @@ class TournamentsService {
     return response.json();
   }
 
+  async uploadPromoFlyer(
+    tournamentId: number,
+    file: File
+  ): Promise<{ url: string; promo_flyer_url: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/promo-flyer`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Error al subir el flier");
+    }
+    return response.json();
+  }
+
+  async setRegistrationNotified(
+    tournamentId: number,
+    playerId: number,
+    notified: boolean
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/registration-notifications/mark`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: playerId, notified }),
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Error al actualizar estado de notificación");
+    }
+  }
+
+  async removePromoFlyer(tournamentId: number): Promise<TournamentDTO> {
+    const response = await fetch(`${this.baseUrl}/${tournamentId}/promo-flyer`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Error al quitar el flier");
+    }
+    const data = await response.json();
+    return data.tournament as TournamentDTO;
+  }
+
   async update(
     tournamentId: number,
     updates: Partial<{
@@ -111,6 +159,7 @@ class TournamentsService {
       match_duration: number;
       match_duration_quarters_onwards?: number;
       registration_fee: number;
+      promo_flyer_url: string | null;
     }>
   ): Promise<TournamentDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}`, {

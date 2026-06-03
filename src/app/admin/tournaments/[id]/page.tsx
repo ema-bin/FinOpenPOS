@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tabs";
 import { Loader2Icon, EditIcon, EyeIcon, Share2Icon } from "lucide-react";
 import TeamsTab from "./TeamsTab";
+import RegistrationNotificationsTab from "./RegistrationNotificationsTab";
 import PaymentsTab from "./PaymentsTab";
 import ScheduleReviewTab from "./ScheduleReviewTab";
 import GroupsTab from "./GroupsTab";
@@ -151,6 +152,7 @@ export default function TournamentDetailPage() {
               </div>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="teams">Inscripción</TabsTrigger>
+                <TabsTrigger value="notifications">Notificaciones</TabsTrigger>
                 <TabsTrigger value="payments">
                   Pagos
                 </TabsTrigger>
@@ -207,6 +209,12 @@ export default function TournamentDetailPage() {
           {activeTab === "teams" && (
             <TabsContent value="teams" className="pt-4">
               <TeamsTab tournament={tournament} />
+            </TabsContent>
+          )}
+
+          {activeTab === "notifications" && (
+            <TabsContent value="notifications" className="pt-4">
+              <RegistrationNotificationsTab tournament={tournament} />
             </TabsContent>
           )}
 

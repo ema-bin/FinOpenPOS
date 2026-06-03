@@ -26,6 +26,8 @@ export interface Tournament {
   registration_fee: number;
   /** IDs de cancha para horarios de zona (cerrar inscripción / regenerar; slots × estas canchas). */
   group_schedule_court_ids?: number[] | null;
+  /** URL pública del flier subido (Supabase Storage). */
+  promo_flyer_url?: string | null;
   created_at: string; // TIMESTAMP
 }
 
