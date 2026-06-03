@@ -58,12 +58,16 @@ export async function GET(req: Request, { params }: RouteParams) {
         return FEMALE_GENDER_VALUES.has(gender);
       });
 
+      const notified = await repos.tournamentRegistrationNotified.findByTournamentId(
+        tournamentId
+      );
       return buildResponse(req, {
         tournament,
         categoryName: tournament.category ?? "Suma 13 damas",
         listMode: "suma_13_damas",
         rows,
         enrolledIds,
+        notified,
       });
     }
 
@@ -104,12 +108,16 @@ export async function GET(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const notified = await repos.tournamentRegistrationNotified.findByTournamentId(
+      tournamentId
+    );
     return buildResponse(req, {
       tournament,
       categoryName: category.name as string,
       listMode: isDamas ? "damas_category" : "libre_category",
       rows: players ?? [],
       enrolledIds,
+      notified,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -146,22 +154,30 @@ function buildResponse(
     listMode: string;
     rows: Array<Record<string, unknown>>;
     enrolledIds: Set<number>;
+    notified: Array<{ player_id: number; notified_at: string }>;
   }
 ) {
   const flyer_url = resolveTournamentPromoFlyerUrl(input.tournament);
   const default_message = buildDefaultRegistrationInviteMessage();
+  const notifiedByPlayer = new Map(
+    input.notified.map((n) => [n.player_id, n.notified_at])
+  );
 
   const unregistered = input.rows
     .filter((p) => !input.enrolledIds.has(p.id as number))
     .map((p) => {
       const phone = (p.phone as string | null) ?? null;
+      const playerId = p.id as number;
+      const notifiedAt = notifiedByPlayer.get(playerId) ?? null;
       return {
-        id: p.id as number,
+        id: playerId,
         first_name: p.first_name as string,
         last_name: p.last_name as string,
         phone,
         category_label: pickCategoryName(p),
         has_phone: Boolean(phone?.trim()),
+        is_notified: notifiedAt != null,
+        notified_at: notifiedAt,
         whatsapp_url: buildWhatsAppUrl(
           phone,
           applyRegistrationMessagePlaceholders(
@@ -176,9 +192,15 @@ function buildResponse(
         ),
       };
     })
-    .sort((a, b) =>
-      `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "es")
-    );
+    .sort((a, b) => {
+      if (a.is_notified !== b.is_notified) return a.is_notified ? 1 : -1;
+      return `${a.last_name} ${a.first_name}`.localeCompare(
+        `${b.last_name} ${b.first_name}`,
+        "es"
+      );
+    });
+
+  const notified_count = unregistered.filter((p) => p.is_notified).length;
 
   return NextResponse.json({
     available: true,
@@ -191,5 +213,7 @@ function buildResponse(
     players: unregistered,
     enrolled_count: input.enrolledIds.size,
     unregistered_count: unregistered.length,
+    notified_count,
+    pending_notification_count: unregistered.length - notified_count,
   });
 }

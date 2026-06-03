@@ -112,6 +112,25 @@ class TournamentsService {
     return response.json();
   }
 
+  async setRegistrationNotified(
+    tournamentId: number,
+    playerId: number,
+    notified: boolean
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/registration-notifications/mark`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: playerId, notified }),
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Error al actualizar estado de notificación");
+    }
+  }
+
   async removePromoFlyer(tournamentId: number): Promise<TournamentDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/promo-flyer`, {
       method: "DELETE",

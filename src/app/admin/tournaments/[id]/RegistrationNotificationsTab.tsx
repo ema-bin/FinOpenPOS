@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -12,6 +12,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2Icon, MessageCircleIcon, CopyIcon, ImageIcon } from "lucide-react";
 import type { TournamentDTO } from "@/models/dto/tournament";
+import { tournamentsService } from "@/services";
 import {
   buildWhatsAppUrl,
   defaultWhatsAppLinkTarget,
@@ -29,6 +32,7 @@ import {
 } from "@/lib/whatsapp";
 import { copyImageFromUrl } from "@/lib/copy-image-url";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type NotificationPlayer = {
   id: number;
@@ -37,6 +41,8 @@ type NotificationPlayer = {
   phone: string | null;
   category_label: string | null;
   has_phone: boolean;
+  is_notified: boolean;
+  notified_at: string | null;
   whatsapp_url: string | null;
 };
 
@@ -52,6 +58,8 @@ type NotificationsResponse = {
   players: NotificationPlayer[];
   enrolled_count: number;
   unregistered_count: number;
+  notified_count?: number;
+  pending_notification_count?: number;
 };
 
 async function fetchNotifications(
@@ -78,13 +86,36 @@ export default function RegistrationNotificationsTab({
     | "registration_fee"
   >;
 }) {
+  const queryClient = useQueryClient();
   const [messageTemplate, setMessageTemplate] = useState<string | null>(null);
   const [copyingFlyer, setCopyingFlyer] = useState(false);
+  const [hideNotified, setHideNotified] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["tournament-registration-notifications", tournament.id],
     queryFn: () => fetchNotifications(tournament.id),
     staleTime: 1000 * 30,
+  });
+
+  const markMutation = useMutation({
+    mutationFn: ({
+      playerId,
+      notified,
+    }: {
+      playerId: number;
+      notified: boolean;
+    }) =>
+      tournamentsService.setRegistrationNotified(
+        tournament.id,
+        playerId,
+        notified
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["tournament-registration-notifications", tournament.id],
+      });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const effectiveTemplate =
@@ -108,6 +139,14 @@ export default function RegistrationNotificationsTab({
     }));
   }, [data?.players, data?.category_name, effectiveTemplate, linkTarget]);
 
+  const visiblePlayers = useMemo(
+    () =>
+      hideNotified
+        ? playersWithLinks.filter((p) => !p.is_notified)
+        : playersWithLinks,
+    [playersWithLinks, hideNotified]
+  );
+
   const handleCopyFlyer = async () => {
     if (!flyerUrl) {
       toast.error("Subí un flier en la pestaña Flier Promoción");
@@ -126,7 +165,11 @@ export default function RegistrationNotificationsTab({
     }
   };
 
-  const withPhoneCount = playersWithLinks.filter((p) => p.whatsapp_url).length;
+  const toggleNotified = (playerId: number, notified: boolean) => {
+    markMutation.mutate({ playerId, notified });
+  };
+
+  const withPhoneCount = visiblePlayers.filter((p) => p.whatsapp_url).length;
 
   const listDescription = useMemo(() => {
     if (!data?.available) return null;
@@ -165,6 +208,10 @@ export default function RegistrationNotificationsTab({
 
   const registrationOpen =
     tournament.status === "draft" || tournament.status === "schedule_review";
+  const notifiedCount = data.notified_count ?? 0;
+  const pendingCount =
+    data.pending_notification_count ??
+    data.unregistered_count - notifiedCount;
 
   return (
     <div className="space-y-4">
@@ -176,8 +223,8 @@ export default function RegistrationNotificationsTab({
           </CardTitle>
           <CardDescription>
             {listDescription}{" "}
-            {data.unregistered_count} sin inscribir · {data.enrolled_count}{" "}
-            ya en equipos.
+            {pendingCount} pendientes · {notifiedCount} notificados ·{" "}
+            {data.enrolled_count} ya inscriptos.
             {!registrationOpen && (
               <span className="block mt-1 text-amber-700 dark:text-amber-400">
                 La inscripción está cerrada ({tournament.status}); podés igual
@@ -240,8 +287,8 @@ export default function RegistrationNotificationsTab({
               placeholder="Mensaje de invitación..."
             />
             <p className="text-xs text-muted-foreground">
-              Placeholders: {"{nombre}"}, {"{categoria}"}. Enviar abre WhatsApp Desktop (no una
-              pestaña del navegador). Un chat por jugador.
+              Placeholders: {"{nombre}"}, {"{categoria}"}. Enviar abre WhatsApp
+              Desktop y marca al jugador como notificado.
             </p>
             <Button
               type="button"
@@ -269,14 +316,28 @@ export default function RegistrationNotificationsTab({
             </p>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                {withPhoneCount} con teléfono válido para WhatsApp de{" "}
-                {playersWithLinks.length} en la lista.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {withPhoneCount} con teléfono en esta vista ·{" "}
+                  {visiblePlayers.length} jugador
+                  {visiblePlayers.length === 1 ? "" : "es"} mostrados
+                </p>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="hide-notified"
+                    checked={hideNotified}
+                    onCheckedChange={setHideNotified}
+                  />
+                  <Label htmlFor="hide-notified" className="text-sm font-normal">
+                    Ocultar notificados
+                  </Label>
+                </div>
+              </div>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">OK</TableHead>
                       <TableHead>Jugador</TableHead>
                       <TableHead>Categoría</TableHead>
                       <TableHead>Teléfono</TableHead>
@@ -286,38 +347,76 @@ export default function RegistrationNotificationsTab({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {playersWithLinks.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-medium">
-                          {p.first_name} {p.last_name}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {p.category_label ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm tabular-nums">
-                          {p.phone?.trim() ? p.phone : "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {p.whatsapp_url ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              asChild
-                            >
-                              <a href={p.whatsapp_url}>
-                                <MessageCircleIcon className="h-4 w-4 mr-1" />
-                                Enviar
-                              </a>
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Sin teléfono
-                            </span>
-                          )}
+                    {visiblePlayers.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-sm text-muted-foreground py-8"
+                        >
+                          Todos los jugadores visibles ya fueron notificados.
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      visiblePlayers.map((p) => (
+                        <TableRow
+                          key={p.id}
+                          className={cn(
+                            p.is_notified && "bg-muted/40 text-muted-foreground"
+                          )}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={p.is_notified}
+                              disabled={markMutation.isPending}
+                              onCheckedChange={(checked) =>
+                                toggleNotified(p.id, checked === true)
+                              }
+                              aria-label={`Notificado: ${p.first_name} ${p.last_name}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {p.first_name} {p.last_name}
+                            {p.is_notified && p.notified_at && (
+                              <span className="block text-xs font-normal text-muted-foreground">
+                                Notificado
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.category_label ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-sm tabular-nums">
+                            {p.phone?.trim() ? p.phone : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {p.whatsapp_url ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                asChild
+                              >
+                                <a
+                                  href={p.whatsapp_url}
+                                  onClick={() => {
+                                    if (!p.is_notified) {
+                                      toggleNotified(p.id, true);
+                                    }
+                                  }}
+                                >
+                                  <MessageCircleIcon className="h-4 w-4 mr-1" />
+                                  Enviar
+                                </a>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Sin teléfono
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
