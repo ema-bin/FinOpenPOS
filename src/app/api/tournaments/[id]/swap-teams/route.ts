@@ -1,14 +1,13 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { swapTournamentTeams } from "@/lib/tournament-team-swap";
 
 type RouteParams = { params: { id: string } };
 
 /**
  * Intercambia una pareja por otra: reemplaza todas las referencias de team1 por team2 y viceversa.
- * Esto afecta:
- * - tournament_matches: donde team1_id o team2_id sea team1 o team2
- * - tournament_group_teams: donde team_id sea team1 o team2
  */
 export async function POST(req: Request, { params }: RouteParams) {
   const supabase = createClient();
@@ -34,12 +33,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
   }
 
-  if (team1Id === team2Id && group1Id === group2Id) {
-    return NextResponse.json({ error: "Cannot swap team with itself" }, { status: 400 });
-  }
-
   try {
-    // Verificar que el torneo existe
     const { data: tournament, error: tournamentError } = await supabase
       .from("tournaments")
       .select("id")
@@ -50,148 +44,12 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
-    // Verificar que los grupos pertenecen al torneo
-    // Si ambos equipos están en la misma zona, group1Id === group2Id, así que solo necesitamos 1 grupo
-    const uniqueGroupIds = group1Id === group2Id ? [group1Id] : [group1Id, group2Id];
-    const { data: groups, error: groupsError } = await supabase
-      .from("tournament_groups")
-      .select("id, tournament_id")
-      .in("id", uniqueGroupIds)
-      .eq("tournament_id", tournamentId);
-
-    if (groupsError || !groups || groups.length !== uniqueGroupIds.length) {
-      return NextResponse.json({ error: "Groups not found or invalid" }, { status: 404 });
-    }
-
-    // Verificar que los equipos pertenecen al torneo
-    const { data: teams, error: teamsError } = await supabase
-      .from("tournament_teams")
-      .select("id, tournament_id")
-      .in("id", [team1Id, team2Id])
-      .eq("tournament_id", tournamentId);
-
-    if (teamsError || !teams || teams.length !== 2) {
-      return NextResponse.json({ error: "Teams not found or invalid" }, { status: 404 });
-    }
-
-    // Verificar que los equipos están en los grupos correctos
-    const { data: groupTeams, error: groupTeamsError } = await supabase
-      .from("tournament_group_teams")
-      .select("team_id, tournament_group_id")
-      .in("team_id", [team1Id, team2Id])
-      .in("tournament_group_id", uniqueGroupIds);
-
-    if (groupTeamsError || !groupTeams) {
-      return NextResponse.json({ error: "Error verifying team-group assignments" }, { status: 500 });
-    }
-
-    const team1InGroup1 = groupTeams.some(gt => gt.team_id === team1Id && gt.tournament_group_id === group1Id);
-    const team2InGroup2 = groupTeams.some(gt => gt.team_id === team2Id && gt.tournament_group_id === group2Id);
-
-    if (!team1InGroup1 || !team2InGroup2) {
-      return NextResponse.json(
-        { error: "Teams are not in the specified groups" },
-        { status: 400 }
-      );
-    }
-
-    // Obtener todos los matches donde participa team1 o team2 (en cualquier grupo)
-    const { data: allMatches, error: matchesError } = await supabase
-      .from("tournament_matches")
-      .select("id, team1_id, team2_id")
-      .eq("phase", "group")
-      .or(`team1_id.eq.${team1Id},team2_id.eq.${team1Id},team1_id.eq.${team2Id},team2_id.eq.${team2Id}`);
-
-    if (matchesError) {
-      return NextResponse.json({ error: "Error fetching matches" }, { status: 500 });
-    }
-
-    if (!allMatches) {
-      return NextResponse.json({ error: "Matches not found" }, { status: 404 });
-    }
-
-    const updates: Promise<any>[] = [];
-
-    // Intercambiar referencias en tournament_matches
-    // Donde team1_id o team2_id sea team1Id, reemplazar con team2Id
-    // Donde team1_id o team2_id sea team2Id, reemplazar con team1Id
-    for (const match of allMatches) {
-      const newTeam1Id = match.team1_id === team1Id ? team2Id : (match.team1_id === team2Id ? team1Id : match.team1_id);
-      const newTeam2Id = match.team2_id === team1Id ? team2Id : (match.team2_id === team2Id ? team1Id : match.team2_id);
-
-      // Solo actualizar si hay cambios
-      if (newTeam1Id !== match.team1_id || newTeam2Id !== match.team2_id) {
-        updates.push(
-          (async () => {
-            const result = await supabase
-              .from("tournament_matches")
-              .update({
-                team1_id: newTeam1Id,
-                team2_id: newTeam2Id,
-              })
-              .eq("id", match.id);
-            return result;
-          })()
-        );
-      }
-    }
-
-    // Intercambiar referencias en tournament_group_teams
-    // Solo si los equipos están en grupos diferentes
-    if (group1Id !== group2Id) {
-      // Remover team1 de group1 y agregarlo a group2
-      // Remover team2 de group2 y agregarlo a group1
-      updates.push(
-        (async () => {
-          const result = await supabase
-            .from("tournament_group_teams")
-            .delete()
-            .eq("team_id", team1Id)
-            .eq("tournament_group_id", group1Id);
-          return result;
-        })()
-      );
-
-      updates.push(
-        (async () => {
-          const result = await supabase
-            .from("tournament_group_teams")
-            .delete()
-            .eq("team_id", team2Id)
-            .eq("tournament_group_id", group2Id);
-          return result;
-        })()
-      );
-
-      updates.push(
-        (async () => {
-          const result = await supabase
-            .from("tournament_group_teams")
-            .insert({
-              team_id: team1Id,
-              tournament_group_id: group2Id,
-              user_uid: user.id,
-            });
-          return result;
-        })()
-      );
-
-      updates.push(
-        (async () => {
-          const result = await supabase
-            .from("tournament_group_teams")
-            .insert({
-              team_id: team2Id,
-              tournament_group_id: group1Id,
-              user_uid: user.id,
-            });
-          return result;
-        })()
-      );
-    }
-    // Si ambos equipos están en el mismo grupo, no necesitamos cambiar tournament_group_teams
-
-    await Promise.all(updates);
+    await swapTournamentTeams(supabase, user.id, tournamentId, {
+      team1Id,
+      group1Id,
+      team2Id,
+      group2Id,
+    });
 
     return NextResponse.json({ ok: true, message: "Teams swapped successfully" });
   } catch (error) {
@@ -202,4 +60,3 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 }
-

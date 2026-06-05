@@ -444,6 +444,26 @@ class TournamentsService {
     }
     return response.json();
   }
+
+  async optimizeGroupAssignments(tournamentId: number): Promise<{
+    swapsApplied: number;
+    improved: boolean;
+    message: string;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/optimize-group-assignments`,
+      { method: "POST" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Error al optimizar zonas");
+    }
+    return {
+      swapsApplied: data.swapsApplied ?? 0,
+      improved: Boolean(data.improved),
+      message: data.message || "Optimización completada",
+    };
+  }
 }
 
 class TournamentMatchesService {

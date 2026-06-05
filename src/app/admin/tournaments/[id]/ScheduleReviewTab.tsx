@@ -18,7 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Loader2Icon, CheckIcon, RefreshCwIcon, TrashIcon, ArrowLeftRightIcon } from "lucide-react";
+import { Loader2Icon, CheckIcon, RefreshCwIcon, TrashIcon, ArrowLeftRightIcon, SparklesIcon } from "lucide-react";
+import { toast } from "sonner";
 import { GroupScheduleViewer } from "@/components/group-schedule-viewer";
 import { TournamentScheduleDialog } from "@/components/tournament-schedule-dialog";
 import {
@@ -70,6 +71,7 @@ export default function ScheduleReviewTab({
   const [swapping, setSwapping] = useState(false);
   const [swapFirst, setSwapFirst] = useState<SwapEntry | null>(null);
   const [swapSecond, setSwapSecond] = useState<SwapEntry | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
 
   const {
     data,
@@ -268,6 +270,31 @@ export default function ScheduleReviewTab({
     }
   };
 
+  const handleOptimizeGroups = async () => {
+    if (
+      !confirm(
+        "¿Optimizar zonas automáticamente? Se intercambiarán equipos (sin mover cabezas de zona) para mejorar la compatibilidad horaria. Después conviene regenerar los horarios."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setOptimizing(true);
+      const result = await tournamentsService.optimizeGroupAssignments(tournament.id);
+      if (result.swapsApplied > 0) {
+        toast.success(result.message);
+      } else {
+        toast.message(result.message);
+      }
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Error al optimizar zonas");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const handleConfirmSwap = async (
     team1Id: number,
     group1Id: number,
@@ -325,21 +352,36 @@ export default function ScheduleReviewTab({
                 <div>
                   <CardTitle className="text-base">Zonas y equipos</CardTitle>
                   <CardDescription className="text-xs">
-                    Si hay incompatibilidades para jugar, podés intercambiar un equipo de una zona por otro de otra zona antes de regenerar horarios.
+                    Si hay incompatibilidades para jugar, usá Optimizar zonas o intercambiá equipos manualmente antes de regenerar horarios.
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSwapFirst(null);
-                    setSwapSecond(null);
-                    setShowSwapDialog(true);
-                  }}
-                >
-                  <ArrowLeftRightIcon className="h-4 w-4 mr-2" />
-                  Intercambiar equipos
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOptimizeGroups}
+                    disabled={optimizing || !data?.tournamentGroupSlots?.length}
+                  >
+                    {optimizing ? (
+                      <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <SparklesIcon className="h-4 w-4 mr-2" />
+                    )}
+                    Optimizar zonas
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSwapFirst(null);
+                      setSwapSecond(null);
+                      setShowSwapDialog(true);
+                    }}
+                  >
+                    <ArrowLeftRightIcon className="h-4 w-4 mr-2" />
+                    Intercambiar equipos
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="py-2 pt-0">
