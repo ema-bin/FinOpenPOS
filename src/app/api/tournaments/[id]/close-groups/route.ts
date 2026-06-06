@@ -165,9 +165,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
   }
 
-  if (t.status !== "in_progress") {
+  if (t.status !== "playoffs_ready" && t.status !== "in_progress") {
     return NextResponse.json(
-      { error: "Tournament must be in_progress to close groups" },
+      { error: "El torneo debe estar listo para playoffs o en progreso para generar la llave" },
       { status: 400 }
     );
   }

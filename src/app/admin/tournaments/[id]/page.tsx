@@ -36,6 +36,7 @@ import PlayoffPreviewTab from "./PlayoffPreviewTab";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
 import { toast } from "sonner";
+import { tournamentStatusLabel } from "@/lib/tournament-status-labels";
 
 async function fetchTournament(id: number): Promise<TournamentDTO> {
   return tournamentsService.getById(id);
@@ -120,7 +121,7 @@ export default function TournamentDetailPage() {
               {tournament.is_puntuable && " • Puntuable"}
               {tournament.is_puntuable && tournament.is_grand_prix && " • Grand Prix"}
               {" • "}
-              {tournament.status}
+              {tournamentStatusLabel(tournament.status)}
             </span>
           </CardTitle>
           <Button
@@ -164,13 +165,19 @@ export default function TournamentDetailPage() {
                 </TabsTrigger>
                 <TabsTrigger 
                   value="groups" 
-                  disabled={tournament.status !== "in_progress"}
+                  disabled={
+                    tournament.status !== "in_progress" &&
+                    tournament.status !== "playoffs_ready"
+                  }
                 >
                   Fase de grupos
                 </TabsTrigger>
                 <TabsTrigger 
                   value="playoffs" 
-                  disabled={tournament.status !== "in_progress"}
+                  disabled={
+                    tournament.status !== "in_progress" &&
+                    tournament.status !== "playoffs_ready"
+                  }
                 >
                   Playoffs
                 </TabsTrigger>

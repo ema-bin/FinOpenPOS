@@ -445,6 +445,28 @@ class TournamentsService {
     return response.json();
   }
 
+  async markPlayoffsReady(tournamentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/mark-playoffs-ready`,
+      { method: "POST" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo marcar listo para playoffs");
+    }
+  }
+
+  async reopenGroupsPhase(tournamentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/reopen-groups-phase`,
+      { method: "POST" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo reabrir la fase de grupos");
+    }
+  }
+
   async optimizeGroupAssignments(tournamentId: number): Promise<{
     swapsApplied: number;
     improved: boolean;

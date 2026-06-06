@@ -32,6 +32,7 @@ import {
 
 import type { TournamentDTO, TournamentListItem } from "@/models/dto/tournament";
 import type { TournamentStatus } from "@/models/db/tournament";
+import { tournamentStatusLabel } from "@/lib/tournament-status-labels";
 import type { Category } from "@/models/db/category";
 import { tournamentsService } from "@/services";
 import { RankingPuntuableSection } from "@/components/ranking-puntuable-section";
@@ -240,6 +241,13 @@ export default function TournamentsPage() {
           <Button size="sm" variant="outline" onClick={() => router.push("/admin/tournaments/schedule-review")}>
             Revisión global
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => router.push("/admin/tournaments/playoffs-ready")}
+          >
+            Playoffs global
+          </Button>
           <Button size="sm" onClick={() => setDialogOpen(true)}>
             <PlusIcon className="w-4 h-4 mr-1" />
             Nuevo torneo
@@ -296,7 +304,7 @@ export default function TournamentsPage() {
                 >
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {t.category ?? "Sin categoría"} • {t.status}
+                    {t.category ?? "Sin categoría"} • {tournamentStatusLabel(t.status)}
                   </div>
                 </button>
                 {t.status === "draft" && (
@@ -736,6 +744,7 @@ const ACTIVE_STATUSES: TournamentStatus[] = [
   "draft",
   "schedule_review",
   "in_progress",
+  "playoffs_ready",
 ];
 
 const statusFilterOptions: Array<{
@@ -747,6 +756,7 @@ const statusFilterOptions: Array<{
   { value: "draft", label: "Inscripción" },
   { value: "schedule_review", label: "Revisión de horarios" },
   { value: "in_progress", label: "En progreso" },
+  { value: "playoffs_ready", label: "Listo para playoffs" },
   { value: "finished", label: "Finalizado" },
   { value: "cancelled", label: "Cancelado" },
 ];
