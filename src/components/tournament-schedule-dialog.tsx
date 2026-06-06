@@ -1164,7 +1164,7 @@ export function TournamentScheduleDialog({
               {playoffsCalendarPick && (
                 <p className="text-xs text-muted-foreground pt-2">
                   {globalPlayoffsReady
-                    ? "Marcá qué ventanas y canchas usar para todos los torneos listos. Los partidos se asignan en orden a los huecos elegidos."
+                    ? "Marcá qué ventanas y canchas usar para todos los torneos listos. Los partidos se intercalan por horario para que varios torneos jueguen a la vez en cada franja."
                     : "Marcá qué ventanas y canchas usar para los playoffs. Las restricciones horarias de equipos no se aplican en este paso."}
                 </p>
               )}

@@ -4,11 +4,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CloseGroupsError, runCloseGroups } from "@/lib/execute-close-groups";
 import { buildPlayoffMatchesPlan } from "@/lib/playoff-matches-plan";
+import { interleavePlayoffSlotsAcrossTournaments } from "@/lib/interleave-playoff-slots";
 import {
   buildPlayoffScheduleSlots,
   parseScheduleConfigFromBody,
   playoffSlotIntervalFromMinutes,
-  type PlayoffScheduleSlot,
 } from "@/lib/playoff-schedule-slots";
 
 export async function POST(req: Request) {
@@ -105,7 +105,11 @@ export async function POST(req: Request) {
     );
   }
 
-  let slotOffset = 0;
+  const slotsByTournament = interleavePlayoffSlotsAcrossTournaments(
+    sharedSlots,
+    plans.map((p) => ({ id: p.id, needing: p.needing }))
+  );
+
   const results: Array<{
     tournamentId: number;
     name: string;
@@ -114,11 +118,7 @@ export async function POST(req: Request) {
   }> = [];
 
   for (const plan of plans) {
-    const slice: PlayoffScheduleSlot[] = sharedSlots.slice(
-      slotOffset,
-      slotOffset + plan.needing
-    );
-    slotOffset += plan.needing;
+    const slice = slotsByTournament.get(plan.id) ?? [];
 
     const payload = {
       ...body,
