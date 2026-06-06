@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, ExternalLinkIcon, TrophyIcon } from "lucide-react";
 import {
   Card,
@@ -13,6 +13,10 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  TournamentScheduleDialog,
+  type ScheduleConfig,
+} from "@/components/tournament-schedule-dialog";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
 import GroupsTab from "../[id]/GroupsTab";
@@ -23,6 +27,11 @@ type ReadyTournament = Pick<
 >;
 
 export default function GlobalPlayoffsReadyPage() {
+  const queryClient = useQueryClient();
+  const [globalDialogOpen, setGlobalDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [playoffsError, setPlayoffsError] = useState<string | null>(null);
+
   const { data, isLoading, isError } = useQuery<ReadyTournament[]>({
     queryKey: ["tournaments", "global-playoffs-ready"],
     queryFn: async () => {
@@ -41,7 +50,17 @@ export default function GlobalPlayoffsReadyPage() {
 
   const tournaments = data ?? [];
 
+  const { data: summary } = useQuery({
+    queryKey: ["tournaments", "playoffs-ready-summary"],
+    queryFn: () => tournamentsService.getPlayoffsReadySummary(),
+    enabled: tournaments.length > 0,
+    staleTime: 1000 * 30,
+  });
+
   const maxPlayoffDuration = useMemo(() => {
+    if (summary?.maxPlayoffDurationMinutes) {
+      return summary.maxPlayoffDurationMinutes;
+    }
     if (tournaments.length === 0) return 60;
     return Math.max(
       60,
@@ -52,7 +71,39 @@ export default function GlobalPlayoffsReadyPage() {
           60
       )
     );
-  }, [tournaments]);
+  }, [summary, tournaments]);
+
+  const planErrors = useMemo(
+    () => (summary?.tournaments ?? []).filter((t) => t.error),
+    [summary]
+  );
+
+  const handleConfirmSchedule = async (config: ScheduleConfig) => {
+    try {
+      setGenerating(true);
+      setPlayoffsError(null);
+      const result = await tournamentsService.generateBulkPlayoffs(config);
+      setGlobalDialogOpen(false);
+      toast.success(
+        `Playoffs generados: ${result.tournamentsProcessed} torneo(s), ${result.totalPlayoffMatches} partido(s)`
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["tournaments", "global-playoffs-ready"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["tournaments", "playoffs-ready-summary"],
+      });
+      window.location.reload();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al generar playoffs. Por favor, intentá nuevamente.";
+      setPlayoffsError(message);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -82,29 +133,49 @@ export default function GlobalPlayoffsReadyPage() {
           <CardTitle>Playoffs global</CardTitle>
           <CardDescription>
             Torneos con la fase de grupos finalizada y marcados como listos para playoffs.
-            La generación en conjunto de horarios de eliminatoria se hará desde acá (próximo paso).
+            Definí los días de playoff y elegí ventanas por cancha una sola vez para todos los torneos listos.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2 pt-3">
             <Button
               type="button"
-              disabled={tournaments.length === 0}
-              onClick={() =>
-                toast.message(
-                  "Próximamente: un solo diálogo de horarios para generar playoffs de todos los torneos listos."
-                )
-              }
+              disabled={tournaments.length === 0 || planErrors.length > 0}
+              onClick={() => setGlobalDialogOpen(true)}
             >
               <TrophyIcon className="h-4 w-4 mr-2" />
               Generar playoffs en conjunto
             </Button>
             {tournaments.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                {tournaments.length} torneo(s) listo(s) · duración playoff ref. {maxPlayoffDuration} min
+                {tournaments.length} torneo(s) listo(s)
+                {summary
+                  ? ` · ${summary.totalPlayoffMatches} partido(s) de playoff · duración ref. ${maxPlayoffDuration} min`
+                  : ` · duración playoff ref. ${maxPlayoffDuration} min`}
               </p>
             )}
           </div>
+          {planErrors.length > 0 && (
+            <p className="text-xs text-destructive pt-2">
+              No se puede generar en conjunto:{" "}
+              {planErrors.map((t) => `"${t.name}" (${t.error})`).join("; ")}
+            </p>
+          )}
         </CardHeader>
       </Card>
+
+      <TournamentScheduleDialog
+        open={globalDialogOpen}
+        onOpenChange={(open) => {
+          setGlobalDialogOpen(open);
+          if (!open) setPlayoffsError(null);
+        }}
+        onConfirm={handleConfirmSchedule}
+        matchCount={summary?.totalPlayoffMatches ?? 0}
+        tournamentMatchDuration={maxPlayoffDuration}
+        tournamentMatchDurationQuartersOnwards={maxPlayoffDuration}
+        globalPlayoffsReady
+        error={playoffsError}
+        isLoading={generating}
+      />
 
       {tournaments.length === 0 ? (
         <Card>

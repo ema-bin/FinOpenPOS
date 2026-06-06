@@ -621,6 +621,8 @@ export default function GroupsTab({
         }}
         onConfirm={handleConfirmSchedule}
         matchCount={calculatePlayoffMatchCount()}
+        tournamentId={tournament.id}
+        preferTournamentSlotGrid
         tournamentMatchDuration={tournament.match_duration}
         tournamentMatchDurationQuartersOnwards={
           tournament.match_duration_quarters_onwards ?? tournament.match_duration

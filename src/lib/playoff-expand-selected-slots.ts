@@ -12,13 +12,13 @@ export type SelectedPlayoffSchedulingWindow = {
   courtId: number;
 };
 
-function parseDayBoundaryMinutes(timeHHMM: string): number {
+export function parseDayBoundaryMinutes(timeHHMM: string): number {
   const s = String(timeHHMM).trim().substring(0, 5);
   const [h, m] = s.split(":").map((x) => parseInt(x, 10) || 0);
   return (h % 24) * 60 + (m % 60);
 }
 
-function formatMinutes(m: number): string {
+export function formatMinutes(m: number): string {
   const x = Math.max(0, Math.floor(m)) % (24 * 60);
   const h = Math.floor(x / 60);
   const min = x % 60;
@@ -66,5 +66,32 @@ export function expandPhysicalWindowsToPlayoffSlotList(
     }
   }
 
+  return out;
+}
+
+/** Ventanas atómicas (inicio + fin) para mostrar en la UI de playoffs. */
+export function listAtomicPlayoffSlotWindows(
+  slotDate: string,
+  windowStart: string,
+  windowEnd: string,
+  playoffMinutesFromDb: number
+): Array<{ date: string; startTime: string; endTime: string }> {
+  const interval = slotIntervalMinutesForPlayoffScheduling(
+    Math.max(15, playoffMinutesFromDb)
+  );
+  const date = String(slotDate).trim().slice(0, 10);
+  let startMin = parseDayBoundaryMinutes(windowStart);
+  let endMin = parseDayBoundaryMinutes(windowEnd);
+  if (endMin <= startMin) endMin += 24 * 60;
+
+  const out: Array<{ date: string; startTime: string; endTime: string }> = [];
+  while (startMin + interval <= endMin) {
+    out.push({
+      date,
+      startTime: formatMinutes(startMin),
+      endTime: formatMinutes(startMin + interval),
+    });
+    startMin += interval;
+  }
   return out;
 }

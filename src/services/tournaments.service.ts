@@ -445,6 +445,50 @@ class TournamentsService {
     return response.json();
   }
 
+  async getPlayoffsReadySummary(): Promise<{
+    tournamentCount: number;
+    totalPlayoffMatches: number;
+    maxPlayoffSlotInterval: number;
+    maxPlayoffDurationMinutes: number;
+    tournaments: Array<{
+      id: number;
+      name: string;
+      playoffMatches: number;
+      error?: string;
+    }>;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/summary`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo cargar el resumen de playoffs");
+    }
+    return data;
+  }
+
+  async generateBulkPlayoffs(config: ScheduleConfig): Promise<{
+    ok: boolean;
+    tournamentsProcessed: number;
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+    results: Array<{
+      tournamentId: number;
+      name: string;
+      ok: boolean;
+      error?: string;
+    }>;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/close-groups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Error al generar playoffs en conjunto");
+    }
+    return data;
+  }
+
   async markPlayoffsReady(tournamentId: number): Promise<void> {
     const response = await fetch(
       `${this.baseUrl}/${tournamentId}/mark-playoffs-ready`,
