@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { assignPlayoffScheduleSlots } from "@/lib/assign-playoff-schedule-to-matches";
-import { interleavePlayoffSlotsAcrossTournaments } from "@/lib/interleave-playoff-slots";
+import {
+  assignPlayoffScheduleSlots,
+  assignPlayoffScheduleSlotsAcrossTournamentsByRound,
+} from "@/lib/assign-playoff-schedule-to-matches";
 import {
   buildPlayoffMatchesPlan,
   type PlayoffBracketMatch,
@@ -177,25 +179,26 @@ export async function planBulkPlayoffsPreview(
     );
   }
 
-  const slotsByTournament = interleavePlayoffSlotsAcrossTournaments(
-    sharedSlots,
-    plans.map((p) => ({ id: p.id, needing: p.needing }))
-  );
+  const scheduledByTournament =
+    assignPlayoffScheduleSlotsAcrossTournamentsByRound(
+      plans.map((p) => {
+        const t = tournaments.find((row) => row.id === p.id)!;
+        return {
+          tournamentId: p.id,
+          matches: p.playoffMatches,
+          playoffMin: Math.max(
+            15,
+            t.match_duration_quarters_onwards ?? t.match_duration ?? 60
+          ),
+        };
+      }),
+      sharedSlots
+    );
 
   const previewTournaments: PlannedTournamentPreview[] = [];
 
   for (const t of tournaments) {
-    const planEntry = plans.find((p) => p.id === t.id)!;
-    const playoffMin = Math.max(
-      15,
-      t.match_duration_quarters_onwards ?? t.match_duration ?? 60
-    );
-    const slice = slotsByTournament.get(t.id) ?? [];
-    const scheduled = assignPlayoffScheduleSlots(
-      planEntry.playoffMatches,
-      slice,
-      playoffMin
-    );
+    const scheduled = scheduledByTournament.get(t.id) ?? [];
 
     const teamIds = scheduled.flatMap((m) =>
       [m.team1_id, m.team2_id].filter((id): id is number => Boolean(id))

@@ -3,8 +3,14 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CloseGroupsError, runCloseGroups } from "@/lib/execute-close-groups";
-import { buildPlayoffMatchesPlan } from "@/lib/playoff-matches-plan";
-import { interleavePlayoffSlotsAcrossTournaments } from "@/lib/interleave-playoff-slots";
+import {
+  buildPlayoffMatchesPlan,
+  type PlayoffBracketMatch,
+} from "@/lib/playoff-matches-plan";
+import {
+  assignPlayoffScheduleSlotsAcrossTournamentsByRound,
+  buildExplicitSlotsFromScheduledMatches,
+} from "@/lib/assign-playoff-schedule-to-matches";
 import {
   buildPlayoffScheduleSlots,
   parseScheduleConfigFromBody,
@@ -74,16 +80,37 @@ export async function POST(req: Request) {
     id: number;
     name: string;
     needing: number;
+    playoffMatches: PlayoffBracketMatch[];
+    playoffMin: number;
     error?: string;
   }> = [];
 
   for (const t of readyList) {
     const plan = await buildPlayoffMatchesPlan(supabase, t.id);
     if (!plan.ok) {
-      plans.push({ id: t.id, name: t.name, needing: 0, error: plan.error });
+      plans.push({
+        id: t.id,
+        name: t.name,
+        needing: 0,
+        playoffMatches: [],
+        playoffMin: Math.max(
+          15,
+          t.match_duration_quarters_onwards ?? t.match_duration ?? 60
+        ),
+        error: plan.error,
+      });
       continue;
     }
-    plans.push({ id: t.id, name: t.name, needing: plan.needingSchedule });
+    plans.push({
+      id: t.id,
+      name: t.name,
+      needing: plan.needingSchedule,
+      playoffMatches: plan.matches,
+      playoffMin: Math.max(
+        15,
+        t.match_duration_quarters_onwards ?? t.match_duration ?? 60
+      ),
+    });
   }
 
   const failedPlan = plans.find((p) => p.error);
@@ -108,10 +135,26 @@ export async function POST(req: Request) {
 
   const tournamentSlotPlans = parseTournamentSlotPlans(body);
 
-  const slotsByTournament = interleavePlayoffSlotsAcrossTournaments(
-    sharedSlots,
-    plans.map((p) => ({ id: p.id, needing: p.needing }))
-  );
+  const slotsByTournament = new Map<number, ReturnType<typeof buildExplicitSlotsFromScheduledMatches>>();
+  if (!tournamentSlotPlans) {
+    const scheduledByTournament =
+      assignPlayoffScheduleSlotsAcrossTournamentsByRound(
+        plans.map((p) => ({
+          tournamentId: p.id,
+          matches: p.playoffMatches,
+          playoffMin: p.playoffMin,
+        })),
+        sharedSlots
+      );
+
+    for (const plan of plans) {
+      const scheduled = scheduledByTournament.get(plan.id) ?? [];
+      slotsByTournament.set(
+        plan.id,
+        buildExplicitSlotsFromScheduledMatches(scheduled)
+      );
+    }
+  }
 
   const results: Array<{
     tournamentId: number;
