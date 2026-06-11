@@ -278,7 +278,7 @@ export default function GlobalPlayoffsReadyPage() {
               plannedTournaments={plannedPreview}
               onPlannedTournamentsChange={setPlannedPreview}
               title="Horarios planificados"
-              description="Usá el lápiz en cada fila para ajustar. Para cambiar días o slots iniciales, cancelá y volvé a configurar."
+              description="Usá el lápiz para editar o Intercambiar para permutar horarios entre dos partidos."
               compact
             />
           )}

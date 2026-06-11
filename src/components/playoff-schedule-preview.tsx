@@ -20,7 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2Icon, PencilIcon, CheckIcon, XIcon, CalendarClockIcon } from "lucide-react";
+import {
+  Loader2Icon,
+  PencilIcon,
+  CheckIcon,
+  XIcon,
+  CalendarClockIcon,
+  ArrowLeftRightIcon,
+} from "lucide-react";
 import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
 import { playoffMatchDurationMinutes } from "@/lib/playoff-match-duration";
 import type { PlayoffRow } from "@/models/dto/tournament";
@@ -210,6 +217,49 @@ function flattenPlannedTournaments(
   return out.sort((a, b) => matchSortKey(a).localeCompare(matchSortKey(b)));
 }
 
+type ScheduleSnapshot = {
+  match_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  court_id: number | null;
+};
+
+function scheduleFromFlatMatch(item: FlatMatch): ScheduleSnapshot {
+  return {
+    match_date: item.match.match_date
+      ? item.match.match_date.split("T")[0]
+      : null,
+    start_time: item.match.start_time,
+    end_time: item.match.end_time,
+    court_id: item.match.court_id,
+  };
+}
+
+function updatePlannedMatchSchedule(
+  tournaments: PlannedTournamentPreview[],
+  item: FlatMatch,
+  schedule: ScheduleSnapshot
+): PlannedTournamentPreview[] {
+  return tournaments.map((t) => {
+    if (t.id !== item.tournamentId) return t;
+    return {
+      ...t,
+      matches: t.matches.map((m) => {
+        if (m.round !== item.round || m.bracket_pos !== item.bracketPos) {
+          return m;
+        }
+        return {
+          ...m,
+          match_date: schedule.match_date,
+          start_time: schedule.start_time,
+          end_time: schedule.end_time,
+          court_id: schedule.court_id,
+        };
+      }),
+    };
+  });
+}
+
 type PlayoffSchedulePreviewProps = {
   tournamentIds?: number[];
   plannedTournaments?: PlannedTournamentPreview[];
@@ -248,6 +298,9 @@ export function PlayoffSchedulePreview({
   const [editEndTime, setEditEndTime] = useState("");
   const [editCourtId, setEditCourtId] = useState("none");
   const [saving, setSaving] = useState(false);
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapSourceKey, setSwapSourceKey] = useState<string | null>(null);
+  const [swapping, setSwapping] = useState(false);
 
   const queryKey = [
     "playoffs-schedule-preview",
@@ -255,6 +308,10 @@ export function PlayoffSchedulePreview({
   ] as const;
 
   const isPlannedMode = Boolean(plannedTournaments?.length);
+
+  const canModify =
+    !readOnly &&
+    (isPlannedMode ? Boolean(onPlannedTournamentsChange) : true);
 
   const { data, isLoading, isError } = useQuery({
     queryKey,
@@ -323,7 +380,112 @@ export function PlayoffSchedulePreview({
     void queryClient.invalidateQueries({ queryKey: ["tournament-playoffs"] });
   };
 
+  const exitSwapMode = () => {
+    setSwapMode(false);
+    setSwapSourceKey(null);
+  };
+
+  const toggleSwapMode = () => {
+    if (swapMode) {
+      exitSwapMode();
+      return;
+    }
+    cancelEdit();
+    setSwapMode(true);
+    setSwapSourceKey(null);
+  };
+
+  const swapPlannedSchedules = (itemA: FlatMatch, itemB: FlatMatch) => {
+    if (!plannedTournaments || !onPlannedTournamentsChange) return;
+
+    const scheduleA = scheduleFromFlatMatch(itemA);
+    const scheduleB = scheduleFromFlatMatch(itemB);
+
+    let updated = updatePlannedMatchSchedule(
+      plannedTournaments,
+      itemA,
+      scheduleB
+    );
+    updated = updatePlannedMatchSchedule(updated, itemB, scheduleA);
+    onPlannedTournamentsChange(updated);
+  };
+
+  const swapDbSchedules = async (itemA: FlatMatch, itemB: FlatMatch) => {
+    if (itemA.match.id <= 0 || itemB.match.id <= 0) return;
+
+    const scheduleA = scheduleFromFlatMatch(itemA);
+    const scheduleB = scheduleFromFlatMatch(itemB);
+
+    const toPayload = (schedule: ScheduleSnapshot, duration: number) => {
+      if (!schedule.match_date || !schedule.start_time) {
+        throw new Error("Ambos partidos necesitan fecha y hora para intercambiar");
+      }
+      return {
+        date: schedule.match_date,
+        start_time: schedule.start_time,
+        end_time:
+          schedule.end_time?.trim() ||
+          resolveMatchEndTime(schedule.start_time, null, duration) ||
+          schedule.start_time,
+        court_id: schedule.court_id ?? undefined,
+      };
+    };
+
+    try {
+      setSwapping(true);
+      await Promise.all([
+        tournamentMatchesService.scheduleMatch(
+          itemA.match.id,
+          toPayload(scheduleB, itemA.playoffDuration)
+        ),
+        tournamentMatchesService.scheduleMatch(
+          itemB.match.id,
+          toPayload(scheduleA, itemB.playoffDuration)
+        ),
+      ]);
+      refresh();
+    } catch (err) {
+      console.error(err);
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Error al intercambiar horarios"
+      );
+    } finally {
+      setSwapping(false);
+    }
+  };
+
+  const handleSwapSelect = async (item: FlatMatch) => {
+    if (!swapMode || swapping || editingKey) return;
+
+    if (!swapSourceKey) {
+      setSwapSourceKey(item.key);
+      return;
+    }
+
+    if (swapSourceKey === item.key) {
+      setSwapSourceKey(null);
+      return;
+    }
+
+    const source = flatMatches.find((m) => m.key === swapSourceKey);
+    if (!source) {
+      setSwapSourceKey(null);
+      return;
+    }
+
+    if (isPlannedMode) {
+      swapPlannedSchedules(source, item);
+    } else {
+      await swapDbSchedules(source, item);
+    }
+
+    setSwapSourceKey(null);
+  };
+
   const startEdit = (item: FlatMatch) => {
+    exitSwapMode();
     setEditingKey(item.key);
     setEditDate(item.match.match_date ? item.match.match_date.split("T")[0] : "");
     setEditTime(item.match.start_time ?? "");
@@ -423,6 +585,10 @@ export function PlayoffSchedulePreview({
 
   const renderRow = (item: FlatMatch) => {
     const isEditing = editingKey === item.key;
+    const isSwapSelected = swapMode && swapSourceKey === item.key;
+    const rowCanModify =
+      canModify &&
+      (item.match.id > 0 || (isPlannedMode && Boolean(onPlannedTournamentsChange)));
     const tournamentColor = tournamentColorById.get(item.tournamentId);
     const label1 = item.team1Display ?? teamLabel(item.match.team1);
     const label2 = item.team2Display ?? teamLabel(item.match.team2);
@@ -439,8 +605,15 @@ export function PlayoffSchedulePreview({
         className={cn(
           "border-l-4 transition-colors",
           tournamentColor?.row,
-          tournamentColor?.border
+          tournamentColor?.border,
+          swapMode && rowCanModify && "cursor-pointer",
+          isSwapSelected && "ring-2 ring-amber-400 ring-inset bg-amber-50/80 dark:bg-amber-950/30"
         )}
+        onClick={() => {
+          if (swapMode && rowCanModify && !isEditing) {
+            void handleSwapSelect(item);
+          }
+        }}
       >
         {viewMode === "timeline" && (
           <TableCell
@@ -548,17 +721,21 @@ export function PlayoffSchedulePreview({
                 : "—"}
             </TableCell>
             <TableCell className="text-right">
-              {!readOnly &&
-                (item.match.id > 0 ||
-                  (isPlannedMode && Boolean(onPlannedTournamentsChange))) && (
+              {rowCanModify && !swapMode && (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="h-8 w-8 p-0"
-                  onClick={() => startEdit(item)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(item);
+                  }}
                 >
                   <PencilIcon className="h-3.5 w-3.5" />
                 </Button>
+              )}
+              {swapMode && rowCanModify && isSwapSelected && (
+                <ArrowLeftRightIcon className="h-3.5 w-3.5 text-amber-600 inline-block" />
               )}
             </TableCell>
           </>
@@ -600,7 +777,23 @@ export function PlayoffSchedulePreview({
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canModify && (
+            <Button
+              type="button"
+              size="sm"
+              variant={swapMode ? "default" : "outline"}
+              disabled={swapping}
+              onClick={toggleSwapMode}
+            >
+              {swapping ? (
+                <Loader2Icon className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <ArrowLeftRightIcon className="h-3.5 w-3.5 mr-1" />
+              )}
+              Intercambiar
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"
@@ -624,6 +817,14 @@ export function PlayoffSchedulePreview({
       <p className="text-xs text-muted-foreground">
         {flatMatches.length} partido(s) · {tournamentList.length} torneo(s)
       </p>
+
+      {swapMode && (
+        <p className="text-xs rounded-md border border-amber-300/80 bg-amber-50 px-3 py-2 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+          {swapSourceKey
+            ? "Elegí otro partido para intercambiar fecha, hora y cancha. Clic de nuevo en el mismo partido para deseleccionar."
+            : "Modo intercambio activo: elegí el primer partido de la lista."}
+        </p>
+      )}
 
       {tournamentList.length > 1 && (
         <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border bg-muted/30 px-3 py-2">

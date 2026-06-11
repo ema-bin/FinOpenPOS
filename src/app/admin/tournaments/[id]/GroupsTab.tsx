@@ -723,7 +723,7 @@ export default function GroupsTab({
                 setPlannedPreview(updated[0] ?? null);
               }}
               title="Horarios planificados"
-              description="Usá el lápiz en cada fila para ajustar. Si querés cambiar los días o slots iniciales, cancelá y volvé a configurar."
+              description="Usá el lápiz para editar o Intercambiar para permutar horarios entre dos partidos."
               compact
             />
           )}
