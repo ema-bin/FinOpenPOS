@@ -24,6 +24,7 @@ import {
 import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import { TournamentScheduleDialog, ScheduleConfig } from "@/components/tournament-schedule-dialog";
+import { PlayoffSchedulePreview } from "@/components/playoff-schedule-preview";
 import {
   Dialog,
   DialogContent,
@@ -169,6 +170,7 @@ export default function GroupsTab({
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editCourtId, setEditCourtId] = useState<string>("none");
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
   const [deletingGroups, setDeletingGroups] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
   const [reopeningReview, setReopeningReview] = useState(false);
@@ -270,10 +272,15 @@ export default function GroupsTab({
         // Mantener el dialog abierto para mostrar el error
         return;
       }
-      // Solo cerrar el dialog si fue exitoso
       setScheduleDialogOpen(false);
-      // recargar todo para ver playoffs
-      window.location.reload();
+      setSchedulePreviewOpen(true);
+      void queryClient.invalidateQueries({
+        queryKey: ["tournament-playoffs", tournament.id],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["playoffs-schedule-preview"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
     } catch (err) {
       console.error(err);
       setPlayoffsError("Error al generar playoffs. Por favor, intentá nuevamente.");
@@ -630,6 +637,22 @@ export default function GroupsTab({
         error={playoffsError}
         isLoading={closingGroups}
       />
+
+      <Dialog open={schedulePreviewOpen} onOpenChange={setSchedulePreviewOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Horarios de playoffs generados</DialogTitle>
+            <DialogDescription>
+              Revisá los partidos y ajustá manualmente fecha, hora o cancha si hace falta.
+            </DialogDescription>
+          </DialogHeader>
+          <PlayoffSchedulePreview
+            tournamentIds={[tournament.id]}
+            title="Vista previa"
+            compact
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de confirmación para eliminar fase de grupos */}
       <Dialog open={showDeleteGroupsDialog} onOpenChange={setShowDeleteGroupsDialog}>

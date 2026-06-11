@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon, ExternalLinkIcon, TrophyIcon } from "lucide-react";
+import { Loader2Icon, ExternalLinkIcon, TrophyIcon, CheckIcon } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -13,6 +13,15 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { PlayoffSchedulePreview } from "@/components/playoff-schedule-preview";
 import {
   TournamentScheduleDialog,
   type ScheduleConfig,
@@ -31,6 +40,12 @@ export default function GlobalPlayoffsReadyPage() {
   const [globalDialogOpen, setGlobalDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
+  const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
+  const [generatedTournamentIds, setGeneratedTournamentIds] = useState<number[]>([]);
+  const [generatedSummary, setGeneratedSummary] = useState<{
+    tournamentsProcessed: number;
+    totalPlayoffMatches: number;
+  } | null>(null);
 
   const { data, isLoading, isError } = useQuery<ReadyTournament[]>({
     queryKey: ["tournaments", "global-playoffs-ready"],
@@ -78,22 +93,37 @@ export default function GlobalPlayoffsReadyPage() {
     [summary]
   );
 
+  const refreshAfterGeneration = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ["tournaments", "global-playoffs-ready"],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["tournaments", "playoffs-ready-summary"],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["playoffs-schedule-preview"],
+    });
+    void queryClient.invalidateQueries({ queryKey: ["tournament-playoffs"] });
+  };
+
   const handleConfirmSchedule = async (config: ScheduleConfig) => {
     try {
       setGenerating(true);
       setPlayoffsError(null);
       const result = await tournamentsService.generateBulkPlayoffs(config);
       setGlobalDialogOpen(false);
-      toast.success(
-        `Playoffs generados: ${result.tournamentsProcessed} torneo(s), ${result.totalPlayoffMatches} partido(s)`
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["tournaments", "global-playoffs-ready"],
+
+      const ids = result.results.map((r) => r.tournamentId);
+      setGeneratedTournamentIds(ids);
+      setGeneratedSummary({
+        tournamentsProcessed: result.tournamentsProcessed,
+        totalPlayoffMatches: result.totalPlayoffMatches,
       });
+      setConfirmPreviewOpen(true);
+
       void queryClient.invalidateQueries({
-        queryKey: ["tournaments", "playoffs-ready-summary"],
+        queryKey: ["playoffs-schedule-preview", ids.join(",")],
       });
-      window.location.reload();
     } catch (err) {
       const message =
         err instanceof Error
@@ -103,6 +133,27 @@ export default function GlobalPlayoffsReadyPage() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleAcceptGeneratedSchedule = () => {
+    setConfirmPreviewOpen(false);
+    setGeneratedTournamentIds([]);
+    setGeneratedSummary(null);
+    refreshAfterGeneration();
+    toast.success("Playoffs y horarios confirmados");
+  };
+
+  const handleConfirmPreviewOpenChange = (open: boolean) => {
+    if (!open && confirmPreviewOpen) {
+      const confirmed = window.confirm(
+        "¿Cerrar sin confirmar? Los playoffs ya están generados; podés revisarlos desde cada torneo en la pestaña Playoffs."
+      );
+      if (!confirmed) return;
+      setGeneratedTournamentIds([]);
+      setGeneratedSummary(null);
+      refreshAfterGeneration();
+    }
+    setConfirmPreviewOpen(open);
   };
 
   if (isLoading) {
@@ -133,7 +184,7 @@ export default function GlobalPlayoffsReadyPage() {
           <CardTitle>Playoffs global</CardTitle>
           <CardDescription>
             Torneos con la fase de grupos finalizada y marcados como listos para playoffs.
-            Definí los días de playoff y elegí ventanas por cancha una sola vez para todos los torneos listos.
+            Al generar en conjunto, revisás y confirmás los horarios antes de finalizar.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2 pt-3">
             <Button
@@ -161,6 +212,40 @@ export default function GlobalPlayoffsReadyPage() {
           )}
         </CardHeader>
       </Card>
+
+      <Dialog
+        open={confirmPreviewOpen && generatedTournamentIds.length > 0}
+        onOpenChange={handleConfirmPreviewOpenChange}
+      >
+        <DialogContent
+          className="max-w-5xl max-h-[90vh] overflow-y-auto"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Confirmar horarios generados</DialogTitle>
+            <DialogDescription>
+              {generatedSummary
+                ? `Se generaron ${generatedSummary.totalPlayoffMatches} partido(s) en ${generatedSummary.tournamentsProcessed} torneo(s). Revisá la grilla, ajustá lo que necesites con el lápiz y confirmá para finalizar.`
+                : "Revisá los partidos generados y ajustá manualmente fecha, hora o cancha si hace falta."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <PlayoffSchedulePreview
+            tournamentIds={generatedTournamentIds}
+            title="Horarios asignados"
+            description="Vista por franja horaria para ver torneos en simultáneo. Editá cualquier fila antes de confirmar."
+            compact
+          />
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button type="button" onClick={handleAcceptGeneratedSchedule}>
+              <CheckIcon className="h-4 w-4 mr-2" />
+              Confirmar horarios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TournamentScheduleDialog
         open={globalDialogOpen}

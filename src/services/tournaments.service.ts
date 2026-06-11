@@ -445,6 +445,38 @@ class TournamentsService {
     return response.json();
   }
 
+  async getPlayoffsSchedulePreview(
+    queryString = ""
+  ): Promise<{
+    tournaments: Array<{
+      id: number;
+      name: string;
+      status: string;
+      match_duration: number | null;
+      match_duration_quarters_onwards: number | null;
+      rows: PlayoffRow[];
+    }>;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/playoffs-ready/schedule-preview${queryString}`
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo cargar la vista previa");
+    }
+    return {
+      tournaments: (data.tournaments ?? []).map(
+        (t: { rows?: PlayoffRow[] } & Record<string, unknown>) => ({
+          ...t,
+          rows: (t.rows ?? []).map((item) => ({
+            ...item,
+            match: (item as PlayoffRow).match ?? null,
+          })),
+        })
+      ),
+    };
+  }
+
   async getPlayoffsReadySummary(): Promise<{
     tournamentCount: number;
     totalPlayoffMatches: number;
