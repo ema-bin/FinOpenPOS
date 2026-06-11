@@ -19,10 +19,8 @@ export class CloseGroupsError extends Error {
 }
 
 import type { TournamentMatch } from "@/models/db/tournament";
-import {
-  playoffMatchDurationMinutes,
-  slotIntervalMinutesForPlayoffScheduling,
-} from "@/lib/playoff-match-duration";
+import { assignPlayoffScheduleSlots } from "@/lib/assign-playoff-schedule-to-matches";
+import { slotIntervalMinutesForPlayoffScheduling } from "@/lib/playoff-match-duration";
 
 // Using Pick from TournamentMatch for internal processing
 type MatchRow = Pick<
@@ -356,15 +354,6 @@ export async function runCloseGroups(
   const totalPairs = groupTeams?.length ?? 0;
   const allMatches = generatePlayoffs(qualifiedTeams, groupOrderMap, totalPairs);
 
-  // Agregar campos de horarios a los matches
-  const allMatchesWithSchedule = allMatches.map(m => ({
-    ...m,
-    match_date: undefined as string | null | undefined,
-    start_time: undefined as string | null | undefined,
-    end_time: undefined as string | null | undefined,
-    court_id: undefined as number | null | undefined,
-  }));
-
   /** Todos los partidos de playoffs usan esta duración (DB). */
   const playoffMin = Math.max(
     15,
@@ -401,63 +390,27 @@ export async function runCloseGroups(
     }
   }
 
-  if (scheduleSlots && scheduleSlots.length > 0) {
-    const matchesNeedingSchedule = allMatchesWithSchedule.filter((m) => {
-      if (m.team1_id && m.team2_id) return true;
-      if (m.source_team1 || m.source_team2) return true;
-      return false;
-    });
+  let allMatchesWithSchedule = allMatches.map((m) => ({
+    ...m,
+    match_date: null as string | null,
+    start_time: null as string | null,
+    end_time: null as string | null,
+    court_id: null as number | null,
+  }));
 
-    if (scheduleSlots.length < matchesNeedingSchedule.length) {
+  if (scheduleSlots && scheduleSlots.length > 0) {
+    try {
+      allMatchesWithSchedule = assignPlayoffScheduleSlots(
+        allMatches,
+        scheduleSlots,
+        playoffMin
+      );
+    } catch (e) {
       throw new CloseGroupsError(
-        `No hay suficientes slots disponibles. Se necesitan ${matchesNeedingSchedule.length} slots pero solo hay ${scheduleSlots.length} disponibles.`,
+        e instanceof Error ? e.message : "Error al asignar horarios",
         400
       );
     }
-
-    const calculateEndTimeFromStart = (startTime: string): string => {
-      const dur = playoffMatchDurationMinutes(playoffMin);
-      const [startH, startM] = startTime.split(":").map(Number);
-      const startMinutes = startH * 60 + startM;
-      const endMinutes = startMinutes + dur;
-      const endH = Math.floor(endMinutes / 60);
-      const endM = endMinutes % 60;
-      return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-    };
-
-    const matchIndices = allMatchesWithSchedule.map((_, index) => index);
-    matchIndices.sort((a, b) => {
-      const matchA = allMatchesWithSchedule[a];
-      const matchB = allMatchesWithSchedule[b];
-      const roundOrder: Record<string, number> = {
-        "16avos": 1,
-        "octavos": 2,
-        "cuartos": 3,
-        "semifinal": 4,
-        "final": 5,
-      };
-      const aOrder = roundOrder[matchA.round] || 999;
-      const bOrder = roundOrder[matchB.round] || 999;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      return matchA.bracket_pos - matchB.bracket_pos;
-    });
-
-    let slotIndex = 0;
-    matchIndices.forEach((originalIndex) => {
-      const match = allMatchesWithSchedule[originalIndex];
-      const needsSchedule =
-        Boolean(match.team1_id && match.team2_id) ||
-        Boolean(match.source_team1 || match.source_team2);
-
-      if (needsSchedule && slotIndex < scheduleSlots!.length) {
-        const slot = scheduleSlots![slotIndex];
-        match.match_date = slot.date;
-        match.start_time = slot.startTime;
-        match.end_time = calculateEndTimeFromStart(slot.startTime);
-        match.court_id = slot.court_id;
-        slotIndex++;
-      }
-    });
   }
 
   // Insertar todos los partidos en la base de datos

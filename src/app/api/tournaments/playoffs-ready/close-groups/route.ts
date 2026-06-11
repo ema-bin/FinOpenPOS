@@ -8,6 +8,7 @@ import { interleavePlayoffSlotsAcrossTournaments } from "@/lib/interleave-playof
 import {
   buildPlayoffScheduleSlots,
   parseScheduleConfigFromBody,
+  parseTournamentSlotPlans,
   playoffSlotIntervalFromMinutes,
 } from "@/lib/playoff-schedule-slots";
 
@@ -105,6 +106,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const tournamentSlotPlans = parseTournamentSlotPlans(body);
+
   const slotsByTournament = interleavePlayoffSlotsAcrossTournaments(
     sharedSlots,
     plans.map((p) => ({ id: p.id, needing: p.needing }))
@@ -118,7 +121,8 @@ export async function POST(req: Request) {
   }> = [];
 
   for (const plan of plans) {
-    const slice = slotsByTournament.get(plan.id) ?? [];
+    const clientSlots = tournamentSlotPlans?.get(plan.id);
+    const slice = clientSlots ?? slotsByTournament.get(plan.id) ?? [];
 
     const payload = {
       ...body,

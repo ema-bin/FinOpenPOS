@@ -27,6 +27,11 @@ import {
   type ScheduleConfig,
 } from "@/components/tournament-schedule-dialog";
 import type { TournamentDTO } from "@/models/dto/tournament";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
+import {
+  buildExplicitSlotsFromPlannedTournament,
+  validatePlannedTournamentSchedule,
+} from "@/lib/assign-playoff-schedule-to-matches";
 import { tournamentsService } from "@/services";
 import GroupsTab from "../[id]/GroupsTab";
 
@@ -38,13 +43,18 @@ type ReadyTournament = Pick<
 export default function GlobalPlayoffsReadyPage() {
   const queryClient = useQueryClient();
   const [globalDialogOpen, setGlobalDialogOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
-  const [generatedTournamentIds, setGeneratedTournamentIds] = useState<number[]>([]);
-  const [generatedSummary, setGeneratedSummary] = useState<{
-    tournamentsProcessed: number;
+  const [pendingScheduleConfig, setPendingScheduleConfig] =
+    useState<ScheduleConfig | null>(null);
+  const [plannedPreview, setPlannedPreview] = useState<
+    PlannedTournamentPreview[] | null
+  >(null);
+  const [plannedSummary, setPlannedSummary] = useState<{
     totalPlayoffMatches: number;
+    tournamentsProcessed: number;
   } | null>(null);
 
   const { data, isLoading, isError } = useQuery<ReadyTournament[]>({
@@ -93,7 +103,7 @@ export default function GlobalPlayoffsReadyPage() {
     [summary]
   );
 
-  const refreshAfterGeneration = () => {
+  const refreshLists = () => {
     void queryClient.invalidateQueries({
       queryKey: ["tournaments", "global-playoffs-ready"],
     });
@@ -108,50 +118,82 @@ export default function GlobalPlayoffsReadyPage() {
 
   const handleConfirmSchedule = async (config: ScheduleConfig) => {
     try {
-      setGenerating(true);
+      setPlanning(true);
       setPlayoffsError(null);
-      const result = await tournamentsService.generateBulkPlayoffs(config);
+      const preview = await tournamentsService.previewBulkPlayoffs(config);
+      setPendingScheduleConfig(config);
+      setPlannedPreview(preview.tournaments);
+      setPlannedSummary({
+        totalPlayoffMatches: preview.totalPlayoffMatches,
+        tournamentsProcessed: preview.tournaments.length,
+      });
       setGlobalDialogOpen(false);
-
-      const ids = result.results.map((r) => r.tournamentId);
-      setGeneratedTournamentIds(ids);
-      setGeneratedSummary({
-        tournamentsProcessed: result.tournamentsProcessed,
-        totalPlayoffMatches: result.totalPlayoffMatches,
-      });
       setConfirmPreviewOpen(true);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al planificar playoffs. Por favor, intentá nuevamente.";
+      setPlayoffsError(message);
+    } finally {
+      setPlanning(false);
+    }
+  };
 
-      void queryClient.invalidateQueries({
-        queryKey: ["playoffs-schedule-preview", ids.join(",")],
+  const handleConfirmAndGenerate = async () => {
+    if (!pendingScheduleConfig || !plannedPreview?.length) return;
+
+    for (const t of plannedPreview) {
+      const validationError = validatePlannedTournamentSchedule(t);
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
+    }
+
+    const tournamentSlotPlans: Record<
+      string,
+      ReturnType<typeof buildExplicitSlotsFromPlannedTournament>
+    > = {};
+    for (const t of plannedPreview) {
+      tournamentSlotPlans[String(t.id)] =
+        buildExplicitSlotsFromPlannedTournament(t);
+    }
+
+    try {
+      setConfirming(true);
+      const result = await tournamentsService.generateBulkPlayoffs({
+        ...pendingScheduleConfig,
+        tournamentSlotPlans,
       });
+      setConfirmPreviewOpen(false);
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
+      setPlannedSummary(null);
+      refreshLists();
+      toast.success(
+        `Playoffs generados: ${result.tournamentsProcessed} torneo(s), ${result.totalPlayoffMatches} partido(s)`
+      );
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
           : "Error al generar playoffs. Por favor, intentá nuevamente.";
-      setPlayoffsError(message);
+      toast.error(message);
     } finally {
-      setGenerating(false);
+      setConfirming(false);
     }
-  };
-
-  const handleAcceptGeneratedSchedule = () => {
-    setConfirmPreviewOpen(false);
-    setGeneratedTournamentIds([]);
-    setGeneratedSummary(null);
-    refreshAfterGeneration();
-    toast.success("Playoffs y horarios confirmados");
   };
 
   const handleConfirmPreviewOpenChange = (open: boolean) => {
     if (!open && confirmPreviewOpen) {
       const confirmed = window.confirm(
-        "¿Cerrar sin confirmar? Los playoffs ya están generados; podés revisarlos desde cada torneo en la pestaña Playoffs."
+        "¿Cancelar? Los playoffs todavía no se generaron. Podés volver a configurar los horarios."
       );
       if (!confirmed) return;
-      setGeneratedTournamentIds([]);
-      setGeneratedSummary(null);
-      refreshAfterGeneration();
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
+      setPlannedSummary(null);
     }
     setConfirmPreviewOpen(open);
   };
@@ -184,7 +226,7 @@ export default function GlobalPlayoffsReadyPage() {
           <CardTitle>Playoffs global</CardTitle>
           <CardDescription>
             Torneos con la fase de grupos finalizada y marcados como listos para playoffs.
-            Al generar en conjunto, revisás y confirmás los horarios antes de finalizar.
+            Primero revisás el plan de horarios; los playoffs se crean solo al confirmar.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2 pt-3">
             <Button
@@ -214,7 +256,7 @@ export default function GlobalPlayoffsReadyPage() {
       </Card>
 
       <Dialog
-        open={confirmPreviewOpen && generatedTournamentIds.length > 0}
+        open={confirmPreviewOpen && Boolean(plannedPreview?.length)}
         onOpenChange={handleConfirmPreviewOpenChange}
       >
         <DialogContent
@@ -223,25 +265,44 @@ export default function GlobalPlayoffsReadyPage() {
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Confirmar horarios generados</DialogTitle>
+            <DialogTitle>Confirmar plan de playoffs</DialogTitle>
             <DialogDescription>
-              {generatedSummary
-                ? `Se generaron ${generatedSummary.totalPlayoffMatches} partido(s) en ${generatedSummary.tournamentsProcessed} torneo(s). Revisá la grilla, ajustá lo que necesites con el lápiz y confirmá para finalizar.`
-                : "Revisá los partidos generados y ajustá manualmente fecha, hora o cancha si hace falta."}
+              {plannedSummary
+                ? `Vista previa de ${plannedSummary.totalPlayoffMatches} partido(s) en ${plannedSummary.tournamentsProcessed} torneo(s). Podés editar fecha, hora y cancha antes de confirmar.`
+                : "Revisá el plan antes de generar los playoffs."}
             </DialogDescription>
           </DialogHeader>
 
-          <PlayoffSchedulePreview
-            tournamentIds={generatedTournamentIds}
-            title="Horarios asignados"
-            description="Vista por franja horaria para ver torneos en simultáneo. Editá cualquier fila antes de confirmar."
-            compact
-          />
+          {plannedPreview && (
+            <PlayoffSchedulePreview
+              plannedTournaments={plannedPreview}
+              onPlannedTournamentsChange={setPlannedPreview}
+              title="Horarios planificados"
+              description="Usá el lápiz en cada fila para ajustar. Para cambiar días o slots iniciales, cancelá y volvé a configurar."
+              compact
+            />
+          )}
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button type="button" onClick={handleAcceptGeneratedSchedule}>
-              <CheckIcon className="h-4 w-4 mr-2" />
-              Confirmar horarios
+            <Button
+              type="button"
+              variant="outline"
+              disabled={confirming}
+              onClick={() => handleConfirmPreviewOpenChange(false)}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              disabled={confirming || !pendingScheduleConfig}
+              onClick={handleConfirmAndGenerate}
+            >
+              {confirming ? (
+                <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckIcon className="h-4 w-4 mr-2" />
+              )}
+              Confirmar y generar playoffs
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -259,7 +320,7 @@ export default function GlobalPlayoffsReadyPage() {
         tournamentMatchDurationQuartersOnwards={maxPlayoffDuration}
         globalPlayoffsReady
         error={playoffsError}
-        isLoading={generating}
+        isLoading={planning}
       />
 
       {tournaments.length === 0 ? (

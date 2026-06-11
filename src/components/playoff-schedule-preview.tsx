@@ -27,6 +27,7 @@ import type { PlayoffRow } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentMatchesService, tournamentsService } from "@/services";
 import { cn } from "@/lib/utils";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
 
 export type PlayoffSchedulePreviewTournament = {
   id: number;
@@ -44,8 +45,10 @@ type FlatMatch = {
   playoffDuration: number;
   round: string;
   bracketPos: number;
-  row: PlayoffRow;
+  row?: PlayoffRow;
   match: NonNullable<PlayoffRow["match"]>;
+  team1Display?: string;
+  team2Display?: string;
 };
 
 const ROUND_ORDER: Record<string, number> = {
@@ -156,8 +159,62 @@ function flattenTournaments(
   return out.sort((a, b) => matchSortKey(a).localeCompare(matchSortKey(b)));
 }
 
+function flattenPlannedTournaments(
+  planned: PlannedTournamentPreview[]
+): FlatMatch[] {
+  const out: FlatMatch[] = [];
+  for (const t of planned) {
+    const playoffDuration = playoffMatchDurationMinutes(
+      t.match_duration_quarters_onwards ?? t.match_duration ?? 60
+    );
+    for (const m of t.matches) {
+      const hasTeams =
+        m.team1Label !== "—" ||
+        m.team2Label !== "—" ||
+        m.team1Label.includes("BYE") ||
+        m.team2Label.includes("BYE");
+      const hasSchedule = m.match_date || m.start_time || m.court_id;
+      if (!hasTeams && !hasSchedule) continue;
+      out.push({
+        key: `planned-${t.id}-${m.round}-${m.bracket_pos}`,
+        tournamentId: t.id,
+        tournamentName: t.name,
+        playoffDuration,
+        round: m.round,
+        bracketPos: m.bracket_pos,
+        team1Display: m.team1Label,
+        team2Display: m.team2Label,
+        match: {
+          id: 0,
+          team1_id: null,
+          team2_id: null,
+          status: "scheduled",
+          match_date: m.match_date,
+          start_time: m.start_time,
+          end_time: m.end_time,
+          court_id: m.court_id,
+          team1: null,
+          team2: null,
+          set1_team1_games: null,
+          set1_team2_games: null,
+          set2_team1_games: null,
+          set2_team2_games: null,
+          set3_team1_games: null,
+          set3_team2_games: null,
+          super_tiebreak_team1_points: null,
+          super_tiebreak_team2_points: null,
+        },
+      });
+    }
+  }
+  return out.sort((a, b) => matchSortKey(a).localeCompare(matchSortKey(b)));
+}
+
 type PlayoffSchedulePreviewProps = {
   tournamentIds?: number[];
+  plannedTournaments?: PlannedTournamentPreview[];
+  onPlannedTournamentsChange?: (tournaments: PlannedTournamentPreview[]) => void;
+  readOnly?: boolean;
   title?: string;
   description?: string;
   compact?: boolean;
@@ -176,6 +233,9 @@ async function fetchPreview(
 
 export function PlayoffSchedulePreview({
   tournamentIds,
+  plannedTournaments,
+  onPlannedTournamentsChange,
+  readOnly = false,
   title = "Vista previa de horarios",
   description = "Revisá y ajustá fecha, hora y cancha de cada partido de playoff.",
   compact = false,
@@ -194,10 +254,13 @@ export function PlayoffSchedulePreview({
     tournamentIds?.join(",") ?? "all",
   ] as const;
 
+  const isPlannedMode = Boolean(plannedTournaments?.length);
+
   const { data, isLoading, isError } = useQuery({
     queryKey,
     queryFn: () => fetchPreview(tournamentIds),
     staleTime: 1000 * 15,
+    enabled: !isPlannedMode,
   });
 
   const { data: courts = [] } = useQuery<CourtDTO[]>({
@@ -215,15 +278,26 @@ export function PlayoffSchedulePreview({
     [courts]
   );
 
-  const tournamentList = useMemo(
-    () => normalizeTournamentList(data),
-    [data]
-  );
+  const tournamentList = useMemo(() => {
+    if (isPlannedMode && plannedTournaments) {
+      return plannedTournaments.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: "playoffs_ready",
+        match_duration: t.match_duration,
+        match_duration_quarters_onwards: t.match_duration_quarters_onwards,
+        rows: [] as PlayoffRow[],
+      }));
+    }
+    return normalizeTournamentList(data);
+  }, [data, isPlannedMode, plannedTournaments]);
 
-  const flatMatches = useMemo(
-    () => flattenTournaments(tournamentList),
-    [tournamentList]
-  );
+  const flatMatches = useMemo(() => {
+    if (isPlannedMode && plannedTournaments) {
+      return flattenPlannedTournaments(plannedTournaments);
+    }
+    return flattenTournaments(tournamentList);
+  }, [isPlannedMode, plannedTournaments, tournamentList]);
 
   const groupedByTournament = useMemo(() => {
     const map = new Map<string, FlatMatch[]>();
@@ -273,11 +347,58 @@ export function PlayoffSchedulePreview({
     setEditCourtId("none");
   };
 
+  const savePlannedEdit = (item: FlatMatch) => {
+    if (!editDate || !editTime) {
+      alert("Fecha y hora de inicio son requeridos");
+      return;
+    }
+    if (editCourtId === "none") {
+      alert("Elegí una cancha");
+      return;
+    }
+    if (!plannedTournaments || !onPlannedTournamentsChange) return;
+
+    const endTime =
+      editEndTime.trim() ||
+      resolveMatchEndTime(editTime, null, item.playoffDuration) ||
+      editTime;
+    const courtId =
+      editCourtId === "none" ? null : Number(editCourtId);
+
+    const updated = plannedTournaments.map((t) => {
+      if (t.id !== item.tournamentId) return t;
+      return {
+        ...t,
+        matches: t.matches.map((m) => {
+          if (m.round !== item.round || m.bracket_pos !== item.bracketPos) {
+            return m;
+          }
+          return {
+            ...m,
+            match_date: editDate,
+            start_time: editTime,
+            end_time: endTime,
+            court_id: courtId,
+          };
+        }),
+      };
+    });
+
+    onPlannedTournamentsChange(updated);
+    cancelEdit();
+  };
+
   const saveEdit = async (item: FlatMatch) => {
     if (!editDate || !editTime) {
       alert("Fecha y hora de inicio son requeridos");
       return;
     }
+
+    if (isPlannedMode && onPlannedTournamentsChange) {
+      savePlannedEdit(item);
+      return;
+    }
+
     try {
       setSaving(true);
       const endTime =
@@ -303,11 +424,13 @@ export function PlayoffSchedulePreview({
   const renderRow = (item: FlatMatch) => {
     const isEditing = editingKey === item.key;
     const tournamentColor = tournamentColorById.get(item.tournamentId);
+    const label1 = item.team1Display ?? teamLabel(item.match.team1);
+    const label2 = item.team2Display ?? teamLabel(item.match.team2);
     const vs =
-      item.match.team1 && item.match.team2
-        ? `${teamLabel(item.match.team1)} vs ${teamLabel(item.match.team2)}`
-        : item.match.team1 || item.match.team2
-          ? `${teamLabel(item.match.team1 ?? item.match.team2)} (BYE)`
+      label1 !== "—" && label2 !== "—"
+        ? `${label1} vs ${label2}`
+        : label1 !== "—" || label2 !== "—"
+          ? `${label1 !== "—" ? label1 : label2} (BYE)`
           : "Por definir";
 
     return (
@@ -425,14 +548,18 @@ export function PlayoffSchedulePreview({
                 : "—"}
             </TableCell>
             <TableCell className="text-right">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0"
-                onClick={() => startEdit(item)}
-              >
-                <PencilIcon className="h-3.5 w-3.5" />
-              </Button>
+              {!readOnly &&
+                (item.match.id > 0 ||
+                  (isPlannedMode && Boolean(onPlannedTournamentsChange))) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={() => startEdit(item)}
+                >
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </TableCell>
           </>
         )}
@@ -440,7 +567,7 @@ export function PlayoffSchedulePreview({
     );
   };
 
-  if (isLoading) {
+  if (!isPlannedMode && isLoading) {
     return (
       <div className="h-[160px] flex items-center justify-center">
         <Loader2Icon className="h-6 w-6 animate-spin" />
@@ -448,7 +575,7 @@ export function PlayoffSchedulePreview({
     );
   }
 
-  if (isError) {
+  if (!isPlannedMode && isError) {
     return (
       <p className="text-sm text-destructive">
         No se pudo cargar la vista previa de horarios.

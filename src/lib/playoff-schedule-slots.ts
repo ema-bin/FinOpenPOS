@@ -10,6 +10,7 @@ export type PlayoffScheduleSlot = {
   date: string;
   startTime: string;
   court_id: number;
+  endTime?: string;
 };
 
 export function parsePlayoffScheduleSelections(
@@ -53,10 +54,16 @@ export function parseExplicitPlayoffSlots(
     const date = String(r.date ?? r.slotDate ?? "").trim().slice(0, 10);
     const startTime = String(r.startTime ?? "").trim().slice(0, 5);
     const courtId = Number(r.court_id ?? r.courtId);
+    const endTime = String(r.endTime ?? r.end_time ?? "").trim().slice(0, 5);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     if (!startTime) continue;
     if (!Number.isFinite(courtId) || courtId <= 0) continue;
-    out.push({ date, startTime, court_id: courtId });
+    out.push({
+      date,
+      startTime,
+      court_id: courtId,
+      ...(endTime ? { endTime } : {}),
+    });
   }
   return out.length > 0 ? out : null;
 }
@@ -197,4 +204,45 @@ export function playoffSlotIntervalFromMinutes(
   return slotIntervalMinutesForPlayoffScheduling(
     Math.max(15, playoffMinutesFromDb)
   );
+}
+
+export function parseTournamentSlotPlans(
+  body: Record<string, unknown>
+): Map<number, PlayoffScheduleSlot[]> | null {
+  const raw = body.tournamentSlotPlans;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+
+  const map = new Map<number, PlayoffScheduleSlot[]>();
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const tournamentId = Number(key);
+    if (!Number.isFinite(tournamentId) || tournamentId <= 0) continue;
+    if (!Array.isArray(value) || value.length === 0) continue;
+
+    const slots: PlayoffScheduleSlot[] = [];
+    for (const row of value) {
+      if (!row || typeof row !== "object") continue;
+      const r = row as Record<string, unknown>;
+      const date = String(r.date ?? r.slotDate ?? "").trim().slice(0, 10);
+      const startTime = String(r.startTime ?? r.start_time ?? "")
+        .trim()
+        .slice(0, 5);
+      const courtId = Number(r.court_id ?? r.courtId);
+      const endTime = String(r.endTime ?? r.end_time ?? "").trim().slice(0, 5);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (!startTime) continue;
+      if (!Number.isFinite(courtId) || courtId <= 0) continue;
+      slots.push({
+        date,
+        startTime,
+        court_id: courtId,
+        ...(endTime ? { endTime } : {}),
+      });
+    }
+
+    if (slots.length > 0) {
+      map.set(tournamentId, slots);
+    }
+  }
+
+  return map.size > 0 ? map : null;
 }

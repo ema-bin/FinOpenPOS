@@ -1,5 +1,6 @@
 import { TournamentPlayoff, TournamentTeam } from "@/models/db";
 import type { TournamentStatus } from "@/models/db";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
 import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, TournamentDTO, AvailableSchedule, ScheduleConfig, TournamentPaymentsApiResponse, TournamentRegistrationPaymentDTO } from "@/models/dto/tournament";
 
 export interface TournamentGroupSlotInput {
@@ -445,6 +446,46 @@ class TournamentsService {
     return response.json();
   }
 
+  async previewPlayoffs(
+    tournamentId: number,
+    config: ScheduleConfig
+  ): Promise<{
+    tournament: PlannedTournamentPreview;
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/close-groups/preview`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo planificar los playoffs");
+    }
+    return data;
+  }
+
+  async previewBulkPlayoffs(config: ScheduleConfig): Promise<{
+    tournaments: PlannedTournamentPreview[];
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo planificar los playoffs");
+    }
+    return data;
+  }
+
   async getPlayoffsSchedulePreview(
     queryString = ""
   ): Promise<{
@@ -497,7 +538,19 @@ class TournamentsService {
     return data;
   }
 
-  async generateBulkPlayoffs(config: ScheduleConfig): Promise<{
+  async generateBulkPlayoffs(
+    config: ScheduleConfig & {
+      tournamentSlotPlans?: Record<
+        string,
+        Array<{
+          date: string;
+          startTime: string;
+          court_id: number;
+          endTime?: string;
+        }>
+      >;
+    }
+  ): Promise<{
     ok: boolean;
     tournamentsProcessed: number;
     totalPlayoffMatches: number;

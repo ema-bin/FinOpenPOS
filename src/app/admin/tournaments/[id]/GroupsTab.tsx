@@ -43,6 +43,11 @@ import type {
   TeamDTO,
   AvailableSchedule,
 } from "@/models/dto/tournament";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
+import {
+  buildExplicitSlotsFromPlannedTournament,
+  validatePlannedTournamentSchedule,
+} from "@/lib/assign-playoff-schedule-to-matches";
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentsService, tournamentMatchesService } from "@/services";
 import { allGroupMatchesHaveResults } from "@/lib/group-match-results";
@@ -162,7 +167,8 @@ export default function GroupsTab({
   >;
 }) {
   const queryClient = useQueryClient();
-  const [closingGroups, setClosingGroups] = useState(false);
+  const [planningPlayoffs, setPlanningPlayoffs] = useState(false);
+  const [confirmingPlayoffs, setConfirmingPlayoffs] = useState(false);
   const groupDurationMinutes = Math.max(15, tournament.match_duration ?? 60);
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
@@ -170,7 +176,12 @@ export default function GroupsTab({
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editCourtId, setEditCourtId] = useState<string>("none");
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
+  const [pendingScheduleConfig, setPendingScheduleConfig] =
+    useState<ScheduleConfig | null>(null);
+  const [plannedPreview, setPlannedPreview] =
+    useState<PlannedTournamentPreview | null>(null);
   const [deletingGroups, setDeletingGroups] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
   const [reopeningReview, setReopeningReview] = useState(false);
@@ -254,26 +265,60 @@ export default function GroupsTab({
 
   const handleConfirmSchedule = async (config: ScheduleConfig) => {
     try {
-      setClosingGroups(true);
+      setPlanningPlayoffs(true);
       setPlayoffsError(null);
-      // NO cerrar el dialog aquí - esperar a que termine exitosamente
+      const preview = await tournamentsService.previewPlayoffs(
+        tournament.id,
+        config
+      );
+      setPendingScheduleConfig(config);
+      setPlannedPreview(preview.tournament);
+      setScheduleDialogOpen(false);
+      setConfirmPreviewOpen(true);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al planificar playoffs. Por favor, intentá nuevamente.";
+      setPlayoffsError(message);
+    } finally {
+      setPlanningPlayoffs(false);
+    }
+  };
+
+  const handleConfirmAndGeneratePlayoffs = async () => {
+    if (!pendingScheduleConfig || !plannedPreview) return;
+
+    const validationError = validatePlannedTournamentSchedule(plannedPreview);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      setConfirmingPlayoffs(true);
+      const explicitPlayoffSlots =
+        buildExplicitSlotsFromPlannedTournament(plannedPreview);
       const res = await fetch(
         `/api/tournaments/${tournament.id}/close-groups`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(config),
+          body: JSON.stringify({
+            ...pendingScheduleConfig,
+            explicitPlayoffSlots,
+          }),
         }
       );
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const errorMessage = errorData.error || "Error al generar playoffs";
-        setPlayoffsError(errorMessage);
-        // Mantener el dialog abierto para mostrar el error
-        return;
+        throw new Error(errorData.error || "Error al generar playoffs");
       }
-      setScheduleDialogOpen(false);
+      setConfirmPreviewOpen(false);
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
       setSchedulePreviewOpen(true);
+      toast.success("Playoffs generados correctamente");
       void queryClient.invalidateQueries({
         queryKey: ["tournament-playoffs", tournament.id],
       });
@@ -282,11 +327,26 @@ export default function GroupsTab({
       });
       void queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
     } catch (err) {
-      console.error(err);
-      setPlayoffsError("Error al generar playoffs. Por favor, intentá nuevamente.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al generar playoffs. Por favor, intentá nuevamente.";
+      toast.error(message);
     } finally {
-      setClosingGroups(false);
+      setConfirmingPlayoffs(false);
     }
+  };
+
+  const handleConfirmPreviewOpenChange = (open: boolean) => {
+    if (!open && confirmPreviewOpen) {
+      const confirmed = window.confirm(
+        "¿Cancelar? Los playoffs todavía no se generaron. Podés volver a configurar los horarios."
+      );
+      if (!confirmed) return;
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
+    }
+    setConfirmPreviewOpen(open);
   };
 
   const handleStartEdit = (match: MatchDTO) => {
@@ -606,9 +666,9 @@ export default function GroupsTab({
                 variant="outline"
                 size="sm"
                 onClick={handleCloseGroups}
-                disabled={closingGroups}
+                disabled={planningPlayoffs || confirmingPlayoffs}
               >
-                {closingGroups && (
+                {(planningPlayoffs || confirmingPlayoffs) && (
                   <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
                 )}
                 Generar playoffs
@@ -635,8 +695,63 @@ export default function GroupsTab({
           tournament.match_duration_quarters_onwards ?? tournament.match_duration
         }
         error={playoffsError}
-        isLoading={closingGroups}
+        isLoading={planningPlayoffs}
       />
+
+      <Dialog
+        open={confirmPreviewOpen && Boolean(plannedPreview)}
+        onOpenChange={handleConfirmPreviewOpenChange}
+      >
+        <DialogContent
+          className="max-w-5xl max-h-[90vh] overflow-y-auto"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Confirmar plan de playoffs</DialogTitle>
+            <DialogDescription>
+              {plannedPreview
+                ? `Vista previa de ${plannedPreview.matches.length} partido(s). Podés editar fecha, hora y cancha antes de confirmar.`
+                : "Revisá el plan antes de generar los playoffs."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {plannedPreview && (
+            <PlayoffSchedulePreview
+              plannedTournaments={[plannedPreview]}
+              onPlannedTournamentsChange={(updated) => {
+                setPlannedPreview(updated[0] ?? null);
+              }}
+              title="Horarios planificados"
+              description="Usá el lápiz en cada fila para ajustar. Si querés cambiar los días o slots iniciales, cancelá y volvé a configurar."
+              compact
+            />
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={confirmingPlayoffs}
+              onClick={() => handleConfirmPreviewOpenChange(false)}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              disabled={confirmingPlayoffs || !pendingScheduleConfig}
+              onClick={handleConfirmAndGeneratePlayoffs}
+            >
+              {confirmingPlayoffs ? (
+                <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckIcon className="h-4 w-4 mr-2" />
+              )}
+              Confirmar y generar playoffs
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={schedulePreviewOpen} onOpenChange={setSchedulePreviewOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
