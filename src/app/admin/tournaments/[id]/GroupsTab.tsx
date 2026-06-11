@@ -10,7 +10,8 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { MatchResultForm } from "@/components/match-result-form";
-import { Loader2Icon, PencilIcon, CheckIcon, XIcon, ArrowLeftIcon } from "lucide-react";
+import { Loader2Icon, PencilIcon, CheckIcon, XIcon, ArrowLeftIcon, FlagIcon } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,6 +24,7 @@ import {
 import { formatDate, formatTimeRange, resolveMatchEndTime } from "@/lib/date-utils";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import { TournamentScheduleDialog, ScheduleConfig } from "@/components/tournament-schedule-dialog";
+import { PlayoffSchedulePreview } from "@/components/playoff-schedule-preview";
 import {
   Dialog,
   DialogContent,
@@ -41,8 +43,14 @@ import type {
   TeamDTO,
   AvailableSchedule,
 } from "@/models/dto/tournament";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
+import {
+  buildExplicitSlotsFromPlannedTournament,
+  validatePlannedTournamentSchedule,
+} from "@/lib/assign-playoff-schedule-to-matches";
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentsService, tournamentMatchesService } from "@/services";
+import { allGroupMatchesHaveResults } from "@/lib/group-match-results";
 
 // Using TournamentDetailDTO from models
 
@@ -159,7 +167,8 @@ export default function GroupsTab({
   >;
 }) {
   const queryClient = useQueryClient();
-  const [closingGroups, setClosingGroups] = useState(false);
+  const [planningPlayoffs, setPlanningPlayoffs] = useState(false);
+  const [confirmingPlayoffs, setConfirmingPlayoffs] = useState(false);
   const groupDurationMinutes = Math.max(15, tournament.match_duration ?? 60);
   const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
   const [editDate, setEditDate] = useState<string>("");
@@ -167,11 +176,19 @@ export default function GroupsTab({
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editCourtId, setEditCourtId] = useState<string>("none");
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
+  const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
+  const [pendingScheduleConfig, setPendingScheduleConfig] =
+    useState<ScheduleConfig | null>(null);
+  const [plannedPreview, setPlannedPreview] =
+    useState<PlannedTournamentPreview | null>(null);
   const [deletingGroups, setDeletingGroups] = useState(false);
   const [playoffsError, setPlayoffsError] = useState<string | null>(null);
   const [reopeningReview, setReopeningReview] = useState(false);
   const [showDeleteGroupsDialog, setShowDeleteGroupsDialog] = useState(false);
   const [simulatingResults, setSimulatingResults] = useState(false);
+  const [markingPlayoffsReady, setMarkingPlayoffsReady] = useState(false);
+  const [reopeningGroupsPhase, setReopeningGroupsPhase] = useState(false);
 
   // React Query para compartir cache con TeamsTab
   const {
@@ -248,34 +265,88 @@ export default function GroupsTab({
 
   const handleConfirmSchedule = async (config: ScheduleConfig) => {
     try {
-      setClosingGroups(true);
+      setPlanningPlayoffs(true);
       setPlayoffsError(null);
-      // NO cerrar el dialog aquí - esperar a que termine exitosamente
+      const preview = await tournamentsService.previewPlayoffs(
+        tournament.id,
+        config
+      );
+      setPendingScheduleConfig(config);
+      setPlannedPreview(preview.tournament);
+      setScheduleDialogOpen(false);
+      setConfirmPreviewOpen(true);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al planificar playoffs. Por favor, intentá nuevamente.";
+      setPlayoffsError(message);
+    } finally {
+      setPlanningPlayoffs(false);
+    }
+  };
+
+  const handleConfirmAndGeneratePlayoffs = async () => {
+    if (!pendingScheduleConfig || !plannedPreview) return;
+
+    const validationError = validatePlannedTournamentSchedule(plannedPreview);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      setConfirmingPlayoffs(true);
+      const explicitPlayoffSlots =
+        buildExplicitSlotsFromPlannedTournament(plannedPreview);
       const res = await fetch(
         `/api/tournaments/${tournament.id}/close-groups`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(config),
+          body: JSON.stringify({
+            ...pendingScheduleConfig,
+            explicitPlayoffSlots,
+          }),
         }
       );
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const errorMessage = errorData.error || "Error al generar playoffs";
-        setPlayoffsError(errorMessage);
-        // Mantener el dialog abierto para mostrar el error
-        return;
+        throw new Error(errorData.error || "Error al generar playoffs");
       }
-      // Solo cerrar el dialog si fue exitoso
-      setScheduleDialogOpen(false);
-      // recargar todo para ver playoffs
-      window.location.reload();
+      setConfirmPreviewOpen(false);
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
+      setSchedulePreviewOpen(true);
+      toast.success("Playoffs generados correctamente");
+      void queryClient.invalidateQueries({
+        queryKey: ["tournament-playoffs", tournament.id],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["playoffs-schedule-preview"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
     } catch (err) {
-      console.error(err);
-      setPlayoffsError("Error al generar playoffs. Por favor, intentá nuevamente.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error al generar playoffs. Por favor, intentá nuevamente.";
+      toast.error(message);
     } finally {
-      setClosingGroups(false);
+      setConfirmingPlayoffs(false);
     }
+  };
+
+  const handleConfirmPreviewOpenChange = (open: boolean) => {
+    if (!open && confirmPreviewOpen) {
+      const confirmed = window.confirm(
+        "¿Cancelar? Los playoffs todavía no se generaron. Podés volver a configurar los horarios."
+      );
+      if (!confirmed) return;
+      setPendingScheduleConfig(null);
+      setPlannedPreview(null);
+    }
+    setConfirmPreviewOpen(open);
   };
 
   const handleStartEdit = (match: MatchDTO) => {
@@ -426,6 +497,50 @@ export default function GroupsTab({
     m.status === "in_progress"
   ) || false;
 
+  const allGroupMatchesHaveResultsLoaded = allGroupMatchesHaveResults(
+    data?.matches ?? []
+  );
+
+  const handleMarkPlayoffsReady = async () => {
+    if (
+      !confirm(
+        "¿Marcar este torneo como listo para playoffs? Podrás generar la llave desde la vista global o desde acá cuando corresponda."
+      )
+    ) {
+      return;
+    }
+    try {
+      setMarkingPlayoffsReady(true);
+      await tournamentsService.markPlayoffsReady(tournament.id);
+      toast.success("Torneo marcado como listo para playoffs");
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      window.location.reload();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al marcar estado");
+    } finally {
+      setMarkingPlayoffsReady(false);
+    }
+  };
+
+  const handleReopenGroupsPhase = async () => {
+    if (!confirm("¿Volver a fase de grupos en progreso? (solo si aún no generaste playoffs)")) {
+      return;
+    }
+    try {
+      setReopeningGroupsPhase(true);
+      await tournamentsService.reopenGroupsPhase(tournament.id);
+      toast.success("Torneo vuelto a fase de grupos");
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      window.location.reload();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al reabrir fase de grupos");
+    } finally {
+      setReopeningGroupsPhase(false);
+    }
+  };
+
 
 
 
@@ -458,8 +573,9 @@ export default function GroupsTab({
         <div>
           <CardTitle>Fase de grupos</CardTitle>
           <CardDescription>
-            Cargá resultados set por set. Cuando estén todos los partidos
-            cargados, podés cerrar la fase y generar los playoffs.
+            {tournament.status === "playoffs_ready"
+              ? "Grupos finalizados. Este torneo está listo para generar playoffs (global o individual)."
+              : "Cargá resultados set por set. Cuando todos los partidos de zona tengan resultado, marcá el torneo como listo para playoffs."}
           </CardDescription>
         </div>
         <div className="flex gap-2">
@@ -487,8 +603,8 @@ export default function GroupsTab({
             variant="outline"
             size="sm"
             onClick={handleSimulateResults}
-            disabled={true}
-            hidden={true}
+            disabled={tournament.status === "playoffs_ready"}
+            hidden={false}
           >
             {simulatingResults ? (
               <>
@@ -505,23 +621,60 @@ export default function GroupsTab({
             variant="destructive"
             size="sm"
             onClick={() => setShowDeleteGroupsDialog(true)}
-            disabled={true}
-            hidden={true}
+            disabled={false}
+            hidden={false}
           >
             <XIcon className="h-3 w-3 mr-1" />
             Eliminar fase de grupos
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCloseGroups}
-            disabled={closingGroups || hasPlayoffs}
-          >
-            {closingGroups && (
-              <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-            )}
-            Generar playoffs
-          </Button>
+          {tournament.status === "in_progress" && !hasPlayoffs && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleMarkPlayoffsReady}
+              disabled={markingPlayoffsReady || !allGroupMatchesHaveResultsLoaded}
+              title={
+                allGroupMatchesHaveResultsLoaded
+                  ? undefined
+                  : "Todos los partidos de zona deben tener resultado cargado"
+              }
+            >
+              {markingPlayoffsReady ? (
+                <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <FlagIcon className="h-3 w-3 mr-1" />
+              )}
+              Listo para playoffs
+            </Button>
+          )}
+          {tournament.status === "playoffs_ready" && !hasPlayoffs && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReopenGroupsPhase}
+                disabled={reopeningGroupsPhase}
+              >
+                {reopeningGroupsPhase ? (
+                  <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <ArrowLeftIcon className="h-3 w-3 mr-1" />
+                )}
+                Volver a grupos
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCloseGroups}
+                disabled={planningPlayoffs || confirmingPlayoffs}
+              >
+                {(planningPlayoffs || confirmingPlayoffs) && (
+                  <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
+                )}
+                Generar playoffs
+              </Button>
+            </>
+          )}
         </div>
       </CardHeader>
 
@@ -535,13 +688,86 @@ export default function GroupsTab({
         }}
         onConfirm={handleConfirmSchedule}
         matchCount={calculatePlayoffMatchCount()}
+        tournamentId={tournament.id}
+        preferTournamentSlotGrid
         tournamentMatchDuration={tournament.match_duration}
         tournamentMatchDurationQuartersOnwards={
           tournament.match_duration_quarters_onwards ?? tournament.match_duration
         }
         error={playoffsError}
-        isLoading={closingGroups}
+        isLoading={planningPlayoffs}
       />
+
+      <Dialog
+        open={confirmPreviewOpen && Boolean(plannedPreview)}
+        onOpenChange={handleConfirmPreviewOpenChange}
+      >
+        <DialogContent
+          className="max-w-5xl max-h-[90vh] overflow-y-auto"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Confirmar plan de playoffs</DialogTitle>
+            <DialogDescription>
+              {plannedPreview
+                ? `Vista previa de ${plannedPreview.matches.length} partido(s). Podés editar fecha, hora y cancha antes de confirmar.`
+                : "Revisá el plan antes de generar los playoffs."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {plannedPreview && (
+            <PlayoffSchedulePreview
+              plannedTournaments={[plannedPreview]}
+              onPlannedTournamentsChange={(updated) => {
+                setPlannedPreview(updated[0] ?? null);
+              }}
+              title="Horarios planificados"
+              description="Usá el lápiz para editar o Intercambiar para permutar horarios entre dos partidos."
+              compact
+            />
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={confirmingPlayoffs}
+              onClick={() => handleConfirmPreviewOpenChange(false)}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              disabled={confirmingPlayoffs || !pendingScheduleConfig}
+              onClick={handleConfirmAndGeneratePlayoffs}
+            >
+              {confirmingPlayoffs ? (
+                <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckIcon className="h-4 w-4 mr-2" />
+              )}
+              Confirmar y generar playoffs
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={schedulePreviewOpen} onOpenChange={setSchedulePreviewOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Horarios de playoffs generados</DialogTitle>
+            <DialogDescription>
+              Revisá los partidos y ajustá manualmente fecha, hora o cancha si hace falta.
+            </DialogDescription>
+          </DialogHeader>
+          <PlayoffSchedulePreview
+            tournamentIds={[tournament.id]}
+            title="Vista previa"
+            compact
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de confirmación para eliminar fase de grupos */}
       <Dialog open={showDeleteGroupsDialog} onOpenChange={setShowDeleteGroupsDialog}>

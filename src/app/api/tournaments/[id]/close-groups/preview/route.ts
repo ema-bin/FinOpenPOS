@@ -2,7 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { CloseGroupsError, runCloseGroups } from "@/lib/execute-close-groups";
+import {
+  BulkPlayoffsPlanError,
+  planSinglePlayoffsPreview,
+} from "@/lib/plan-bulk-playoffs-preview";
 
 type RouteParams = { params: { id: string } };
 
@@ -25,13 +28,13 @@ export async function POST(req: Request, { params }: RouteParams) {
       : {};
 
   try {
-    await runCloseGroups(supabase, user.id, tournamentId, body);
-    return NextResponse.json({ ok: true });
+    const preview = await planSinglePlayoffsPreview(supabase, tournamentId, body);
+    return NextResponse.json(preview);
   } catch (e) {
-    if (e instanceof CloseGroupsError) {
+    if (e instanceof BulkPlayoffsPlanError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
-    console.error("POST close-groups error:", e);
+    console.error("POST close-groups preview error:", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

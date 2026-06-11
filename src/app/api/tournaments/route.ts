@@ -7,6 +7,7 @@ const ALLOWED_STATUSES: TournamentStatus[] = [
   "draft",
   "schedule_review",
   "in_progress",
+  "playoffs_ready",
   "finished",
   "cancelled",
 ];

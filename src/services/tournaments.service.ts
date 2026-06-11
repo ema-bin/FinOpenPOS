@@ -1,5 +1,6 @@
 import { TournamentPlayoff, TournamentTeam } from "@/models/db";
 import type { TournamentStatus } from "@/models/db";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
 import type { ApiResponseStandings, GroupsApiResponse, PlayoffRow, TeamDTO, TournamentDTO, AvailableSchedule, ScheduleConfig, TournamentPaymentsApiResponse, TournamentRegistrationPaymentDTO } from "@/models/dto/tournament";
 
 export interface TournamentGroupSlotInput {
@@ -443,6 +444,156 @@ class TournamentsService {
       throw new Error("Failed to update registration payment");
     }
     return response.json();
+  }
+
+  async previewPlayoffs(
+    tournamentId: number,
+    config: ScheduleConfig
+  ): Promise<{
+    tournament: PlannedTournamentPreview;
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/close-groups/preview`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo planificar los playoffs");
+    }
+    return data;
+  }
+
+  async previewBulkPlayoffs(config: ScheduleConfig): Promise<{
+    tournaments: PlannedTournamentPreview[];
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo planificar los playoffs");
+    }
+    return data;
+  }
+
+  async getPlayoffsSchedulePreview(
+    queryString = ""
+  ): Promise<{
+    tournaments: Array<{
+      id: number;
+      name: string;
+      status: string;
+      match_duration: number | null;
+      match_duration_quarters_onwards: number | null;
+      rows: PlayoffRow[];
+    }>;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/playoffs-ready/schedule-preview${queryString}`
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo cargar la vista previa");
+    }
+    return {
+      tournaments: (data.tournaments ?? []).map(
+        (t: { rows?: PlayoffRow[] } & Record<string, unknown>) => ({
+          ...t,
+          rows: (t.rows ?? []).map((item) => ({
+            ...item,
+            match: (item as PlayoffRow).match ?? null,
+          })),
+        })
+      ),
+    };
+  }
+
+  async getPlayoffsReadySummary(): Promise<{
+    tournamentCount: number;
+    totalPlayoffMatches: number;
+    maxPlayoffSlotInterval: number;
+    maxPlayoffDurationMinutes: number;
+    tournaments: Array<{
+      id: number;
+      name: string;
+      playoffMatches: number;
+      error?: string;
+    }>;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/summary`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo cargar el resumen de playoffs");
+    }
+    return data;
+  }
+
+  async generateBulkPlayoffs(
+    config: ScheduleConfig & {
+      tournamentSlotPlans?: Record<
+        string,
+        Array<{
+          date: string;
+          startTime: string;
+          court_id: number;
+          endTime?: string;
+        }>
+      >;
+    }
+  ): Promise<{
+    ok: boolean;
+    tournamentsProcessed: number;
+    totalPlayoffMatches: number;
+    slotsUsed: number;
+    results: Array<{
+      tournamentId: number;
+      name: string;
+      ok: boolean;
+      error?: string;
+    }>;
+  }> {
+    const response = await fetch(`${this.baseUrl}/playoffs-ready/close-groups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Error al generar playoffs en conjunto");
+    }
+    return data;
+  }
+
+  async markPlayoffsReady(tournamentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/mark-playoffs-ready`,
+      { method: "POST" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo marcar listo para playoffs");
+    }
+  }
+
+  async reopenGroupsPhase(tournamentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/${tournamentId}/reopen-groups-phase`,
+      { method: "POST" }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo reabrir la fase de grupos");
+    }
   }
 
   async optimizeGroupAssignments(tournamentId: number): Promise<{

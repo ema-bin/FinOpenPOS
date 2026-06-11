@@ -52,13 +52,16 @@ type TournamentScheduleDialogProps = {
   globalScheduleReview?: boolean;
   showLogs?: boolean; // Si mostrar la bitácora de logs
   streamEndpoint?: string; // Endpoint para el stream (por defecto: close-registration-stream)
-  /** Sin SSE: slots del torneo × cancha como en zona — p. ej. generar playoffs */
+  /** Playoffs: definir días propios y elegir ventanas por cancha (independiente de fechas de zona) */
   preferTournamentSlotGrid?: boolean;
+  /** Playoffs global: mismos días compartidos para todos los torneos listos */
+  globalPlayoffsReady?: boolean;
   error?: string | null; // Error a mostrar
   isLoading?: boolean; // Si está cargando
 };
 
 import type { CourtDTO } from "@/models/dto/court";
+import { listAtomicPlayoffSlotWindows } from "@/lib/playoff-expand-selected-slots";
 
 // Inicializar días desde horarios disponibles si existen
 function getInitialDays(availableSchedules: Array<{ date: string; start_time: string; end_time: string }>): ScheduleDayEditor[] {
@@ -77,20 +80,6 @@ function getInitialDays(availableSchedules: Array<{ date: string; start_time: st
       endTime: "22:00",
     },
   ];
-}
-
-/** Une fechas ISO YYYY-MM-DD sin repetir y ordenadas. */
-function mergeIsoDateLists(...parts: string[][]): string[] {
-  const m = new Map<string, boolean>();
-  for (const arr of parts) {
-    for (let i = 0; i < arr.length; i++) {
-      const t = String(arr[i]).trim().slice(0, 10);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
-        m.set(t, true);
-      }
-    }
-  }
-  return Array.from(m.keys()).sort();
 }
 
 /** Orden cronológico para filas slot × cancha (fecha ISO + HH:MM). */
@@ -123,6 +112,7 @@ export function TournamentScheduleDialog({
   showLogs = false,
   streamEndpoint = "close-registration-stream",
   preferTournamentSlotGrid = false,
+  globalPlayoffsReady = false,
 }: TournamentScheduleDialogProps) {
   const [days, setDays] = useState<ScheduleDayEditor[]>(() => getInitialDays(availableSchedules));
   const [matchDuration, setMatchDuration] = useState<number>(tournamentMatchDuration);
@@ -144,19 +134,21 @@ export function TournamentScheduleDialog({
   const [isLogsExpanded, setIsLogsExpanded] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [resolvedGlobalMatchCount, setResolvedGlobalMatchCount] = useState<number | null>(null);
-  /** Playoffs (preferTournamentSlotGrid): sólo fechas elegidas en el calendario */
-  const [playbookSelectedDates, setPlaybookSelectedDates] = useState<string[]>([]);
-  const [playbookDateDraft, setPlaybookDateDraft] = useState("");
   const logsEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const wasOpenRef = useRef<boolean>(false);
   const isCompletedRef = useRef<boolean>(false);
 
-  const tournamentGridSlotPick = Boolean(
-    preferTournamentSlotGrid && tournamentId && !globalScheduleReview && !showLogs
+  const playoffsCalendarPick = Boolean(
+    (preferTournamentSlotGrid &&
+      tournamentId &&
+      !globalScheduleReview &&
+      !showLogs &&
+      !globalPlayoffsReady) ||
+    globalPlayoffsReady
   );
   const streamUsesSlotMode = Boolean(showLogs && (tournamentId || globalScheduleReview));
-  const useSlotMode = streamUsesSlotMode || tournamentGridSlotPick;
+  const useSlotMode = streamUsesSlotMode || playoffsCalendarPick;
   const showOverlapTournamentSelector =
     useSlotMode &&
     streamEndpoint === "regenerate-schedule-stream" &&
@@ -167,15 +159,18 @@ export function TournamentScheduleDialog({
     if (globalScheduleReview) {
       return "tournament-schedule-dialog-global-schedule-review";
     }
+    if (globalPlayoffsReady) {
+      return "tournament-schedule-dialog-global-playoffs-ready";
+    }
     return `tournament-schedule-dialog-${tournamentId}-${streamEndpoint}`;
-  }, [globalScheduleReview, tournamentId, streamEndpoint]);
+  }, [globalScheduleReview, globalPlayoffsReady, tournamentId, streamEndpoint]);
 
   const effectiveMatchCount =
-    globalScheduleReview && resolvedGlobalMatchCount !== null
+    (globalScheduleReview || globalPlayoffsReady) && resolvedGlobalMatchCount !== null
       ? resolvedGlobalMatchCount
       : matchCount;
 
-  /** Stream: todas las combinaciones desde DB; playoffs: sólo días elegidos en el calendario + sintéticas */
+  /** Stream: combinaciones desde slots de zona; playoffs: días propios definidos arriba */
   const physicalSlotOptionsSingleBase = useMemo(() => {
     type OptItem = {
       key: string;
@@ -187,11 +182,57 @@ export function TournamentScheduleDialog({
       tournamentGroupSlotId?: number;
       label: string;
     };
-    if (!useSlotMode || !groupSlots?.length || selectedCourtIds.length === 0) {
+    if (!useSlotMode || selectedCourtIds.length === 0) {
       return [] as OptItem[];
     }
 
     const courtById = new Map(courts.map((c) => [c.id, c]));
+
+    if (playoffsCalendarPick) {
+      const playoffDays = days.filter(
+        (d) => d.date && d.startTime && d.endTime
+      );
+      const options: OptItem[] = [];
+      for (const day of playoffDays) {
+        const slotDate = String(day.date).trim().slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(slotDate)) continue;
+        const windowStart = String(day.startTime).trim().slice(0, 5);
+        const windowEnd = String(day.endTime).trim().slice(0, 5);
+        if (!windowStart || !windowEnd) continue;
+        const [y, m, d] = slotDate.split("-").map(Number);
+        const dateLabel = new Date(y, m - 1, d).toLocaleDateString("es-AR", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        });
+        const atomicSlots = listAtomicPlayoffSlotWindows(
+          slotDate,
+          windowStart,
+          windowEnd,
+          matchDuration
+        );
+        for (const atomic of atomicSlots) {
+          for (const courtId of selectedCourtIds) {
+            const court = courtById.get(courtId);
+            if (!court) continue;
+            options.push({
+              key: `po|${atomic.date}|${atomic.startTime}|${courtId}`,
+              slotDate: atomic.date,
+              startTime: atomic.startTime,
+              endTime: atomic.endTime,
+              courtId,
+              courtName: court.name,
+              label: `${dateLabel} ${atomic.startTime}–${atomic.endTime}`,
+            });
+          }
+        }
+      }
+      return sortPhysicalSlotRows(options);
+    }
+
+    if (!groupSlots?.length) {
+      return [] as OptItem[];
+    }
 
     if (globalScheduleReview) {
       const uniqueWindows = new Map<
@@ -234,55 +275,9 @@ export function TournamentScheduleDialog({
       return sortPhysicalSlotRows(allFromWindows);
     }
 
-    const datesWithTorneoSlots = new Map<string, boolean>();
-    const uniqueWindowsFirstId = new Map<string, number>();
-    for (const slot of groupSlots) {
-      const sd = String(slot.slot_date).trim().slice(0, 10);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(sd)) datesWithTorneoSlots.set(sd, true);
-      const st = String(slot.start_time).trim().slice(0, 5);
-      const en = String(slot.end_time).trim().slice(0, 5);
-      if (st && en) {
-        const wk = `${st}|${en}`;
-        if (!uniqueWindowsFirstId.has(wk)) uniqueWindowsFirstId.set(wk, slot.id);
-      }
-    }
-
-    if (!tournamentGridSlotPick) {
-      const allFromDb: OptItem[] = [];
-      for (const slot of groupSlots) {
-        const slotDate = String(slot.slot_date).trim().slice(0, 10);
-        const startTime = String(slot.start_time).trim().slice(0, 5);
-        const endTime = String(slot.end_time).trim().slice(0, 5);
-        const [y, m, d] = slotDate.split("-").map(Number);
-        const dateLabel = new Date(y, m - 1, d).toLocaleDateString("es-AR", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-        });
-        for (const courtId of selectedCourtIds) {
-          const court = courtById.get(courtId);
-          if (!court) continue;
-          allFromDb.push({
-            key: `${slot.id}|${courtId}`,
-            slotDate,
-            startTime,
-            endTime,
-            courtId,
-            courtName: court.name,
-            tournamentGroupSlotId: slot.id,
-            label: `${dateLabel} ${startTime}–${endTime}`,
-          });
-        }
-      }
-      return sortPhysicalSlotRows(allFromDb);
-    }
-
-    const allowedDates = new Map(playbookSelectedDates.map((iso) => [iso, true]));
-    const fromDb: OptItem[] = [];
-
+    const allFromDb: OptItem[] = [];
     for (const slot of groupSlots) {
       const slotDate = String(slot.slot_date).trim().slice(0, 10);
-      if (!allowedDates.has(slotDate)) continue;
       const startTime = String(slot.start_time).trim().slice(0, 5);
       const endTime = String(slot.end_time).trim().slice(0, 5);
       const [y, m, d] = slotDate.split("-").map(Number);
@@ -294,7 +289,7 @@ export function TournamentScheduleDialog({
       for (const courtId of selectedCourtIds) {
         const court = courtById.get(courtId);
         if (!court) continue;
-        fromDb.push({
+        allFromDb.push({
           key: `${slot.id}|${courtId}`,
           slotDate,
           startTime,
@@ -306,95 +301,47 @@ export function TournamentScheduleDialog({
         });
       }
     }
-
-    const syntheticExtras: OptItem[] = [];
-    if (uniqueWindowsFirstId.size > 0 && playbookSelectedDates.length > 0) {
-      const templateWindows = Array.from(uniqueWindowsFirstId.entries()).map(([k, sid]) => {
-        const parts = k.split("|");
-        return {
-          startTime: parts[0] ?? "",
-          endTime: parts[1] ?? "",
-          tournamentGroupSlotId: sid,
-        };
-      });
-      templateWindows.sort((a, b) => {
-        const s = a.startTime.localeCompare(b.startTime);
-        if (s !== 0) return s;
-        return a.endTime.localeCompare(b.endTime);
-      });
-      const sortedIso = playbookSelectedDates.slice().sort((a, b) => a.localeCompare(b));
-
-      for (let di = 0; di < sortedIso.length; di++) {
-        const slotDate = sortedIso[di];
-        if (datesWithTorneoSlots.has(slotDate)) continue;
-
-        const [yo, mo, da] = slotDate.split("-").map(Number);
-        const dateLabel = new Date(yo, mo - 1, da).toLocaleDateString("es-AR", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-        });
-
-        for (let wi = 0; wi < templateWindows.length; wi++) {
-          const w = templateWindows[wi];
-          for (const courtId of selectedCourtIds) {
-            const court = courtById.get(courtId);
-            if (!court) continue;
-            syntheticExtras.push({
-              key: `syn|${slotDate}|${w.startTime}|${w.endTime}|${courtId}`,
-              slotDate,
-              startTime: w.startTime,
-              endTime: w.endTime,
-              courtId,
-              courtName: court.name,
-              tournamentGroupSlotId: w.tournamentGroupSlotId,
-              label: `${dateLabel} ${w.startTime}–${w.endTime}`,
-            });
-          }
-        }
-      }
-    }
-
-    return sortPhysicalSlotRows(fromDb.concat(syntheticExtras));
+    return sortPhysicalSlotRows(allFromDb);
   }, [
     useSlotMode,
+    playoffsCalendarPick,
     globalScheduleReview,
+    days,
+    matchDuration,
     groupSlots,
     selectedCourtIds,
     courts,
-    tournamentGridSlotPick,
-    playbookSelectedDates,
   ]);
 
   const physicalSlotOptionsSingle = useMemo(() => {
-    if (!tournamentGridSlotPick) {
+    if (!playoffsCalendarPick) {
       return physicalSlotOptionsSingleBase;
     }
-    if (playbookSelectedDates.length === 0) {
+    if (!days.some((d) => d.date)) {
       return [];
     }
     return physicalSlotOptionsSingleBase;
-  }, [tournamentGridSlotPick, playbookSelectedDates, physicalSlotOptionsSingleBase]);
+  }, [playoffsCalendarPick, days, physicalSlotOptionsSingleBase]);
 
-  const addPlaybookDateFromCalendar = () => {
-    const draft = playbookDateDraft.trim().slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft)) {
-      alert("Elegí una fecha válida (calendario).");
+  useEffect(() => {
+    if (open && globalPlayoffsReady) {
+      setResolvedGlobalMatchCount(matchCount);
+    }
+  }, [open, globalPlayoffsReady, matchCount]);
+
+  // Cargar slots del torneo (solo revisión global / streams SSE)
+  useEffect(() => {
+    if (!open || playoffsCalendarPick) {
+      if (playoffsCalendarPick) {
+        setGroupSlots([]);
+        setLoadingSlots(false);
+      } else {
+        setGroupSlots(null);
+        setResolvedGlobalMatchCount(null);
+      }
       return;
     }
-    setPlaybookSelectedDates((prev) =>
-      prev.includes(draft) ? prev : mergeIsoDateLists(prev, [draft])
-    );
-    setPlaybookDateDraft("");
-  };
-
-  const removePlaybookDate = (dateISO: string) => {
-    setPlaybookSelectedDates((prev) => prev.filter((x) => x !== dateISO));
-  };
-
-  // Cargar slots del torneo (SSE o modo grilla playoffs / preferTournamentSlotGrid)
-  useEffect(() => {
-    if (!open || (!showLogs && !tournamentGridSlotPick)) {
+    if (!showLogs) {
       setGroupSlots(null);
       setResolvedGlobalMatchCount(null);
       return;
@@ -421,7 +368,9 @@ export function TournamentScheduleDialog({
             setGroupSlots(slots);
             setSelectedSlotIds(slots.map((s) => s.id));
             setResolvedGlobalMatchCount(
-              typeof data.pendingGroupMatchCount === "number" ? data.pendingGroupMatchCount : 0
+              typeof data.pendingGroupMatchCount === "number"
+                ? data.pendingGroupMatchCount
+                : 0
             );
             return;
           }
@@ -441,7 +390,7 @@ export function TournamentScheduleDialog({
         setResolvedGlobalMatchCount(globalScheduleReview ? 0 : null);
       })
       .finally(() => setLoadingSlots(false));
-  }, [open, tournamentId, showLogs, globalScheduleReview, tournamentGridSlotPick]);
+  }, [open, tournamentId, showLogs, globalScheduleReview, playoffsCalendarPick]);
 
   useEffect(() => {
     if (!open || !useSlotMode) {
@@ -454,11 +403,14 @@ export function TournamentScheduleDialog({
     const allKeys = physicalSlotOptionsSingle.map((o) => o.key);
     const allKeysSet = new Set(allKeys);
     setSelectedPhysicalSlotKeys((prev) => {
+      if (playoffsCalendarPick) {
+        return prev.filter((key) => allKeysSet.has(key));
+      }
       if (prev.length === 0) return allKeys;
       const filtered = prev.filter((key) => allKeysSet.has(key));
       return filtered.length > 0 ? filtered : allKeys;
     });
-  }, [open, useSlotMode, physicalSlotOptionsSingle]);
+  }, [open, useSlotMode, physicalSlotOptionsSingle, playoffsCalendarPick]);
 
   useEffect(() => {
     if (!open || !showOverlapTournamentSelector || !tournamentId) {
@@ -531,8 +483,11 @@ export function TournamentScheduleDialog({
     if (open && !wasOpenRef.current) {
       // El dialog se está abriendo por primera vez o después de estar cerrado
       setMatchDuration(effectiveGridDuration);
-      // Si hay horarios disponibles, pre-llenar los días
-      setDays(getInitialDays(availableSchedules));
+      setDays(
+        playoffsCalendarPick
+          ? [{ date: "", startTime: "18:00", endTime: "22:00" }]
+          : getInitialDays(availableSchedules)
+      );
       wasOpenRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -566,8 +521,7 @@ export function TournamentScheduleDialog({
     } else if (!open && wasOpenRef.current) {
       // El dialog se cerró después de estar abierto
       wasOpenRef.current = false;
-      setPlaybookSelectedDates([]);
-      setPlaybookDateDraft("");
+      setSelectedPhysicalSlotKeys([]);
       // Si se cierra, resetear el estado completado para la próxima vez
       setIsCompleted(false);
       isCompletedRef.current = false;
@@ -629,7 +583,28 @@ export function TournamentScheduleDialog({
       return;
     }
 
-    if (useSlotMode) {
+    const dayHasInvalidTimeRange = (d: ScheduleDayEditor) => {
+      const [startH, startM] = d.startTime.split(":").map(Number);
+      const [endH, endM] = d.endTime.split(":").map(Number);
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH === 0 && endM === 0 ? 24 * 60 : endH * 60 + endM;
+      return startMinutes >= endMinutes;
+    };
+
+    if (playoffsCalendarPick) {
+      if (!days.some((d) => d.date)) {
+        alert("Agregá al menos un día de playoff con fecha y horario.");
+        return;
+      }
+      if (days.some((d) => d.date && dayHasInvalidTimeRange(d))) {
+        alert("La hora de inicio debe ser anterior a la hora de fin en cada día de playoff.");
+        return;
+      }
+      if (selectedPhysicalSlotKeys.length === 0) {
+        alert("Seleccioná al menos una ventana horaria por cancha.");
+        return;
+      }
+    } else if (useSlotMode) {
       if (selectedPhysicalSlotKeys.length === 0) {
         alert("Seleccioná al menos una combinación de horario del torneo y cancha.");
         return;
@@ -639,13 +614,7 @@ export function TournamentScheduleDialog({
         alert("Todos los días deben tener una fecha");
         return;
       }
-      if (days.some((d) => {
-        const [startH, startM] = d.startTime.split(":").map(Number);
-        const [endH, endM] = d.endTime.split(":").map(Number);
-        const startMinutes = startH * 60 + startM;
-        const endMinutes = (endH === 0 && endM === 0) ? 24 * 60 : endH * 60 + endM;
-        return startMinutes >= endMinutes;
-      })) {
+      if (days.some((d) => dayHasInvalidTimeRange(d))) {
         alert("La hora de inicio debe ser anterior a la hora de fin");
         return;
       }
@@ -655,8 +624,8 @@ export function TournamentScheduleDialog({
       ? []
       : days.map((d) => ({ date: d.date, startTime: d.startTime, endTime: d.endTime }));
 
-    const playbookPhysicalSelections: SchedulePhysicalSlotCourtSelection[] =
-      tournamentGridSlotPick && !globalScheduleReview
+    const playoffsPhysicalSelections: SchedulePhysicalSlotCourtSelection[] =
+      !showLogs && playoffsCalendarPick
         ? physicalSlotOptionsSingle
             .filter((option) => selectedPhysicalSlotKeys.includes(option.key))
             .map((option) => ({
@@ -669,12 +638,14 @@ export function TournamentScheduleDialog({
         : [];
 
     let scheduleConfig: ScheduleConfig =
-      tournamentGridSlotPick && playbookPhysicalSelections.length > 0
+      playoffsPhysicalSelections.length > 0
         ? {
             days: [],
             matchDuration,
-            courtIds: Array.from(new Set(playbookPhysicalSelections.map((s) => s.courtId))),
-            selectedPhysicalSlots: playbookPhysicalSelections,
+            courtIds: Array.from(
+              new Set(playoffsPhysicalSelections.map((s) => s.courtId))
+            ),
+            selectedPhysicalSlots: playoffsPhysicalSelections,
           }
         : { days: scheduleDays, matchDuration, courtIds: selectedCourtIds };
 
@@ -923,6 +894,11 @@ export function TournamentScheduleDialog({
   const calculateAvailableSlots = (): number => {
     if (useSlotMode && physicalSlotOptionsSingle.length > 0) {
       const selectedKeySet = new Set(selectedPhysicalSlotKeys);
+      if (playoffsCalendarPick) {
+        return physicalSlotOptionsSingle.filter((o) =>
+          selectedKeySet.has(o.key)
+        ).length;
+      }
       let total = 0;
       for (const option of physicalSlotOptionsSingle) {
         if (!selectedKeySet.has(option.key)) continue;
@@ -966,23 +942,31 @@ export function TournamentScheduleDialog({
   const availableSlots = calculateAvailableSlots();
   const canConfirmSlotMode = Boolean(
     useSlotMode &&
-      groupSlots &&
-      groupSlots.length > 0 &&
       physicalSlotOptionsSingle.length > 0 &&
-      selectedPhysicalSlotKeys.length > 0
+      selectedPhysicalSlotKeys.length > 0 &&
+      (playoffsCalendarPick || (groupSlots && groupSlots.length > 0))
   );
   const canConfirmDaysMode = !useSlotMode && days.length > 0 && days.every((d) => d.date);
   /** Slots físicos solo aplican con stream (useSlotMode). Modo días (ej. generar playoffs) no usa selectedPhysicalSlotKeys. */
   const courtsAndPhysicalSelectionOk = useSlotMode
     ? selectedCourtIds.length > 0 && selectedPhysicalSlotKeys.length > 0
     : selectedCourtIds.length > 0;
-  const playbookDatesChosenOk =
-    !tournamentGridSlotPick || playbookSelectedDates.length > 0;
+  const playoffDaysChosenOk =
+    !playoffsCalendarPick ||
+    (days.some((d) => d.date) &&
+      days.every((d) => {
+        if (!d.date) return true;
+        const [startH, startM] = d.startTime.split(":").map(Number);
+        const [endH, endM] = d.endTime.split(":").map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH === 0 && endM === 0 ? 24 * 60 : endH * 60 + endM;
+        return startMinutes < endMinutes;
+      }));
 
   const canConfirm =
     (useSlotMode ? canConfirmSlotMode : canConfirmDaysMode) &&
     courtsAndPhysicalSelectionOk &&
-    playbookDatesChosenOk &&
+    playoffDaysChosenOk &&
     availableSlots >= effectiveMatchCount &&
     !loadingCourts &&
     !loadingSlots &&
@@ -995,7 +979,11 @@ export function TournamentScheduleDialog({
           <DialogTitle>
             {globalScheduleReview
               ? "Generar horarios en conjunto (revisión global)"
-              : "Configurar horarios de partidos"}
+              : globalPlayoffsReady
+                ? "Generar playoffs en conjunto"
+                : playoffsCalendarPick
+                  ? "Configurar horarios de playoffs"
+                  : "Configurar horarios de partidos"}
           </DialogTitle>
         </DialogHeader>
 
@@ -1029,72 +1017,18 @@ export function TournamentScheduleDialog({
               )}
             </div>
 
-          {tournamentGridSlotPick && !loadingSlots && groupSlots && groupSlots.length > 0 && (
-            <div className="space-y-2 rounded-md border p-3 bg-muted/40">
-              <Label>Días en los que se juegan los playoffs</Label>
+          {playoffsCalendarPick && (
+            <div className="space-y-2">
+              <Label>Días de playoff</Label>
               <p className="text-xs text-muted-foreground">
-                Agregá una o más fechas con el calendario. El torneo necesita slots de zona para tomar las ventanas
-                horarias modelo. Después marcá huecos por cancha.
+                Definí las fechas y el horario de cada día de eliminatoria. Son independientes de los días de la
+                fase de grupos.
               </p>
-              <div className="flex flex-wrap items-end gap-2 pt-1">
-                <div className="space-y-1">
-                  <Label htmlFor="playbook-date" className="text-xs text-muted-foreground">
-                    Fecha
-                  </Label>
-                  <Input
-                    id="playbook-date"
-                    type="date"
-                    value={playbookDateDraft}
-                    onChange={(e) => setPlaybookDateDraft(e.target.value)}
-                    className="w-[11rem]"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-9"
-                  onClick={addPlaybookDateFromCalendar}
-                >
-                  Agregar
-                </Button>
-              </div>
-              {playbookSelectedDates.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {[...playbookSelectedDates]
-                    .sort((a, b) => a.localeCompare(b))
-                    .map((iso) => {
-                      const [y, mo, da] = iso.split("-").map(Number);
-                      const pretty = new Date(y, mo - 1, da).toLocaleDateString("es-AR", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      });
-                      return (
-                        <span
-                          key={iso}
-                          className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs"
-                        >
-                          {pretty}
-                          <button
-                            type="button"
-                            className="text-muted-foreground hover:text-foreground"
-                            onClick={() => removePlaybookDate(iso)}
-                            aria-label={`Quitar ${pretty}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                </div>
-              )}
-              {playbookSelectedDates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Agregá al menos un día para ver y elegir los slots por cancha.
-                </p>
-              ) : null}
+              <ScheduleDaysEditor
+                days={days}
+                onChange={handleDaysChange}
+                showDayOfWeek={false}
+              />
             </div>
           )}
 
@@ -1121,19 +1055,19 @@ export function TournamentScheduleDialog({
           {useSlotMode ? (
             <div className="space-y-3">
               <Label>
-                {globalScheduleReview
-                  ? "Slots por cancha (torneos en revisión)"
-                  : tournamentGridSlotPick
-                    ? "Slots por cancha (solo días elegidos arriba)"
+                {playoffsCalendarPick
+                  ? "Horarios por cancha (días de playoff)"
+                  : globalScheduleReview
+                    ? "Slots por cancha (torneos en revisión)"
                     : "Slots del torneo por cancha"}
               </Label>
-              {loadingSlots ? (
+              {loadingSlots && !playoffsCalendarPick ? (
                 <p className="text-sm text-muted-foreground">
                   {globalScheduleReview
                     ? "Cargando slots combinados..."
                     : "Cargando slots del torneo..."}
                 </p>
-              ) : !groupSlots || groupSlots.length === 0 ? (
+              ) : !playoffsCalendarPick && (!groupSlots || groupSlots.length === 0) ? (
                 <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
                   <p className="text-sm text-amber-800 dark:text-amber-200">
                     {globalScheduleReview ? (
@@ -1151,9 +1085,9 @@ export function TournamentScheduleDialog({
                 </div>
               ) : (
                 <div className="max-h-72 overflow-y-auto space-y-4 border rounded-md p-2">
-                  {tournamentGridSlotPick && playbookSelectedDates.length === 0 ? (
+                  {playoffsCalendarPick && !days.some((d) => d.date) ? (
                     <p className="text-sm text-muted-foreground px-1">
-                      Elegí al menos un día arriba para ver los slots por cancha.
+                      Definí al menos un día de playoff arriba para ver los horarios por cancha.
                     </p>
                   ) : physicalSlotOptionsSingle.length === 0 ? (
                     <p className="text-sm text-muted-foreground px-1">
@@ -1215,7 +1149,7 @@ export function TournamentScheduleDialog({
                   )}
                 </div>
               )}
-              {!tournamentGridSlotPick && (
+              {!playoffsCalendarPick && (
                 <div className="flex items-center space-x-2 pt-2">
                   <Checkbox
                     id="use-restrictions"
@@ -1227,15 +1161,15 @@ export function TournamentScheduleDialog({
                   </Label>
                 </div>
               )}
-              {tournamentGridSlotPick &&
-                Boolean(groupSlots && groupSlots.length > 0) && (
-                  <p className="text-xs text-muted-foreground pt-2">
-                    Los playoffs se agendan solo con los huecos que marques. Las restricciones horarias por
-                    equipo del torneo <strong>no</strong> se aplican en este paso.
-                  </p>
-                )}
+              {playoffsCalendarPick && (
+                <p className="text-xs text-muted-foreground pt-2">
+                  {globalPlayoffsReady
+                    ? "Marcá qué ventanas y canchas usar para todos los torneos listos. Los partidos se intercalan por horario para que varios torneos jueguen a la vez en cada franja."
+                    : "Marcá qué ventanas y canchas usar para los playoffs. Las restricciones horarias de equipos no se aplican en este paso."}
+                </p>
+              )}
               {useSlotMode &&
-                !tournamentGridSlotPick &&
+                !playoffsCalendarPick &&
                 groupSlots &&
                 groupSlots.length > 0 && (
                 <p className="text-xs text-muted-foreground">

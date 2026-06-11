@@ -1,7 +1,13 @@
 // Database models for tournaments
 // These types reflect the exact structure of the database tables
 
-export type TournamentStatus = "draft" | "schedule_review" | "in_progress" | "finished" | "cancelled";
+export type TournamentStatus =
+  | "draft"
+  | "schedule_review"
+  | "in_progress"
+  | "playoffs_ready"
+  | "finished"
+  | "cancelled";
 export type MatchPhase = "group" | "playoff";
 export type MatchStatus = "scheduled" | "in_progress" | "finished" | "cancelled";
 
