@@ -14,6 +14,8 @@ import { formatDate, formatTime } from "@/lib/date-utils";
 import type { TournamentDTO, GroupsApiResponse, MatchDTO } from "@/models/dto/tournament";
 import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
+import { splitGroupFlyerAds } from "@/lib/share-group-flyer-ads";
+import { ShareGroupFlyerAdsBlock } from "@/components/share-group-flyer-ads";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
@@ -90,13 +92,7 @@ export default function ShareGroupScheduleTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const ADS_TOP_COUNT = 9; // 3 filas × 3
-  const ADS_BOTTOM_COUNT = 10; // 3 + 3 + 4
-  const adsTop = advertisements.slice(0, ADS_TOP_COUNT);
-  const adsBottom = advertisements.slice(ADS_TOP_COUNT, ADS_TOP_COUNT + ADS_BOTTOM_COUNT);
-  const adsBottomRow1 = adsBottom.slice(0, 3);
-  const adsBottomRow2 = adsBottom.slice(3, 6);
-  const adsBottomRow3 = adsBottom.slice(6, 10);
+  const { top: adsTop, bottom: adsBottom } = splitGroupFlyerAds(advertisements);
 
   const groupColorIndexMap = useMemo(
     () => (data?.groups ? buildGroupColorIndexMap(data.groups) : new Map<number, number>()),
@@ -311,20 +307,11 @@ export default function ShareGroupScheduleTab({
                     <Logo className="share-group-schedule-logo" />
                   </div>
 
-                  {adsTop.length > 0 && (
-                    <div className="share-group-schedule-ads share-group-schedule-ads--top">
-                      {adsTop.map((ad: AdvertisementDTO) => (
-                        <div key={ad.id} className="share-group-schedule-ad-cell">
-                          <img
-                            src={ad.image_url}
-                            alt={ad.name}
-                            crossOrigin="anonymous"
-                            draggable={false}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <ShareGroupFlyerAdsBlock
+                    rows={adsTop}
+                    placement="top"
+                    variant="schedule"
+                  />
 
                   <div className="share-group-schedule-matches">
                     {matches.map(({ match, groupName }) => {
@@ -355,52 +342,11 @@ export default function ShareGroupScheduleTab({
                     })}
                   </div>
 
-                  {adsBottom.length > 0 && (
-                    <div className="share-group-schedule-ads share-group-schedule-ads--bottom">
-                      {adsBottomRow1.length > 0 && (
-                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
-                          {adsBottomRow1.map((ad: AdvertisementDTO) => (
-                            <div key={ad.id} className="share-group-schedule-ad-cell">
-                              <img
-                                src={ad.image_url}
-                                alt={ad.name}
-                                crossOrigin="anonymous"
-                                draggable={false}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {adsBottomRow2.length > 0 && (
-                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--3">
-                          {adsBottomRow2.map((ad: AdvertisementDTO) => (
-                            <div key={ad.id} className="share-group-schedule-ad-cell">
-                              <img
-                                src={ad.image_url}
-                                alt={ad.name}
-                                crossOrigin="anonymous"
-                                draggable={false}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {adsBottomRow3.length > 0 && (
-                        <div className="share-group-schedule-ads-row share-group-schedule-ads-row--4">
-                          {adsBottomRow3.map((ad: AdvertisementDTO) => (
-                            <div key={ad.id} className="share-group-schedule-ad-cell">
-                              <img
-                                src={ad.image_url}
-                                alt={ad.name}
-                                crossOrigin="anonymous"
-                                draggable={false}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <ShareGroupFlyerAdsBlock
+                    rows={adsBottom}
+                    placement="bottom"
+                    variant="schedule"
+                  />
                 </div>
               </div>
             </div>

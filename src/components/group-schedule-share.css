@@ -294,8 +294,8 @@
 }
 
 .share-group-schedule-ads--top {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-bottom: 5px;
 }

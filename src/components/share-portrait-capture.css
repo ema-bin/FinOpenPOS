@@ -17,7 +17,7 @@
 }
 
 .share-group-schedule-root.share-portrait-capture .share-group-schedule-ads--top {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--sch-gap);
 }
 
 .share-group-schedule-root.share-portrait-capture .share-group-schedule-header {
