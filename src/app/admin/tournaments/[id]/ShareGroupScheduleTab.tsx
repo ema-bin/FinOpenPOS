@@ -16,6 +16,7 @@ import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import { splitGroupFlyerAds } from "@/lib/share-group-flyer-ads";
 import { ShareGroupFlyerAdsBlock } from "@/components/share-group-flyer-ads";
+import { ShareStoryPreviewFrame } from "@/components/share-story-preview-frame";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
@@ -25,7 +26,12 @@ import {
   getShareZoneBadgeClassName,
   resolveZoneColorIndex,
 } from "@/lib/group-zone-colors";
-import { SHARE_EXPORT_BG, scaleCanvasToShareWidth } from "@/lib/share-image-export";
+import {
+  SHARE_EXPORT_BG,
+  SHARE_PORTRAIT_CAPTURE_WIDTH,
+  captureShareElementToPng,
+  scaleCanvasToInstagramStory,
+} from "@/lib/share-image-export";
 import "@/components/group-schedule-share.css";
 import "@/components/share-portrait-capture.css";
 
@@ -156,8 +162,6 @@ export default function ShareGroupScheduleTab({
 
     setCopyingDate(date);
     try {
-      const { toPng } = await import("html-to-image");
-
       dayRef.scrollIntoView({ behavior: "smooth", block: "nearest" });
       await new Promise((resolve) => setTimeout(resolve, 400));
 
@@ -179,16 +183,10 @@ export default function ShareGroupScheduleTab({
         ),
       );
 
-      const dataUrl = await toPng(dayRef, {
-        pixelRatio: 2,
+      const dataUrl = await captureShareElementToPng(dayRef, {
         backgroundColor: SHARE_EXPORT_BG,
-        cacheBust: true,
-        filter: (node: Node) => {
-          if (node instanceof HTMLElement) {
-            return !node.closest("[data-share-schedule-exclude]");
-          }
-          return true;
-        },
+        excludeAttribute: "data-share-schedule-exclude",
+        captureWidth: SHARE_PORTRAIT_CAPTURE_WIDTH,
       });
 
       dayRef.classList.remove("share-group-schedule-exporting");
@@ -205,7 +203,7 @@ export default function ShareGroupScheduleTab({
       raw.height = img.height;
       raw.getContext("2d")!.drawImage(img, 0, 0);
 
-      const canvas = scaleCanvasToShareWidth(raw, 1080, 0, SHARE_EXPORT_BG);
+      const canvas = scaleCanvasToInstagramStory(raw, SHARE_EXPORT_BG);
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob((b) => resolve(b), "image/png", 1),
       );
@@ -253,7 +251,7 @@ export default function ShareGroupScheduleTab({
           <div>
             <CardTitle>Compartir horarios de zona</CardTitle>
             <CardDescription>
-              Compartí los horarios de los partidos de zona en redes sociales
+              Formato story (9:16) para Instagram. Copiá la imagen y pegala en tu story.
             </CardDescription>
           </div>
         </div>
@@ -263,10 +261,11 @@ export default function ShareGroupScheduleTab({
         className="px-0 pt-4"
         style={{ overflow: "visible", maxHeight: "none" }}
       >
-        <div className="w-full space-y-4" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="share-flyer-preview-grid-scroll">
+        <div className="share-flyer-preview-grid share-flyer-preview-grid--schedule">
           {matchesByDate.map(({ date, matches }) => (
-            <div key={date} className="mx-auto w-max max-w-full">
-              <div className="mb-1 flex justify-end" data-share-schedule-exclude>
+            <div key={date} className="share-flyer-preview-cell">
+              <div className="flex justify-end" data-share-schedule-exclude>
                 <Button
                   variant="outline"
                   size="sm"
@@ -283,15 +282,16 @@ export default function ShareGroupScheduleTab({
                 </Button>
               </div>
 
-              <div
-                data-date={date}
-                ref={(el) => {
-                  if (el) scheduleRefs.current.set(date, el);
-                  else scheduleRefs.current.delete(date);
-                }}
-                className="share-group-schedule-root share-portrait-capture"
-              >
-                <div className="share-group-schedule-inner">
+              <ShareStoryPreviewFrame>
+                <div
+                  data-date={date}
+                  ref={(el) => {
+                    if (el) scheduleRefs.current.set(date, el);
+                    else scheduleRefs.current.delete(date);
+                  }}
+                  className="share-group-schedule-root share-portrait-capture"
+                >
+                  <div className="share-group-schedule-inner">
                   <div className="share-group-schedule-header">
                     <div className="share-group-schedule-header-text">
                       <ShareTournamentTitle
@@ -349,8 +349,10 @@ export default function ShareGroupScheduleTab({
                   />
                 </div>
               </div>
+              </ShareStoryPreviewFrame>
             </div>
           ))}
+        </div>
         </div>
       </CardContent>
     </Card>

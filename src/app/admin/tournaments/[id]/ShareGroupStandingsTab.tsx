@@ -16,6 +16,7 @@ import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import { splitGroupFlyerAds } from "@/lib/share-group-flyer-ads";
 import { ShareGroupFlyerAdsBlock } from "@/components/share-group-flyer-ads";
+import { ShareStoryPreviewFrame } from "@/components/share-story-preview-frame";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
@@ -29,7 +30,7 @@ import {
   SHARE_EXPORT_BG,
   SHARE_PORTRAIT_CAPTURE_WIDTH,
   captureShareElementToPng,
-  scaleCanvasToShareMobile,
+  scaleCanvasToInstagramStory,
 } from "@/lib/share-image-export";
 import "@/components/group-schedule-share.css";
 import "@/components/group-standings-share.css";
@@ -185,7 +186,7 @@ export default function ShareGroupStandingsTab({
       raw.height = img.height;
       raw.getContext("2d")!.drawImage(img, 0, 0);
 
-      const canvas = scaleCanvasToShareMobile(raw, SHARE_EXPORT_BG);
+      const canvas = scaleCanvasToInstagramStory(raw, SHARE_EXPORT_BG);
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob((b) => resolve(b), "image/png", 1),
       );
@@ -235,12 +236,13 @@ export default function ShareGroupStandingsTab({
       <CardHeader className="px-0 pt-0">
         <CardTitle>Compartir posiciones y resultados</CardTitle>
             <CardDescription>
-              Imagen vertical a ancho 1080px; alto completo sin recortes
+              Formato story (9:16, 1080×1920) para Instagram. Copiá la imagen y pegala en tu story.
             </CardDescription>
       </CardHeader>
 
       <CardContent className="px-0 pt-4" style={{ overflow: "visible", maxHeight: "none" }}>
-        <div className="w-full space-y-4" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="share-flyer-preview-grid-scroll">
+        <div className="share-flyer-preview-grid share-flyer-preview-grid--standings">
           {sortedGroups.map((group) => {
             const groupStandings = data.standings
               .filter((s) => s.tournament_group_id === group.id)
@@ -300,8 +302,8 @@ export default function ShareGroupStandingsTab({
             );
 
             return (
-              <div key={group.id} className="mx-auto w-full max-w-[400px]">
-                <div className="mb-1 flex justify-end" data-share-standings-exclude>
+              <div key={group.id} className="share-flyer-preview-cell">
+                <div className="flex justify-end" data-share-standings-exclude>
                   <Button
                     variant="outline"
                     size="sm"
@@ -318,14 +320,15 @@ export default function ShareGroupStandingsTab({
                   </Button>
                 </div>
 
-                <div
-                  ref={(el) => {
-                    if (el) groupRefs.current.set(group.id, el);
-                    else groupRefs.current.delete(group.id);
-                  }}
-                  className="share-group-standings-root share-portrait-capture"
-                >
-                  <div className="share-group-standings-inner">
+                <ShareStoryPreviewFrame>
+                  <div
+                    ref={(el) => {
+                      if (el) groupRefs.current.set(group.id, el);
+                      else groupRefs.current.delete(group.id);
+                    }}
+                    className="share-group-standings-root share-portrait-capture"
+                  >
+                    <div className="share-group-standings-inner">
                     <div className="share-group-schedule-header share-group-standings-header">
                       <div className="share-group-schedule-header-text">
                         <div className="share-group-standings-title-block">
@@ -440,11 +443,13 @@ export default function ShareGroupStandingsTab({
                       placement="bottom"
                       variant="standings"
                     />
+                    </div>
                   </div>
-                </div>
+                </ShareStoryPreviewFrame>
               </div>
             );
           })}
+        </div>
         </div>
       </CardContent>
     </Card>
