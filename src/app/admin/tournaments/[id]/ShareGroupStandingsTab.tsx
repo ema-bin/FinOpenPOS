@@ -241,7 +241,8 @@ export default function ShareGroupStandingsTab({
       </CardHeader>
 
       <CardContent className="px-0 pt-4" style={{ overflow: "visible", maxHeight: "none" }}>
-        <div className="w-full space-y-4" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="share-flyer-preview-grid-scroll">
+        <div className="share-flyer-preview-grid share-flyer-preview-grid--standings">
           {sortedGroups.map((group) => {
             const groupStandings = data.standings
               .filter((s) => s.tournament_group_id === group.id)
@@ -301,8 +302,8 @@ export default function ShareGroupStandingsTab({
             );
 
             return (
-              <div key={group.id} className="mx-auto w-full max-w-[400px]">
-                <div className="mb-1 flex justify-end" data-share-standings-exclude>
+              <div key={group.id} className="share-flyer-preview-cell">
+                <div className="flex justify-end" data-share-standings-exclude>
                   <Button
                     variant="outline"
                     size="sm"
@@ -448,6 +449,7 @@ export default function ShareGroupStandingsTab({
               </div>
             );
           })}
+        </div>
         </div>
       </CardContent>
     </Card>

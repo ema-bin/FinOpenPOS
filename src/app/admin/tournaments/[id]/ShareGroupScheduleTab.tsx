@@ -261,10 +261,11 @@ export default function ShareGroupScheduleTab({
         className="px-0 pt-4"
         style={{ overflow: "visible", maxHeight: "none" }}
       >
-        <div className="w-full space-y-4" style={{ overflow: "visible", maxHeight: "none" }}>
+        <div className="share-flyer-preview-grid-scroll">
+        <div className="share-flyer-preview-grid share-flyer-preview-grid--schedule">
           {matchesByDate.map(({ date, matches }) => (
-            <div key={date} className="mx-auto w-max max-w-full">
-              <div className="mb-1 flex justify-end" data-share-schedule-exclude>
+            <div key={date} className="share-flyer-preview-cell">
+              <div className="flex justify-end" data-share-schedule-exclude>
                 <Button
                   variant="outline"
                   size="sm"
@@ -351,6 +352,7 @@ export default function ShareGroupScheduleTab({
               </ShareStoryPreviewFrame>
             </div>
           ))}
+        </div>
         </div>
       </CardContent>
     </Card>

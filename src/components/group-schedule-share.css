@@ -13,7 +13,7 @@
   --sch-pad-top: 40px;
 
   display: block;
-  width: 100%;
+  width: var(--share-capture-max-width);
   max-width: var(--share-capture-max-width);
   box-sizing: border-box;
   padding: 4px 5px;

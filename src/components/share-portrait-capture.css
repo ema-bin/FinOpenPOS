@@ -3,22 +3,52 @@
 .share-portrait-capture {
   --share-capture-max-width: 400px;
   display: block;
-  width: 100%;
+  width: var(--share-capture-max-width);
   max-width: var(--share-capture-max-width);
   box-sizing: border-box;
 }
 
 .share-story-preview-frame {
   --share-capture-max-width: 400px;
-  width: 100%;
+  width: var(--share-capture-max-width);
   max-width: var(--share-capture-max-width);
   aspect-ratio: 9 / 16;
-  margin-left: auto;
-  margin-right: auto;
+  flex-shrink: 0;
   overflow: hidden;
   background: #0f2418;
   border-radius: 8px;
   box-sizing: border-box;
+}
+
+.share-flyer-preview-grid {
+  display: grid;
+  gap: 1rem;
+  width: max-content;
+  max-width: 100%;
+  align-items: start;
+}
+
+.share-flyer-preview-grid--schedule {
+  grid-template-columns: repeat(2, var(--share-capture-max-width, 400px));
+}
+
+.share-flyer-preview-grid--standings {
+  grid-template-columns: repeat(4, var(--share-capture-max-width, 400px));
+}
+
+.share-flyer-preview-grid-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: 0.25rem;
+}
+
+.share-flyer-preview-cell {
+  width: var(--share-capture-max-width, 400px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .share-story-preview-frame__content {
