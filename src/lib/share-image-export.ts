@@ -58,13 +58,20 @@ export function scaleCanvasToSharePortrait(
 }
 
 /**
- * Export móvil vertical: ancho 1080px, alto según contenido (sin recortar).
+ * Export 9:16 (Instagram Story / Reels): 1080×1920, contenido escalado y centrado.
  */
-export function scaleCanvasToShareMobile(
+export function scaleCanvasToInstagramStory(
   src: HTMLCanvasElement,
   backgroundColor: string,
+  pad: number = SHARE_EXPORT_PAD,
 ): HTMLCanvasElement {
-  return scaleCanvasToShareWidth(src, SHARE_EXPORT_PORTRAIT.width, SHARE_EXPORT_PAD, backgroundColor);
+  return scaleCanvasToSharePortrait(
+    src,
+    SHARE_EXPORT_PORTRAIT.width,
+    SHARE_EXPORT_PORTRAIT.height,
+    pad,
+    backgroundColor,
+  );
 }
 
 export type CaptureShareElementOptions = {

@@ -39,7 +39,7 @@
 
 .share-group-standings-root.share-portrait-capture {
   --share-capture-max-width: 400px;
-  width: var(--share-capture-max-width);
+  width: 100%;
   max-width: var(--share-capture-max-width);
 }
 
