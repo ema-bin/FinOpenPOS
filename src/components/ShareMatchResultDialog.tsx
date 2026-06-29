@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -14,6 +14,8 @@ import { advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import {
   matchResultAdRowDefs,
+  MATCH_RESULT_ADS_TOTAL,
+  pickRandomAdvertisements,
   splitMatchResultAds,
 } from "@/lib/share-match-result-ads";
 import { ShareMatchResultAdsBlock } from "@/components/share-match-result-ads";
@@ -54,6 +56,8 @@ export function ShareMatchResultDialog({
   const canvaRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [copying, setCopying] = useState(false);
+  const [selectedAds, setSelectedAds] = useState<AdvertisementDTO[]>([]);
+  const adsPickedRef = useRef(false);
 
   const { data: advertisements = [] } = useQuery<AdvertisementDTO[]>({
     queryKey: ["advertisements"],
@@ -62,7 +66,18 @@ export function ShareMatchResultDialog({
     enabled: open,
   });
 
-  const adRows = splitMatchResultAds(advertisements);
+  useEffect(() => {
+    if (!open) {
+      adsPickedRef.current = false;
+      setSelectedAds([]);
+      return;
+    }
+    if (advertisements.length === 0 || adsPickedRef.current) return;
+    setSelectedAds(pickRandomAdvertisements(advertisements, MATCH_RESULT_ADS_TOTAL));
+    adsPickedRef.current = true;
+  }, [open, advertisements]);
+
+  const adRows = splitMatchResultAds(selectedAds);
   const topAdRowCount = matchResultAdRowDefs(adRows).filter((r) => r.variant === "top").length;
 
   const scoreLine = [
