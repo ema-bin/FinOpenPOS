@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -12,6 +12,13 @@ import { Button } from "@/components/ui/button";
 import { CopyIcon, Loader2Icon } from "lucide-react";
 import { advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
+import {
+  matchResultAdRowDefs,
+  MATCH_RESULT_ADS_TOTAL,
+  pickRandomAdvertisements,
+  splitMatchResultAds,
+} from "@/lib/share-match-result-ads";
+import { ShareMatchResultAdsBlock } from "@/components/share-match-result-ads";
 import { toast } from "sonner";
 
 type ShareMatchResultDialogProps = {
@@ -49,6 +56,8 @@ export function ShareMatchResultDialog({
   const canvaRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [copying, setCopying] = useState(false);
+  const [selectedAds, setSelectedAds] = useState<AdvertisementDTO[]>([]);
+  const adsPickedRef = useRef(false);
 
   const { data: advertisements = [] } = useQuery<AdvertisementDTO[]>({
     queryKey: ["advertisements"],
@@ -57,11 +66,19 @@ export function ShareMatchResultDialog({
     enabled: open,
   });
 
-  // 3 filas: 2 arriba de 6 cada una, 1 abajo de 7 (justo encima del resultado)
-  const n = advertisements.length;
-  const adsTopRow1 = advertisements.slice(0, Math.min(6, n));
-  const adsTopRow2 = advertisements.slice(6, Math.min(12, n));
-  const adsBottom = advertisements.slice(12, Math.min(19, n));
+  useEffect(() => {
+    if (!open) {
+      adsPickedRef.current = false;
+      setSelectedAds([]);
+      return;
+    }
+    if (advertisements.length === 0 || adsPickedRef.current) return;
+    setSelectedAds(pickRandomAdvertisements(advertisements, MATCH_RESULT_ADS_TOTAL));
+    adsPickedRef.current = true;
+  }, [open, advertisements]);
+
+  const adRows = splitMatchResultAds(selectedAds);
+  const topAdRowCount = matchResultAdRowDefs(adRows).filter((r) => r.variant === "top").length;
 
   const scoreLine = [
     `${set1.team1}-${set1.team2}`,
@@ -139,45 +156,55 @@ export function ShareMatchResultDialog({
 
         const padW = Sw(5);
         const padH = Sh(5);
-        const logoW1 = Sw(44);
-        const logoH1 = Sh(34);
-        const row1H = Sh(44);
-        const row2H = Sh(44);
-        const instanceY = Sh(92);
+        const logoWTop = Sw(64);
+        const logoHTop = Sh(48);
+        const rowTopH = Sh(58);
+        const logoWBottom = Sw(56);
+        const logoHBottom = Sh(44);
+        const rowBottomH = Sh(58);
         const resultH = Sh(80);
-        const adsBottomH = Sh(56);
-        const logoW2 = Sw(40);
-        const logoH2 = Sh(30);
 
         const centerRow = (count: number, logoW: number) =>
           (outW - count * logoW - (count - 1) * padW) / 2;
 
-        if (adsTopRow1.length > 0) {
+        const drawAdRow = async (
+          ads: AdvertisementDTO[],
+          y: number,
+          logoW: number,
+          logoH: number,
+          rowH: number
+        ) => {
+          if (ads.length === 0) return;
           ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(0, 0, outW, row1H);
-          let startX = centerRow(adsTopRow1.length, logoW1);
-          for (let i = 0; i < adsTopRow1.length; i++) {
+          ctx.fillRect(0, y, outW, rowH);
+          let startX = centerRow(ads.length, logoW);
+          for (const ad of ads) {
             ctx.fillStyle = "rgba(255,255,255,0.95)";
             ctx.beginPath();
-            ctx.roundRect(startX, padH, logoW1, logoH1, Sw(4));
+            ctx.roundRect(startX, y + padH, logoW, logoH, Sw(4));
             ctx.fill();
-            await drawLogo(adsTopRow1[i].image_url, startX + Sw(2), padH + Sh(2), logoW1 - Sw(4), logoH1 - Sh(4));
-            startX += logoW1 + padW;
+            await drawLogo(
+              ad.image_url,
+              startX + Sw(2),
+              y + padH + Sh(2),
+              logoW - Sw(4),
+              logoH - Sh(4)
+            );
+            startX += logoW + padW;
           }
+        };
+
+        let topY = 0;
+        if (adRows.row1.length > 0) {
+          await drawAdRow(adRows.row1, topY, logoWTop, logoHTop, rowTopH);
+          topY += rowTopH;
         }
-        if (adsTopRow2.length > 0) {
-          ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(0, row1H, outW, row2H);
-          let startX = centerRow(adsTopRow2.length, logoW1);
-          for (let i = 0; i < adsTopRow2.length; i++) {
-            ctx.fillStyle = "rgba(255,255,255,0.95)";
-            ctx.beginPath();
-            ctx.roundRect(startX, row1H + padH, logoW1, logoH1, Sw(4));
-            ctx.fill();
-            await drawLogo(adsTopRow2[i].image_url, startX + Sw(2), row1H + padH + Sh(2), logoW1 - Sw(4), logoH1 - Sh(4));
-            startX += logoW1 + padW;
-          }
+        if (adRows.row2.length > 0) {
+          await drawAdRow(adRows.row2, topY, logoWTop, logoHTop, rowTopH);
+          topY += rowTopH;
         }
+
+        const instanceY = topY > 0 ? topY + Sh(8) : Sh(12);
         if (instanceLabel) {
           const instanceUpper = instanceLabel.toUpperCase();
           ctx.font = `bold ${Sw(14)}px system-ui,sans-serif`;
@@ -192,18 +219,14 @@ export function ShareMatchResultDialog({
         }
 
         const resultY = outH - resultH;
-        if (adsBottom.length > 0) {
-          ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(0, resultY - adsBottomH, outW, adsBottomH);
-          let startX = centerRow(adsBottom.length, logoW2);
-          for (let i = 0; i < adsBottom.length; i++) {
-            ctx.fillStyle = "rgba(255,255,255,0.95)";
-            ctx.beginPath();
-            ctx.roundRect(startX, resultY - adsBottomH + padH, logoW2, logoH2, Sw(4));
-            ctx.fill();
-            await drawLogo(adsBottom[i].image_url, startX + Sw(2), resultY - adsBottomH + padH + Sh(2), logoW2 - Sw(4), logoH2 - Sh(4));
-            startX += logoW2 + padW;
-          }
+        if (adRows.row3.length > 0) {
+          await drawAdRow(
+            adRows.row3,
+            resultY - rowBottomH,
+            logoWBottom,
+            logoHBottom,
+            rowBottomH
+          );
         }
 
         ctx.fillStyle = "rgba(0,0,0,0.75)";
@@ -339,55 +362,25 @@ export function ShareMatchResultDialog({
               className="absolute inset-0 z-10 pointer-events-none"
               style={{ width: 320, height: 569 }}
             >
-            {/* Overlay 2 filas arriba: 6 publicidades cada una (tamaño alineado con imagen copiada) */}
-            {adsTopRow1.length > 0 && (
-              <div className="absolute top-0 left-0 right-0 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-black/30 z-10">
-                {adsTopRow1.map((ad) => (
-                  <div
-                    key={ad.id}
-                    className="w-11 h-9 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
-                  >
-                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
-                  </div>
-                ))}
-              </div>
-            )}
-            {adsTopRow2.length > 0 && (
-              <div className="absolute left-0 right-0 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-black/30 z-10" style={{ top: "2.75rem" }}>
-                {adsTopRow2.map((ad) => (
-                  <div
-                    key={ad.id}
-                    className="w-11 h-9 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
-                  >
-                    <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
-                  </div>
-                ))}
-              </div>
-            )}
+            <ShareMatchResultAdsBlock rows={adRows} placement="top" />
 
-            {/* Instancia del partido: debajo de la segunda fila de publicidades */}
+            {/* Instancia del partido: debajo de las dos filas superiores de publicidades */}
             {instanceLabel && (
-              <div className="absolute left-0 right-0 flex justify-center z-10" style={{ top: "5.5rem" }}>
+              <div
+                className="absolute left-0 right-0 flex justify-center z-10"
+                style={{
+                  top: topAdRowCount > 0 ? `${topAdRowCount * 3.75}rem` : "0.5rem",
+                }}
+              >
                 <span className="text-white font-bold text-sm uppercase tracking-wider bg-black/50 px-3 py-1 rounded">
-                  {instanceLabel?.toUpperCase()}
+                  {instanceLabel.toUpperCase()}
                 </span>
               </div>
             )}
 
-            {/* Abajo: fila de 7 publicidades justo encima del resultado + resultado */}
+            {/* Abajo: 4 publicidades justo encima del resultado + resultado */}
             <div className="absolute bottom-0 left-0 right-0 flex flex-col z-10">
-              {adsBottom.length > 0 && (
-                <div className="flex items-center justify-center gap-1 py-2 px-2 bg-black/30 flex-nowrap min-w-0">
-                  {adsBottom.map((ad) => (
-                    <div
-                      key={ad.id}
-                      className="w-10 h-8 rounded overflow-hidden bg-white/95 flex items-center justify-center p-0.5 flex-shrink-0"
-                    >
-                      <img src={ad.image_url} alt={ad.name} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" />
-                    </div>
-                  ))}
-                </div>
-              )}
+              <ShareMatchResultAdsBlock rows={adRows} placement="bottom" />
               {/* Overlay resultado: 2 filas (una por pareja) sobre la foto */}
               <div className="bg-black/75 backdrop-blur-sm px-3 py-2.5 min-w-0">
               <div className="flex items-center justify-between gap-2 py-1">

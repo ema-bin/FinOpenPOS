@@ -33,3 +33,18 @@ export function splitGroupFlyerAds(ads: AdvertisementDTO[]): {
 export function hasGroupFlyerAds(rows: GroupFlyerAdRows): boolean {
   return rows.row1.length + rows.row2.length + rows.row3.length > 0;
 }
+
+export type FlyerAdRowDef = {
+  ads: import("@/models/dto/advertisement").AdvertisementDTO[];
+  columns: 3 | 4;
+};
+
+export function flyerAdRowDefs(rows: GroupFlyerAdRows): FlyerAdRowDef[] {
+  return (
+    [
+      { ads: rows.row1, columns: 3 as const },
+      { ads: rows.row2, columns: 3 as const },
+      { ads: rows.row3, columns: 4 as const },
+    ] as FlyerAdRowDef[]
+  ).filter((row) => row.ads.length > 0);
+}
