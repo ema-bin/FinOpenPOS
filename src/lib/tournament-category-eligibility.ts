@@ -1,7 +1,13 @@
 import type { Tournament } from "@/models/db/tournament";
 import type { CategoriesRepository } from "@/repositories/categories.repository";
 
-type PlayerWithCategory = { id: number; first_name: string; last_name: string; category_id: number | null };
+type PlayerWithCategory = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  category_id: number | null;
+  female_category_id?: number | null;
+};
 type PlayerForSuma13 = { first_name: string; last_name: string; gender: string | null; female_category_id: number | null };
 
 /**
@@ -20,8 +26,16 @@ export async function validateCategoryEligibility(
   }
 
   const categoryIds: number[] = [tournament.category_id];
-  if (player1?.category_id != null) categoryIds.push(player1.category_id);
-  if (player2?.category_id != null) categoryIds.push(player2.category_id);
+
+  const metaById = await categoriesRepo.getMetaByIds([tournament.category_id]);
+  const tournamentMeta = metaById.get(tournament.category_id);
+  const isDamasTournament = tournamentMeta?.type === "damas";
+
+  for (const player of [player1, player2]) {
+    if (!player) continue;
+    const playerCatId = isDamasTournament ? player.female_category_id : player.category_id;
+    if (playerCatId != null) categoryIds.push(playerCatId);
+  }
 
   const orderByCategoryId = await categoriesRepo.getDisplayOrdersByIds(categoryIds);
   const tournamentOrder = orderByCategoryId.get(tournament.category_id);
@@ -31,8 +45,9 @@ export async function validateCategoryEligibility(
 
   for (const player of [player1, player2]) {
     if (!player) continue;
-    if (player.category_id == null) continue; // Sin categoría asignada: se permite inscribir
-    const playerOrder = orderByCategoryId.get(player.category_id);
+    const playerCatId = isDamasTournament ? player.female_category_id : player.category_id;
+    if (playerCatId == null) continue; // Sin categoría asignada: se permite inscribir
+    const playerOrder = orderByCategoryId.get(playerCatId);
     if (playerOrder === undefined) {
       return {
         ok: false,

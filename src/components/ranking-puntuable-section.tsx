@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -119,13 +119,18 @@ export function RankingPuntuableSection() {
     staleTime: 1000 * 60 * 10,
   });
 
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.name.localeCompare(b.name, "es")),
+    [categories]
+  );
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (categories.length > 0 && selectedCategoryId == null) {
-      setSelectedCategoryId(categories[0].id);
+    if (sortedCategories.length > 0 && selectedCategoryId == null) {
+      setSelectedCategoryId(sortedCategories[0].id);
     }
-  }, [categories, selectedCategoryId]);
+  }, [sortedCategories, selectedCategoryId]);
 
   useEffect(() => {
     // Resetear preview cuando cambie la categoría
@@ -171,9 +176,9 @@ export function RankingPuntuableSection() {
     }
   );
 
-  const effectiveCategoryId = selectedCategoryId ?? categories[0]?.id ?? null;
+  const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
   const categoryName =
-    categories.find((c) => c.id === effectiveCategoryId)?.name ?? "Categoría";
+    sortedCategories.find((c) => c.id === effectiveCategoryId)?.name ?? "Categoría";
 
   const { data: breakdown, isLoading: loadingBreakdown } = useQuery<PlayerBreakdownResponse>(
     {
@@ -487,7 +492,7 @@ export function RankingPuntuableSection() {
                   <SelectValue placeholder="Elegir categoría" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c) => (
+                  {sortedCategories.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.name}
                     </SelectItem>

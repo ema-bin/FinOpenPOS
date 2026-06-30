@@ -7,5 +7,5 @@ export interface Category {
   name: string;
   type: CategoryType;
   display_order: number;
-  sum_value?: number | null; // para damas: valor para suma 13 (4ta=4, 5ta=5, 6ta=6, 7ma=7)
+  sum_value?: number | null; // para damas: valor para suma 13 (4ta=4 … 7ma=7); 8va sin sum_value
 }
