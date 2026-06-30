@@ -29,6 +29,27 @@ export class CategoriesRepository {
   }
 
   /**
+   * Get display_order and type for each category id.
+   */
+  async getMetaByIds(
+    ids: number[]
+  ): Promise<Map<number, { display_order: number; type: "libre" | "damas" }>> {
+    if (ids.length === 0) return new Map();
+    const unique = Array.from(new Set(ids));
+    const { data, error } = await this.supabase
+      .from("categories")
+      .select("id, display_order, type")
+      .in("id", unique);
+    if (error) throw new Error(`Failed to fetch categories: ${error.message}`);
+    const map = new Map<number, { display_order: number; type: "libre" | "damas" }>();
+    const rows = (data ?? []) as { id: number; display_order: number; type: "libre" | "damas" }[];
+    for (const row of rows) {
+      map.set(row.id, { display_order: row.display_order, type: row.type });
+    }
+    return map;
+  }
+
+  /**
    * Get sum_value for each category id (damas: 4ta=4, 5ta=5, 6ta=6, 7ma=7).
    * Used for "suma 13 damas" eligibility. Returns a Map: categoryId -> sum_value (undefined if null).
    */

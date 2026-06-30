@@ -54,7 +54,7 @@ CREATE TABLE payment_methods (
 -- =========================================================
 -- CATEGORIES (categorías estandarizadas: libre y damas)
 -- =========================================================
--- Lista fija por tipo: libre (Principiantes, 8va...3ra) y damas (4ta-7ma damas)
+-- Lista fija por tipo: libre (Principiantes, 8va...3ra) y damas (8va-7ma damas)
 
 CREATE TABLE categories (
     id            SMALLSERIAL PRIMARY KEY,
@@ -73,6 +73,7 @@ INSERT INTO categories (name, type, display_order, sum_value) VALUES
   ('5ta', 'libre', 5, NULL),
   ('4ta', 'libre', 6, NULL),
   ('3ra', 'libre', 7, NULL),
+  ('8va damas', 'damas', 0, NULL),
   ('4ta damas', 'damas', 1, 4),
   ('5ta damas', 'damas', 2, 5),
   ('6ta damas', 'damas', 3, 6),

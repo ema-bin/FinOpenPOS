@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -67,6 +67,13 @@ export default function TournamentsPage() {
     staleTime: 1000 * 60 * 10,
   });
   const suma13Category = categoriesDamas.find((c) => c.name === "Suma 13 damas");
+  const selectableCategories = useMemo(
+    () =>
+      [...categories, ...categoriesDamas.filter((c) => c.name !== "Suma 13 damas")].sort(
+        (a, b) => a.name.localeCompare(b.name, "es")
+      ),
+    [categories, categoriesDamas]
+  );
   const [isCategorySpecific, setIsCategorySpecific] = useState(false);
   const [hasSuperTiebreak, setHasSuperTiebreak] = useState(false);
   const [matchDuration, setMatchDuration] = useState<number>(60);
@@ -394,8 +401,8 @@ export default function TournamentsPage() {
             </div>
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
-                <Label htmlFor="create-category-specific">De categoría específica (libre)</Label>
-                <p className="text-xs text-muted-foreground">Restringir a una categoría</p>
+                <Label htmlFor="create-category-specific">De categoría específica</Label>
+                <p className="text-xs text-muted-foreground">Restringir a una categoría libre o damas</p>
               </div>
               <Switch
                 id="create-category-specific"
@@ -418,8 +425,11 @@ export default function TournamentsPage() {
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    {selectableCategories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {c.type === "libre" ? " (Libre)" : " (Damas)"}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -637,8 +647,8 @@ export default function TournamentsPage() {
             </div>
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
-                <Label htmlFor="edit-category-specific">De categoría específica (libre)</Label>
-                <p className="text-xs text-muted-foreground">Restringir a una categoría</p>
+                <Label htmlFor="edit-category-specific">De categoría específica</Label>
+                <p className="text-xs text-muted-foreground">Restringir a una categoría libre o damas</p>
               </div>
               <Switch
                 id="edit-category-specific"
@@ -661,8 +671,11 @@ export default function TournamentsPage() {
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    {selectableCategories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {c.type === "libre" ? " (Libre)" : " (Damas)"}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
