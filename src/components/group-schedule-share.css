@@ -8,7 +8,7 @@
   --sch-title: 2.15rem;
   --sch-date: 1rem;
   --sch-logo-width: 6.25rem;
-  --sch-ad-img: 26px;
+  --sch-ad-img: 38px;
   --sch-gap: 2px;
   --sch-pad-top: 40px;
 
@@ -44,8 +44,8 @@
 }
 
 .share-group-schedule-root.share-portrait-capture .share-group-schedule-ad-cell {
-  min-height: calc(var(--sch-ad-img) + 6px);
-  padding: 3px 4px;
+  min-height: calc(var(--sch-ad-img) + 8px);
+  padding: 4px 5px;
   border-radius: 4px;
 }
 
@@ -135,7 +135,7 @@
   --sch-title: 2.45rem;
   --sch-date: 1.15rem;
   --sch-logo-width: 7rem;
-  --sch-ad-img: 28px;
+  --sch-ad-img: 42px;
   --sch-pad-top: 48px;
   width: var(--share-capture-max-width) !important;
   max-width: var(--share-capture-max-width) !important;
@@ -166,8 +166,8 @@
 
 .share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
   .share-group-schedule-ad-cell {
-  min-height: calc(var(--sch-ad-img) + 6px);
-  padding: 3px 4px;
+  min-height: calc(var(--sch-ad-img) + 8px);
+  padding: 4px 5px;
 }
 
 .share-group-schedule-root.share-portrait-capture.share-group-schedule-exporting
