@@ -15,9 +15,9 @@ import type { AdvertisementDTO } from "@/models/dto/advertisement";
 import {
   matchResultAdRowDefs,
   MATCH_RESULT_ADS_TOTAL,
-  pickRandomAdvertisements,
   splitMatchResultAds,
 } from "@/lib/share-match-result-ads";
+import { pickRandomAdvertisements } from "@/lib/pick-random-advertisements";
 import { ShareMatchResultAdsBlock } from "@/components/share-match-result-ads";
 import { toast } from "sonner";
 

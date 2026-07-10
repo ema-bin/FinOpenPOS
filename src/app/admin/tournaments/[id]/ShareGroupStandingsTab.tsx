@@ -14,7 +14,7 @@ import { formatTime } from "@/lib/date-utils";
 import type { TournamentDTO, ApiResponseStandings, MatchDTO } from "@/models/dto/tournament";
 import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
-import { splitGroupFlyerAds } from "@/lib/share-group-flyer-ads";
+import { pickGroupFlyerAds } from "@/lib/share-group-flyer-ads";
 import { ShareGroupFlyerAdsBlock } from "@/components/share-group-flyer-ads";
 import { ShareStoryPreviewFrame } from "@/components/share-story-preview-frame";
 import { useMemo, useRef, useState } from "react";
@@ -127,12 +127,18 @@ export default function ShareGroupStandingsTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const { top: adsTop, bottom: adsBottom } = splitGroupFlyerAds(advertisements);
-
   const groupColorIndexMap = useMemo(
     () => (data?.groups ? buildGroupColorIndexMap(data.groups) : new Map<number, number>()),
     [data?.groups],
   );
+
+  const flyerAdsByGroupId = useMemo(() => {
+    const map = new Map<number, ReturnType<typeof pickGroupFlyerAds>>();
+    for (const group of data?.groups ?? []) {
+      map.set(group.id, pickGroupFlyerAds(advertisements));
+    }
+    return map;
+  }, [advertisements, data?.groups]);
 
   const handleCopyImageToClipboard = async (groupId: number) => {
     const groupRef = groupRefs.current.get(groupId);
@@ -301,6 +307,8 @@ export default function ShareGroupStandingsTab({
               groupColorIndexMap,
             );
 
+            const flyerAds = flyerAdsByGroupId.get(group.id) ?? { top: [], bottom: [] };
+
             return (
               <div key={group.id} className="share-flyer-preview-cell">
                 <div className="flex justify-end" data-share-standings-exclude>
@@ -349,7 +357,7 @@ export default function ShareGroupStandingsTab({
                     </div>
 
                     <ShareGroupFlyerAdsBlock
-                      rows={adsTop}
+                      ads={flyerAds.top}
                       placement="top"
                       variant="standings"
                     />
@@ -439,7 +447,7 @@ export default function ShareGroupStandingsTab({
                     )}
 
                     <ShareGroupFlyerAdsBlock
-                      rows={adsBottom}
+                      ads={flyerAds.bottom}
                       placement="bottom"
                       variant="standings"
                     />

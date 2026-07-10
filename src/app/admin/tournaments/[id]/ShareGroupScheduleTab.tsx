@@ -14,7 +14,7 @@ import { formatDate, formatTime } from "@/lib/date-utils";
 import type { TournamentDTO, GroupsApiResponse, MatchDTO } from "@/models/dto/tournament";
 import { tournamentsService, advertisementsService } from "@/services";
 import type { AdvertisementDTO } from "@/models/dto/advertisement";
-import { splitGroupFlyerAds } from "@/lib/share-group-flyer-ads";
+import { pickGroupFlyerAds } from "@/lib/share-group-flyer-ads";
 import { ShareGroupFlyerAdsBlock } from "@/components/share-group-flyer-ads";
 import { ShareStoryPreviewFrame } from "@/components/share-story-preview-frame";
 import { useMemo, useRef, useState } from "react";
@@ -98,26 +98,19 @@ export default function ShareGroupScheduleTab({
     queryFn: () => advertisementsService.getAll(),
     staleTime: 1000 * 60 * 5,
   });
-  const { top: adsTop, bottom: adsBottom } = splitGroupFlyerAds(advertisements);
 
   const groupColorIndexMap = useMemo(
     () => (data?.groups ? buildGroupColorIndexMap(data.groups) : new Map<number, number>()),
     [data?.groups],
   );
 
-  // Organizar partidos por fecha y hora
-  const matchesByDate = (() => {
+  const matchesByDate = useMemo((): MatchByDate[] => {
     if (!data || !data.matches || !data.groups) return [];
 
-    // Crear mapa de grupos
-    const groupsMap = new Map(data.groups.map(g => [g.id, g.name]));
-
-    // Filtrar solo partidos de zona con fecha y hora
+    const groupsMap = new Map(data.groups.map((g) => [g.id, g.name]));
     const scheduledMatches = data.matches.filter(
       (m) => m.phase === "group" && m.match_date && m.start_time
     );
-
-    // Agrupar por fecha
     const grouped: Map<string, MatchByDate["matches"]> = new Map();
 
     scheduledMatches.forEach((match) => {
@@ -137,21 +130,25 @@ export default function ShareGroupScheduleTab({
       });
     });
 
-    // Convertir a array y ordenar por fecha
-    const result: MatchByDate[] = Array.from(grouped.entries())
+    return Array.from(grouped.entries())
       .map(([date, matches]) => ({
         date,
         matches: matches.sort((a, b) => {
-          // Ordenar por hora de inicio
           const timeA = a.match.start_time || "";
           const timeB = b.match.start_time || "";
           return timeA.localeCompare(timeB);
         }),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data]);
 
-    return result;
-  })();
+  const flyerAdsByDate = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof pickGroupFlyerAds>>();
+    for (const { date } of matchesByDate) {
+      map.set(date, pickGroupFlyerAds(advertisements));
+    }
+    return map;
+  }, [advertisements, matchesByDate]);
 
   const handleCopyImageToClipboard = async (date: string) => {
     const dayRef = scheduleRefs.current.get(date);
@@ -263,7 +260,9 @@ export default function ShareGroupScheduleTab({
       >
         <div className="share-flyer-preview-grid-scroll">
         <div className="share-flyer-preview-grid share-flyer-preview-grid--schedule">
-          {matchesByDate.map(({ date, matches }) => (
+          {matchesByDate.map(({ date, matches }) => {
+            const flyerAds = flyerAdsByDate.get(date) ?? { top: [], bottom: [] };
+            return (
             <div key={date} className="share-flyer-preview-cell">
               <div className="flex justify-end" data-share-schedule-exclude>
                 <Button
@@ -308,7 +307,7 @@ export default function ShareGroupScheduleTab({
                   </div>
 
                   <ShareGroupFlyerAdsBlock
-                    rows={adsTop}
+                    ads={flyerAds.top}
                     placement="top"
                     variant="schedule"
                   />
@@ -343,7 +342,7 @@ export default function ShareGroupScheduleTab({
                   </div>
 
                   <ShareGroupFlyerAdsBlock
-                    rows={adsBottom}
+                    ads={flyerAds.bottom}
                     placement="bottom"
                     variant="schedule"
                   />
@@ -351,7 +350,8 @@ export default function ShareGroupScheduleTab({
               </div>
               </ShareStoryPreviewFrame>
             </div>
-          ))}
+          );
+          })}
         </div>
         </div>
       </CardContent>
