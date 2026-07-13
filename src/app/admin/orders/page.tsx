@@ -44,6 +44,7 @@ import {
 import { Loader2Icon, PlusIcon, SearchIcon, FilePenIcon, ShoppingCartIcon, ReceiptIcon, CalendarIcon, BarChart3Icon, ArrowUpDownIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
+import { PlayerDuplicateSuggestions } from "@/components/player-duplicate-suggestions";
 import Link from "next/link";
 import {
   useQuery,
@@ -690,6 +691,16 @@ export default function OrdersPage() {
       setCreatingPlayer(false);
     },
   });
+
+  const handleUseExistingPlayerFromSuggestion = useCallback((playerId: number) => {
+    setSelectedPlayerId(playerId);
+    setIsNewPlayerDialogOpen(false);
+    setNewPlayerFirstName("");
+    setNewPlayerLastName("");
+    setNewPlayerPhone("");
+    setNewPlayerStatus("active");
+    toast.success("Cliente existente seleccionado.");
+  }, []);
 
   const handleCreatePlayer = useCallback(() => {
     const firstName = newPlayerFirstName.trim();
@@ -1490,7 +1501,7 @@ export default function OrdersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="newPlayerName">Nombre</Label>
               <Input
@@ -1523,6 +1534,14 @@ export default function OrdersPage() {
                 onChange={(e) => setNewPlayerPhone(e.target.value)}
               />
             </div>
+
+            <PlayerDuplicateSuggestions
+              firstName={newPlayerFirstName}
+              lastName={newPlayerLastName}
+              phone={newPlayerPhone}
+              enabled={isNewPlayerDialogOpen}
+              onSelectExisting={handleUseExistingPlayerFromSuggestion}
+            />
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="newPlayerStatus">Estado</Label>
