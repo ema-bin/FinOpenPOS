@@ -15,6 +15,9 @@ export async function POST(req: Request) {
     if (!description || typeof amount !== "number" || Number.isNaN(amount) || !player_id) {
       return NextResponse.json({ error: "amount, description and player_id required" }, { status: 400 });
     }
+    if (amount <= 0) {
+      return NextResponse.json({ error: "amount must be positive" }, { status: 400 });
+    }
 
     const supabase = createClient();
     const {

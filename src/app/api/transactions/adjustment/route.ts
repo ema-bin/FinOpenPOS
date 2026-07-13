@@ -16,6 +16,13 @@ export async function POST(req: Request) {
     if (!description || typeof amount !== "number" || Number.isNaN(amount)) {
       return NextResponse.json({ error: "amount and description required" }, { status: 400 });
     }
+    if (
+      payment_method_id == null ||
+      typeof payment_method_id !== "number" ||
+      Number.isNaN(payment_method_id)
+    ) {
+      return NextResponse.json({ error: "payment_method_id required" }, { status: 400 });
+    }
 
     const supabase = createClient();
     const {
