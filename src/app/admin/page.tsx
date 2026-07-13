@@ -21,6 +21,7 @@ import {
   AlertTriangleIcon,
   DollarSignIcon,
   ImageIcon,
+  ClipboardListIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { adminService } from "@/services";
@@ -323,6 +324,23 @@ export default function Page() {
             <CardContent>
               <CardDescription className="text-xs">
                 Ajustes de fondos y retiros de socios
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="hover:bg-muted/50 transition-colors cursor-pointer"
+            onClick={() => router.push("/admin/daily-sales-closure")}
+          >
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <ClipboardListIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Cierre de caja</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Registro diario de ventas de cantina
               </CardDescription>
             </CardContent>
           </Card>

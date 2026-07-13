@@ -8,6 +8,7 @@ export * from "./court-slot-day-notes.service";
 export * from "./tournaments.service";
 export * from "./admin.service";
 export * from "./transactions.service";
+export * from "./daily-sales-closures.service";
 export * from "./stock-movements.service";
 export * from "./advertisements.service";
 
