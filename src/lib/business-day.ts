@@ -13,6 +13,13 @@ export function getCurrentBusinessDate(ref: Date = new Date()): string {
   return getBusinessDayStart(ref).toISOString().slice(0, 10);
 }
 
+/** Día de negocio que acaba de cerrar (p. ej. a las 06:00 UTC corre para el día anterior). */
+export function getPreviousBusinessDate(ref: Date = new Date()): string {
+  const start = getBusinessDayStart(ref);
+  start.setUTCDate(start.getUTCDate() - 1);
+  return start.toISOString().slice(0, 10);
+}
+
 export function getBusinessDayRange(businessDate: string): { start: Date; end: Date } {
   const start = new Date(`${businessDate}T06:00:00.000Z`);
   if (Number.isNaN(start.getTime())) {

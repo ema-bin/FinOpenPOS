@@ -6,6 +6,12 @@
   "regions": ["iad1"],
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily-sales-closure",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }
 
