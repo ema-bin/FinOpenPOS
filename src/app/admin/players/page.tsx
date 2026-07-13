@@ -60,6 +60,7 @@ import {
   playerMatchesPlayersTableCategoryFilter,
   type PlayersTableCategoryFilter,
 } from "@/lib/player-category-filter";
+import { PlayerDuplicateSuggestions } from "@/components/player-duplicate-suggestions";
 
 type Player = PlayerDTO;
 
@@ -169,6 +170,25 @@ export default function PlayersPage() {
     setNewPlayerGender("");
     setNewPlayerFemaleCategoryId(null);
   };
+
+  const handleUseExistingPlayer = useCallback(
+    (playerId: number) => {
+      const existing = players.find((player) => player.id === playerId);
+      if (!existing) return;
+      setShowNewPlayerDialog(false);
+      setSelectedPlayerId(existing.id);
+      setNewPlayerFirstName(existing.first_name);
+      setNewPlayerLastName(existing.last_name ?? "");
+      setNewPlayerPhone(existing.phone ?? "");
+      setNewPlayerCity(existing.city ?? "");
+      setNewPlayerStatus(existing.status);
+      setNewPlayerCategoryId(existing.category_id ?? null);
+      setNewPlayerGender(existing.gender ?? "");
+      setNewPlayerFemaleCategoryId(existing.female_category_id ?? null);
+      setIsEditPlayerDialogOpen(true);
+    },
+    [players]
+  );
 
   const handleAddPlayer = useCallback(async () => {
     try {
@@ -465,7 +485,7 @@ export default function PlayersPage() {
               {showNewPlayerDialog ? "Crear Nuevo Cliente" : "Editar Cliente"}
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name">Nombre</Label>
               <Input
@@ -493,6 +513,15 @@ export default function PlayersPage() {
                 className="col-span-3"
               />
             </div>
+            {showNewPlayerDialog ? (
+              <PlayerDuplicateSuggestions
+                firstName={newPlayerFirstName}
+                lastName={newPlayerLastName}
+                phone={newPlayerPhone}
+                onSelectExisting={handleUseExistingPlayer}
+                className="w-full"
+              />
+            ) : null}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="city">Ciudad</Label>
               <Input

@@ -3,6 +3,7 @@ import type {
   PlayerStatus,
   PlayerStatusFilter,
 } from "@/models/db/player";
+import type { PlayerDuplicateSuggestion } from "@/lib/player-duplicate-suggestions";
 
 export interface CreatePlayerInput {
   first_name: string;
@@ -44,6 +45,29 @@ class PlayersService {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
       throw new Error("Failed to fetch player");
+    }
+    return response.json();
+  }
+
+  async getDuplicateSuggestions(input: {
+    first_name: string;
+    last_name: string;
+    phone: string;
+    exclude_id?: number | null;
+  }): Promise<{ suggestions: PlayerDuplicateSuggestion[] }> {
+    const params = new URLSearchParams({
+      first_name: input.first_name,
+      last_name: input.last_name,
+      phone: input.phone,
+    });
+    if (input.exclude_id != null) {
+      params.set("exclude_id", String(input.exclude_id));
+    }
+    const response = await fetch(
+      `${this.baseUrl}/duplicate-suggestions?${params.toString()}`
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch duplicate suggestions");
     }
     return response.json();
   }
