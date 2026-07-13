@@ -125,23 +125,25 @@ export default function BalancePage() {
     mutationFn: () =>
       transactionsService.createAdjustment({
         amount: Number(adjustmentAmount),
-        description: adjustmentDescription,
-        payment_method_id: adjustmentPaymentMethodId ? Number(adjustmentPaymentMethodId) : null,
+        description: adjustmentDescription.trim(),
+        payment_method_id: Number(adjustmentPaymentMethodId),
       }),
     onSuccess: () => {
       toast.success("Ajuste registrado");
       setAdjustmentAmount("");
       setAdjustmentDescription("");
       setAdjustmentPaymentMethodId("");
+      setIsAdjustmentDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
     },
+    onError: () => toast.error("No se pudo registrar el ajuste"),
   });
 
   const withdrawalMutation = useMutation({
     mutationFn: () =>
       transactionsService.createWithdrawal({
         amount: Number(withdrawalAmount),
-        description: withdrawalDescription,
+        description: withdrawalDescription.trim(),
         player_id: Number(withdrawalPlayerId),
         payment_method_id: withdrawalPaymentMethodId ? Number(withdrawalPaymentMethodId) : null,
       }),
@@ -151,9 +153,50 @@ export default function BalancePage() {
       setWithdrawalDescription("");
       setWithdrawalPlayerId("");
       setWithdrawalPaymentMethodId("");
+      setIsWithdrawalDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-withdrawals"] });
     },
+    onError: () => toast.error("No se pudo registrar el retiro"),
   });
+
+  const parsedWithdrawalAmount = Number(withdrawalAmount);
+  const withdrawalAmountValid =
+    withdrawalAmount !== "" &&
+    !Number.isNaN(parsedWithdrawalAmount) &&
+    parsedWithdrawalAmount > 0;
+
+  const handleSaveAdjustment = () => {
+    if (!adjustmentAmount || Number.isNaN(Number(adjustmentAmount))) {
+      toast.error("Ingresá un monto válido");
+      return;
+    }
+    if (!adjustmentDescription.trim()) {
+      toast.error("Ingresá una descripción");
+      return;
+    }
+    if (!adjustmentPaymentMethodId) {
+      toast.error("Seleccioná un método de pago");
+      return;
+    }
+    adjustmentMutation.mutate();
+  };
+
+  const handleSaveWithdrawal = () => {
+    if (!withdrawalPlayerId) {
+      toast.error("Seleccioná un socio");
+      return;
+    }
+    if (!withdrawalAmountValid) {
+      toast.error("El monto a retirar debe ser mayor a 0");
+      return;
+    }
+    if (!withdrawalDescription.trim()) {
+      toast.error("Ingresá una descripción");
+      return;
+    }
+    withdrawalMutation.mutate();
+  };
 
   const summary = data?.summary ?? {};
   const balanceByPaymentMethod = data?.balanceByPaymentMethod ?? [];
@@ -444,13 +487,15 @@ export default function BalancePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="adjustment-payment-method">Método de Pago</Label>
+              <Label htmlFor="adjustment-payment-method">
+                Método de pago <span className="text-destructive">*</span>
+              </Label>
               <Select
                 value={adjustmentPaymentMethodId || undefined}
                 onValueChange={(value) => setAdjustmentPaymentMethodId(value)}
               >
                 <SelectTrigger id="adjustment-payment-method">
-                  <SelectValue placeholder="Seleccionar método de pago (opcional)" />
+                  <SelectValue placeholder="Seleccionar método de pago" />
                 </SelectTrigger>
                 <SelectContent>
                   {paymentMethods.map((method) => (
@@ -476,9 +521,12 @@ export default function BalancePage() {
               Cancelar
             </Button>
             <Button
-              onClick={() => adjustmentMutation.mutate()}
+              onClick={handleSaveAdjustment}
               disabled={
-                adjustmentMutation.isPending || !adjustmentAmount || !adjustmentDescription
+                adjustmentMutation.isPending ||
+                !adjustmentAmount ||
+                !adjustmentDescription.trim() ||
+                !adjustmentPaymentMethodId
               }
             >
               {adjustmentMutation.isPending ? "Guardando..." : "Guardar ajuste"}
@@ -513,11 +561,15 @@ export default function BalancePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="withdrawal-amount">Monto</Label>
+              <Label htmlFor="withdrawal-amount">
+                Monto <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="withdrawal-amount"
                 type="number"
-                placeholder="Monto"
+                min="0.01"
+                step="0.01"
+                placeholder="Monto mayor a 0"
                 value={withdrawalAmount}
                 onChange={(e) => setWithdrawalAmount(e.target.value)}
               />
@@ -555,11 +607,11 @@ export default function BalancePage() {
               Cancelar
             </Button>
             <Button
-              onClick={() => withdrawalMutation.mutate()}
+              onClick={handleSaveWithdrawal}
               disabled={
                 withdrawalMutation.isPending ||
-                !withdrawalAmount ||
-                !withdrawalDescription ||
+                !withdrawalAmountValid ||
+                !withdrawalDescription.trim() ||
                 !withdrawalPlayerId
               }
             >
