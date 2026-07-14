@@ -25,19 +25,24 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2Icon, LockIcon } from "lucide-react";
 import { toast } from "sonner";
-import { dailySalesClosuresService } from "@/services/daily-sales-closures.service";
-import { getCurrentBusinessDate, formatBusinessDayLabel } from "@/lib/business-day";
-import type { DailySalesClosureDTO, DailySalesClosurePreviewDTO } from "@/models/dto/daily-sales-closure";
+import { monthlySalesClosuresService } from "@/services/monthly-sales-closures.service";
+import { formatYearMonthLabel, getCurrentYearMonth } from "@/lib/month-period";
+import type {
+  MonthlySalesClosureDTO,
+  MonthlySalesClosurePreviewDTO,
+} from "@/models/dto/monthly-sales-closure";
 
-function mapPreviewToDisplay(preview: NonNullable<DailySalesClosurePreviewDTO["preview"]>) {
+function mapPreviewToDisplay(preview: NonNullable<MonthlySalesClosurePreviewDTO["preview"]>) {
   return {
+    dailyClosuresCount: preview.dailyClosuresCount,
+    daysInMonth: preview.daysInMonth,
+    missingBusinessDates: preview.missingBusinessDates,
     totalSales: preview.totalSales,
     ordersClosedCount: preview.ordersClosedCount,
     transactionsCount: preview.transactionsCount,
@@ -73,6 +78,9 @@ function mapPreviewToDisplay(preview: NonNullable<DailySalesClosurePreviewDTO["p
 }
 
 function SummaryCards({
+  dailyClosuresCount,
+  daysInMonth,
+  missingCount,
   totalSales,
   ordersClosedCount,
   transactionsCount,
@@ -82,6 +90,9 @@ function SummaryCards({
   zeroAmountOrdersCount,
   discountedOrdersCount,
 }: {
+  dailyClosuresCount: number;
+  daysInMonth: number;
+  missingCount: number;
   totalSales: number;
   ordersClosedCount: number;
   transactionsCount: number;
@@ -94,8 +105,19 @@ function SummaryCards({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div className="border rounded-lg p-4">
-        <div className="text-xs uppercase text-muted-foreground">Total ventas</div>
+        <div className="text-xs uppercase text-muted-foreground">Total ventas del mes</div>
         <div className="text-2xl font-bold text-green-600">${totalSales.toFixed(2)}</div>
+      </div>
+      <div className="border rounded-lg p-4">
+        <div className="text-xs uppercase text-muted-foreground">Cierres diarios incluidos</div>
+        <div className="text-2xl font-bold">
+          {dailyClosuresCount}
+          <span className="text-sm font-normal text-muted-foreground ml-2">/ {daysInMonth} días</span>
+        </div>
+      </div>
+      <div className="border rounded-lg p-4">
+        <div className="text-xs uppercase text-muted-foreground">Días sin cierre diario</div>
+        <div className="text-2xl font-bold">{missingCount}</div>
       </div>
       <div className="border rounded-lg p-4">
         <div className="text-xs uppercase text-muted-foreground">Órdenes cerradas</div>
@@ -114,7 +136,7 @@ function SummaryCards({
         <div className="text-2xl font-bold">{discountedOrdersCount}</div>
       </div>
       <div className="border rounded-lg p-4">
-        <div className="text-xs uppercase text-muted-foreground">Cuentas abiertas al cierre</div>
+        <div className="text-xs uppercase text-muted-foreground">Cuentas abiertas (último día)</div>
         <div className="text-2xl font-bold">
           {openOrdersCount}
           <span className="text-sm font-normal text-muted-foreground ml-2">
@@ -130,21 +152,21 @@ function SummaryCards({
   );
 }
 
-function ClosureDetailTables({
+function DetailTables({
   paymentMethods = [],
   products = [],
   categories = [],
 }: {
-  paymentMethods?: DailySalesClosureDTO["payment_methods"];
-  products?: DailySalesClosureDTO["products"];
-  categories?: DailySalesClosureDTO["categories"];
+  paymentMethods?: MonthlySalesClosureDTO["payment_methods"];
+  products?: MonthlySalesClosureDTO["products"];
+  categories?: MonthlySalesClosureDTO["categories"];
 }) {
   return (
     <div className="space-y-6">
       <div>
         <h3 className="font-semibold mb-2">Ventas por medio de pago</h3>
         {paymentMethods.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin cobros en este período.</p>
+          <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -168,11 +190,10 @@ function ClosureDetailTables({
           </Table>
         )}
       </div>
-
       <div>
         <h3 className="font-semibold mb-2">Ventas por producto</h3>
         {products.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin productos vendidos en este período.</p>
+          <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -198,11 +219,10 @@ function ClosureDetailTables({
           </Table>
         )}
       </div>
-
       <div>
         <h3 className="font-semibold mb-2">Ventas por categoría</h3>
         {categories.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin categorías en este período.</p>
+          <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -230,45 +250,45 @@ function ClosureDetailTables({
   );
 }
 
-export default function DailySalesClosurePage() {
+export default function MonthlySalesClosurePage() {
   const queryClient = useQueryClient();
-  const defaultDate = useMemo(() => getCurrentBusinessDate(), []);
-  const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const defaultMonth = useMemo(() => getCurrentYearMonth(), []);
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [notes, setNotes] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [historyDate, setHistoryDate] = useState<string | null>(null);
+  const [historyMonth, setHistoryMonth] = useState<string | null>(null);
 
-  const { data: previewData, isLoading: loadingPreview } = useQuery({
-    queryKey: ["daily-sales-closure-preview", selectedDate],
-    queryFn: () => dailySalesClosuresService.getPreview(selectedDate),
+  const { data: previewData, isLoading: loadingPreview, isError, error } = useQuery({
+    queryKey: ["monthly-sales-closure-preview", selectedMonth],
+    queryFn: () => monthlySalesClosuresService.getPreview(selectedMonth),
     staleTime: 1000 * 15,
   });
 
   const { data: history = [], isLoading: loadingHistory } = useQuery({
-    queryKey: ["daily-sales-closures"],
-    queryFn: () => dailySalesClosuresService.list(30),
+    queryKey: ["monthly-sales-closures"],
+    queryFn: () => monthlySalesClosuresService.list(24),
     staleTime: 1000 * 30,
   });
 
   const { data: historyDetail, isLoading: loadingHistoryDetail } = useQuery({
-    queryKey: ["daily-sales-closure-detail", historyDate],
-    queryFn: () => dailySalesClosuresService.getByDate(historyDate!),
-    enabled: Boolean(historyDate),
+    queryKey: ["monthly-sales-closure-detail", historyMonth],
+    queryFn: () => monthlySalesClosuresService.getByMonth(historyMonth!),
+    enabled: Boolean(historyMonth),
   });
 
   const closeMutation = useMutation({
     mutationFn: () =>
-      dailySalesClosuresService.create({
-        businessDate: selectedDate,
+      monthlySalesClosuresService.create({
+        yearMonth: selectedMonth,
         notes: notes.trim() || undefined,
       }),
     onSuccess: (result) => {
       toast.success(
-        result.replaced ? "Cierre corregido y actualizado" : "Cierre de caja registrado"
+        result.replaced ? "Cierre mensual corregido" : "Cierre mensual registrado"
       );
       setConfirmOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["daily-sales-closure-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-sales-closures"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales-closure-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales-closures"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -283,7 +303,7 @@ export default function DailySalesClosurePage() {
       return;
     }
     if (!alreadyClosed) setNotes("");
-  }, [selectedDate, alreadyClosed, closure]);
+  }, [selectedMonth, alreadyClosed, closure]);
 
   const displayData = preview ? mapPreviewToDisplay(preview) : null;
 
@@ -295,36 +315,37 @@ export default function DailySalesClosurePage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/admin/daily-sales-closure">Cierre diario</Link>
+        </Button>
+        <Button variant="secondary" size="sm" disabled>
+          Cierre mensual
+        </Button>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Cierre de caja diario</CardTitle>
+          <CardTitle>Cierre de caja mensual</CardTitle>
           <CardDescription>
-            Registro diario de ventas de cantina (06:00 UTC a 06:00 UTC). No modifica reportes
-            existentes; guarda un snapshot para uso futuro.
+            Integra los cierres diarios guardados del mes (solo ventas cantina). No recalcula desde
+            transacciones en vivo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 pb-2">
-            <Button variant="secondary" size="sm" disabled>
-              Cierre diario
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/monthly-sales-closure">Cierre mensual</Link>
-            </Button>
-          </div>
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1">
-              <Label htmlFor="business-date">Día de negocio</Label>
+              <Label htmlFor="year-month">Mes</Label>
               <Input
-                id="business-date"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                id="year-month"
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-44"
               />
             </div>
-            <p className="text-sm text-muted-foreground pb-2">
-              {formatBusinessDayLabel(selectedDate)}
+            <p className="text-sm text-muted-foreground pb-2 capitalize">
+              {formatYearMonthLabel(selectedMonth)}
             </p>
           </div>
 
@@ -339,52 +360,59 @@ export default function DailySalesClosurePage() {
                   <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
                     <LockIcon className="h-4 w-4 shrink-0" />
                     <span>
-                      Cierre guardado
+                      Cierre mensual guardado
                       {closure?.closed_at
                         ? ` el ${new Date(closure.closed_at).toLocaleString("es-AR")}`
                         : ""}
                       {closure?.revision_count && closure.revision_count > 1
                         ? ` · revisión ${closure.revision_count}`
                         : ""}
-                      . Los totales abajo están recalculados con los datos actuales.
+                      . Los totales abajo se recalculan desde los cierres diarios actuales.
                     </span>
                   </div>
                   {savedDiffersFromPreview ? (
                     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                      El cierre guardado tenía ${closure?.total_sales.toFixed(2)} en ventas; el
-                      recálculo actual da ${preview?.totalSales.toFixed(2)}. Podés corregir el
-                      cierre para actualizar el registro.
+                      El cierre guardado tenía ${closure?.total_sales.toFixed(2)}; el recálculo
+                      actual da ${preview?.totalSales.toFixed(2)}.
                     </div>
                   ) : null}
                   <div className="space-y-1">
-                    <Label htmlFor="closure-notes">Notas (opcional)</Label>
+                    <Label htmlFor="monthly-notes">Notas (opcional)</Label>
                     <Textarea
-                      id="closure-notes"
+                      id="monthly-notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Observaciones del cierre"
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Corregir cierre</Button>
+                  <Button onClick={() => setConfirmOpen(true)}>Corregir cierre mensual</Button>
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {displayData.missingBusinessDates.length > 0 ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      Faltan {displayData.missingBusinessDates.length} cierre(s) diario(s):{" "}
+                      {displayData.missingBusinessDates.join(", ")}. El mensual se arma con los{" "}
+                      {displayData.dailyClosuresCount} días disponibles.
+                    </div>
+                  ) : null}
                   <div className="space-y-1">
-                    <Label htmlFor="closure-notes">Notas (opcional)</Label>
+                    <Label htmlFor="monthly-notes">Notas (opcional)</Label>
                     <Textarea
-                      id="closure-notes"
+                      id="monthly-notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Observaciones del cierre"
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Cerrar día</Button>
+                  <Button onClick={() => setConfirmOpen(true)}>Cerrar mes</Button>
                 </div>
               )}
 
               <SummaryCards
+                dailyClosuresCount={displayData.dailyClosuresCount}
+                daysInMonth={displayData.daysInMonth}
+                missingCount={displayData.missingBusinessDates.length}
                 totalSales={displayData.totalSales}
                 ordersClosedCount={displayData.ordersClosedCount}
                 transactionsCount={displayData.transactionsCount}
@@ -395,35 +423,38 @@ export default function DailySalesClosurePage() {
                 discountedOrdersCount={displayData.discountedOrdersCount}
               />
 
-              <ClosureDetailTables
+              <DetailTables
                 paymentMethods={displayData.paymentMethods}
                 products={displayData.products}
                 categories={displayData.categories}
               />
             </div>
-          ) : null}
+          ) : isError ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              {(error as Error)?.message ?? "No hay cierres diarios para este mes."}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground py-6 text-center">Seleccioná un mes.</p>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Historial de cierres</CardTitle>
-          <CardDescription>Últimos 30 cierres registrados.</CardDescription>
+          <CardTitle>Historial mensual</CardTitle>
         </CardHeader>
         <CardContent>
           {loadingHistory ? (
-            <div className="text-center py-6 text-muted-foreground">Cargando historial…</div>
+            <div className="text-center py-6 text-muted-foreground">Cargando…</div>
           ) : history.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground">Todavía no hay cierres.</div>
+            <div className="text-center py-6 text-muted-foreground">Sin cierres mensuales.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Día</TableHead>
+                  <TableHead>Mes</TableHead>
                   <TableHead className="text-right">Ventas</TableHead>
-                  <TableHead className="text-right">Órdenes</TableHead>
-                  <TableHead className="text-right">Cuentas abiertas</TableHead>
-                  <TableHead>Cerrado</TableHead>
+                  <TableHead className="text-right">Días</TableHead>
                   <TableHead className="text-right">Rev.</TableHead>
                   <TableHead />
                 </TableRow>
@@ -431,21 +462,19 @@ export default function DailySalesClosurePage() {
               <TableBody>
                 {history.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.business_date}</TableCell>
-                    <TableCell className="text-right">${row.total_sales.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{row.orders_closed_count}</TableCell>
-                    <TableCell className="text-right">
-                      {row.open_orders_count} (${row.open_orders_total.toFixed(2)})
+                    <TableCell className="font-medium capitalize">
+                      {formatYearMonthLabel(row.year_month)}
                     </TableCell>
-                    <TableCell>
-                      {new Date(row.closed_at).toLocaleString("es-AR")}
+                    <TableCell className="text-right">${row.total_sales.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      {row.daily_closures_count}/{row.days_in_month}
                     </TableCell>
                     <TableCell className="text-right">{row.revision_count ?? 1}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setHistoryDate(row.business_date)}
+                        onClick={() => setHistoryMonth(row.year_month)}
                       >
                         Ver detalle
                       </Button>
@@ -462,22 +491,20 @@ export default function DailySalesClosurePage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {alreadyClosed ? "Confirmar corrección de cierre" : "Confirmar cierre de caja"}
+              {alreadyClosed ? "Confirmar corrección mensual" : "Confirmar cierre mensual"}
             </DialogTitle>
-            <DialogDescription>
-              {alreadyClosed
-                ? `Se reemplazará el cierre del día ${selectedDate} con los datos recalculados actuales.`
-                : `Se guardará el registro de ventas del día ${selectedDate}.`}
-            </DialogDescription>
           </DialogHeader>
           {displayData ? (
             <div className="text-sm space-y-1">
               <p>
-                <strong>Total ventas:</strong> ${displayData.totalSales.toFixed(2)}
+                <strong>Mes:</strong> {formatYearMonthLabel(selectedMonth)}
               </p>
               <p>
-                <strong>Cuentas abiertas al cierre:</strong> {displayData.openOrdersCount} ($
-                {displayData.openOrdersTotal.toFixed(2)})
+                <strong>Cierres diarios:</strong> {displayData.dailyClosuresCount} de{" "}
+                {displayData.daysInMonth}
+              </p>
+              <p>
+                <strong>Total ventas:</strong> ${displayData.totalSales.toFixed(2)}
               </p>
             </div>
           ) : null}
@@ -486,20 +513,18 @@ export default function DailySalesClosurePage() {
               Cancelar
             </Button>
             <Button onClick={() => closeMutation.mutate()} disabled={closeMutation.isPending}>
-              {closeMutation.isPending
-                ? "Guardando…"
-                : alreadyClosed
-                ? "Confirmar corrección"
-                : "Confirmar cierre"}
+              {closeMutation.isPending ? "Guardando…" : alreadyClosed ? "Confirmar" : "Cerrar mes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(historyDate)} onOpenChange={(open) => !open && setHistoryDate(null)}>
+      <Dialog open={Boolean(historyMonth)} onOpenChange={(open) => !open && setHistoryMonth(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalle del cierre — {historyDate}</DialogTitle>
+            <DialogTitle className="capitalize">
+              {historyMonth ? formatYearMonthLabel(historyMonth) : ""}
+            </DialogTitle>
           </DialogHeader>
           {loadingHistoryDetail || !historyDetail ? (
             <div className="flex justify-center py-8">
@@ -507,17 +532,16 @@ export default function DailySalesClosurePage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {historyDetail.revision_count && historyDetail.revision_count > 1 ? (
+              {historyDetail.included_days && historyDetail.included_days.length > 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  <strong>Revisión:</strong> {historyDetail.revision_count}
-                </p>
-              ) : null}
-              {historyDetail.notes ? (
-                <p className="text-sm text-muted-foreground">
-                  <strong>Notas:</strong> {historyDetail.notes}
+                  <strong>Días incluidos:</strong>{" "}
+                  {historyDetail.included_days.map((d) => d.business_date).join(", ")}
                 </p>
               ) : null}
               <SummaryCards
+                dailyClosuresCount={historyDetail.daily_closures_count}
+                daysInMonth={historyDetail.days_in_month}
+                missingCount={historyDetail.missing_days_count}
                 totalSales={historyDetail.total_sales}
                 ordersClosedCount={historyDetail.orders_closed_count}
                 transactionsCount={historyDetail.transactions_count}
@@ -527,7 +551,7 @@ export default function DailySalesClosurePage() {
                 zeroAmountOrdersCount={historyDetail.zero_amount_orders_count}
                 discountedOrdersCount={historyDetail.discounted_orders_count}
               />
-              <ClosureDetailTables
+              <DetailTables
                 paymentMethods={historyDetail.payment_methods}
                 products={historyDetail.products}
                 categories={historyDetail.categories}
