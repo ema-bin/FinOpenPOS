@@ -345,6 +345,23 @@ export default function Page() {
             </CardContent>
           </Card>
 
+          <Card
+            className="hover:bg-muted/50 transition-colors cursor-pointer"
+            onClick={() => router.push("/admin/monthly-sales-closure")}
+          >
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <ClipboardListIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Cierre mensual</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Integra los cierres diarios del mes
+              </CardDescription>
+            </CardContent>
+          </Card>
+
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/advertisements")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">

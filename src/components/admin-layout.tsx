@@ -39,6 +39,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/advertisements": "Publicidades",
   "/admin/balance": "Balance",
   "/admin/daily-sales-closure": "Cierre de caja",
+  "/admin/monthly-sales-closure": "Cierre mensual",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
