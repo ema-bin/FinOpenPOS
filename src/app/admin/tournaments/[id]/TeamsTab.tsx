@@ -151,6 +151,8 @@ export default function TeamsTab({
   const [confirmReplaceSlotsOpen, setConfirmReplaceSlotsOpen] = useState(false);
   const [initializingAllRestrictions, setInitializingAllRestrictions] = useState(false);
   const [confirmCloseWithPendingScheduleOpen, setConfirmCloseWithPendingScheduleOpen] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState<TeamDTO | null>(null);
+  const [deletingTeam, setDeletingTeam] = useState(false);
   
   // Estado para edición de parejas
   const [editingTeam, setEditingTeam] = useState<TeamDTO | null>(null);
@@ -342,6 +344,11 @@ export default function TeamsTab({
   const getTeamDisplayName = (team: TeamDTO) =>
     team.display_name ?? `${fullName(team.player1)} / ${fullName(team.player2)}`;
 
+  const teamHasScheduleRestrictions = (team: TeamDTO) =>
+    Boolean(team.schedule_restrictions_loaded) ||
+    (team.restricted_slot_ids?.length ?? 0) > 0 ||
+    Boolean(team.schedule_notes?.trim());
+
   const openRestrictionsDialog = (team: TeamDTO) => {
     setSelectedTeamForRestrictions(team);
     setRestrictionsDialogOpen(true);
@@ -424,6 +431,7 @@ export default function TeamsTab({
 
   const handleDelete = async (teamId: number) => {
     try {
+      setDeletingTeam(true);
       await tournamentsService.deleteTeam(tournament.id, teamId);
       // Actualizar orden local removiendo el equipo eliminado
       const updated = localTeamsOrder.filter(t => t.id !== teamId);
@@ -435,10 +443,17 @@ export default function TeamsTab({
       // Invalidar cache para refrescar teams
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
       toast.success("Equipo eliminado correctamente");
+      setTeamToDelete(null);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Error al eliminar el equipo");
+    } finally {
+      setDeletingTeam(false);
     }
+  };
+
+  const handleDeleteClick = (team: TeamDTO) => {
+    setTeamToDelete(team);
   };
 
   const handleSaveRestrictions = async (
@@ -1100,7 +1115,7 @@ export default function TeamsTab({
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(team.id)}
+                        onClick={() => handleDeleteClick(team)}
                         title="Eliminar equipo inválido"
                       >
                         <TrashIcon className="w-4 h-4 text-red-600" />
@@ -1270,7 +1285,7 @@ export default function TeamsTab({
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(team.id)}
+                            onClick={() => handleDeleteClick(team)}
                             title="Eliminar equipo"
                           >
                             <TrashIcon className="w-4 h-4" />
@@ -1853,6 +1868,56 @@ export default function TeamsTab({
             <Button variant="destructive" onClick={() => void handleCloseRegistration()} disabled={closing}>
               {closing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
               Cerrar inscripción igual
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={teamToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingTeam) setTeamToDelete(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar pareja</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  ¿Querés eliminar la pareja{" "}
+                  <strong className="text-foreground">
+                    {teamToDelete ? getTeamDisplayName(teamToDelete) : ""}
+                  </strong>{" "}
+                  del torneo?
+                </p>
+                {teamToDelete && teamHasScheduleRestrictions(teamToDelete) && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                    <p className="font-medium">Esta pareja tiene disponibilidad horaria cargada.</p>
+                    <p className="mt-1">
+                      Al eliminarla se perderán sus restricciones horarias
+                      {teamToDelete.schedule_notes?.trim() ? ", las notas de disponibilidad" : ""}
+                      {" "}y el registro de consulta. Esta acción no se puede deshacer.
+                    </p>
+                  </div>
+                )}
+                {teamToDelete && !teamHasScheduleRestrictions(teamToDelete) && (
+                  <p>Esta acción no se puede deshacer.</p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTeamToDelete(null)} disabled={deletingTeam}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => teamToDelete && void handleDelete(teamToDelete.id)}
+              disabled={deletingTeam || !teamToDelete}
+            >
+              {deletingTeam ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Eliminar pareja
             </Button>
           </DialogFooter>
         </DialogContent>
