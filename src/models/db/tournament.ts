@@ -49,6 +49,7 @@ export interface TournamentTeam {
   display_order: number;
   is_substitute: boolean;
   schedule_notes: string | null;
+  schedule_restrictions_loaded: boolean;
 }
 
 export interface TournamentGroup {
@@ -164,6 +165,7 @@ export interface CreateTournamentTeamInput {
   display_order?: number;
   is_substitute?: boolean;
   schedule_notes?: string | null;
+  schedule_restrictions_loaded?: boolean;
 }
 
 export interface CreateTournamentGroupInput {

@@ -269,6 +269,7 @@ class TournamentsService {
       display_order?: number;
       is_substitute?: boolean;
       schedule_notes?: string | null;
+      schedule_restrictions_loaded?: boolean;
     }
   ): Promise<TeamDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}`, {

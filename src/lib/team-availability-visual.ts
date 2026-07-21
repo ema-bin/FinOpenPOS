@@ -53,3 +53,30 @@ export function availabilityBadgeClassName(level: TeamAvailabilityLevel): string
       return "";
   }
 }
+
+/** Pareja activa con horarios del torneo pero sin marcar consulta de disponibilidad. */
+export function teamNeedsScheduleConsultation(
+  hasSlots: boolean,
+  isSubstitute: boolean,
+  scheduleRestrictionsLoaded?: boolean
+): boolean {
+  return hasSlots && !isSubstitute && !scheduleRestrictionsLoaded;
+}
+
+/** Fila destacada para parejas que aún no consultaron horarios. */
+export function scheduleConsultationPendingRowClassName(): string {
+  return "border-2 border-orange-400 bg-orange-50/95 dark:bg-orange-950/45 dark:border-orange-500 shadow-sm ring-1 ring-orange-200/70 dark:ring-orange-900/40";
+}
+
+/** Fila atenuada para parejas ya consultadas (menos ruido visual). */
+export function scheduleConsultationDoneRowClassName(): string {
+  return "border-emerald-200/70 bg-muted/25 dark:bg-muted/15 opacity-75";
+}
+
+export function scheduleConsultationPendingBadgeClassName(): string {
+  return "bg-orange-100 text-orange-950 dark:bg-orange-900/60 dark:text-orange-50 border border-orange-300/80 dark:border-orange-700";
+}
+
+export function scheduleConsultationDoneBadgeClassName(): string {
+  return "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100";
+}
