@@ -253,7 +253,12 @@ export function TeamScheduleRestrictionsDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
+          {!readOnly && (
+            <p className="text-xs text-muted-foreground mr-auto hidden sm:block">
+              Al guardar, la pareja queda marcada como consultada.
+            </p>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {readOnly ? "Cerrar" : "Cancelar"}
           </Button>

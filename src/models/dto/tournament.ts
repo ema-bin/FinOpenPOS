@@ -67,6 +67,7 @@ export interface TeamDTO {
   display_order: number;
   is_substitute: boolean;
   schedule_notes: string | null;
+  schedule_restrictions_loaded?: boolean;
   restricted_slot_ids?: number[]; // IDs de tournament_group_slots en los que el equipo NO puede jugar
   standings?: Array<{
     position: number;

@@ -123,11 +123,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
     }
 
-    // Actualizar schedule_notes si se proporcionó
+    const repos = await createRepositories();
+    const teamUpdates: { schedule_notes?: string | null; schedule_restrictions_loaded: boolean } = {
+      schedule_restrictions_loaded: true,
+    };
     if (schedule_notes !== undefined) {
-      const repos = await createRepositories();
-      await repos.tournamentTeams.update(teamId, { schedule_notes: schedule_notes || null });
+      teamUpdates.schedule_notes = schedule_notes || null;
     }
+    await repos.tournamentTeams.update(teamId, teamUpdates);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

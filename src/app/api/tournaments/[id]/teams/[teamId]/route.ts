@@ -16,7 +16,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     const body = await req.json();
-    const { player1_id, player2_id, display_name, seed_number, notes, display_order, is_substitute, schedule_notes } = body;
+    const { player1_id, player2_id, display_name, seed_number, notes, display_order, is_substitute, schedule_notes, schedule_restrictions_loaded } = body;
 
     const tournament = await repos.tournaments.findById(tournamentId);
     if (!tournament) {
@@ -113,6 +113,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     if (display_order !== undefined) updates.display_order = display_order;
     if (is_substitute !== undefined) updates.is_substitute = is_substitute;
     if (schedule_notes !== undefined) updates.schedule_notes = schedule_notes;
+    if (schedule_restrictions_loaded !== undefined) {
+      updates.schedule_restrictions_loaded = Boolean(schedule_restrictions_loaded);
+    }
 
     // Update team
     const updatedTeam = await repos.tournamentTeams.update(teamId, updates);

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Loader2Icon, PlusIcon, TrashIcon, Trash2Icon, LockIcon, ChevronsUpDown, CheckIcon, CalendarIcon, EditIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, GripVerticalIcon, SaveIcon, ClockIcon } from "lucide-react";
+import { Loader2Icon, PlusIcon, TrashIcon, Trash2Icon, LockIcon, ChevronsUpDown, CheckIcon, CalendarIcon, EditIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, GripVerticalIcon, SaveIcon, ClockIcon, CheckCircle2Icon, AlertCircleIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
@@ -42,6 +42,11 @@ import {
   availabilityBadgeClassName,
   availabilityRowClassName,
   getTeamAvailabilityLevel,
+  scheduleConsultationDoneBadgeClassName,
+  scheduleConsultationDoneRowClassName,
+  scheduleConsultationPendingBadgeClassName,
+  scheduleConsultationPendingRowClassName,
+  teamNeedsScheduleConsultation,
 } from "@/lib/team-availability-visual";
 import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restrictions-dialog";
 
@@ -145,6 +150,7 @@ export default function TeamsTab({
   const [generatingSlots, setGeneratingSlots] = useState(false);
   const [confirmReplaceSlotsOpen, setConfirmReplaceSlotsOpen] = useState(false);
   const [initializingAllRestrictions, setInitializingAllRestrictions] = useState(false);
+  const [confirmCloseWithPendingScheduleOpen, setConfirmCloseWithPendingScheduleOpen] = useState(false);
   
   // Estado para edición de parejas
   const [editingTeam, setEditingTeam] = useState<TeamDTO | null>(null);
@@ -333,6 +339,14 @@ export default function TeamsTab({
     return `${p.first_name} ${p.last_name}`;
   };
 
+  const getTeamDisplayName = (team: TeamDTO) =>
+    team.display_name ?? `${fullName(team.player1)} / ${fullName(team.player2)}`;
+
+  const openRestrictionsDialog = (team: TeamDTO) => {
+    setSelectedTeamForRestrictions(team);
+    setRestrictionsDialogOpen(true);
+  };
+
   // Filtrar jugadores por búsqueda (subcadena en nombre o apellido)
   // Usa useMemo para memoizar los resultados filtrados
   const filteredPlayers1 = useMemo(() => {
@@ -450,6 +464,22 @@ export default function TeamsTab({
   // Filtrar equipos para cálculos (excluir suplentes) - usar orden local si hay cambios
   const teamsToUse = hasOrderChanges && localTeamsOrder.length > 0 ? localTeamsOrder : teams;
   const activeTeams = useMemo(() => teamsToUse.filter(t => !t.is_substitute), [teamsToUse]);
+  const scheduleRestrictionsStats = useMemo(() => {
+    const relevantTeams = groupSlots.length > 0 ? teamsToUse.filter((t) => !t.is_substitute) : [];
+    const loaded = relevantTeams.filter((t) => t.schedule_restrictions_loaded).length;
+    return { loaded, total: relevantTeams.length, pending: relevantTeams.length - loaded };
+  }, [teamsToUse, groupSlots.length]);
+  const teamsPendingSchedule = useMemo(
+    () =>
+      teamsToUse.filter((team) =>
+        teamNeedsScheduleConsultation(
+          groupSlots.length > 0,
+          team.is_substitute,
+          team.schedule_restrictions_loaded
+        )
+      ),
+    [teamsToUse, groupSlots.length]
+  );
   const playerPointsMap = useMemo(() => {
     const m = new Map<number, number>();
     (rankingForCategory?.rows ?? []).forEach((r) => {
@@ -606,6 +636,23 @@ export default function TeamsTab({
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Error al actualizar el equipo");
+    }
+  };
+
+  const handleToggleScheduleRestrictionsLoaded = async (team: TeamDTO) => {
+    try {
+      await tournamentsService.updateTeam(tournament.id, team.id, {
+        schedule_restrictions_loaded: !team.schedule_restrictions_loaded,
+      });
+      queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
+      toast.success(
+        team.schedule_restrictions_loaded
+          ? "Restricciones horarias desmarcadas como consultadas"
+          : "Restricciones horarias marcadas como consultadas"
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Error al actualizar el equipo");
     }
   };
 
@@ -790,7 +837,16 @@ export default function TeamsTab({
     } finally {
       setClosing(false);
       setClosingStatus(null);
+      setConfirmCloseWithPendingScheduleOpen(false);
     }
+  };
+
+  const handleCloseRegistrationClick = () => {
+    if (teamsPendingSchedule.length > 0) {
+      setConfirmCloseWithPendingScheduleOpen(true);
+      return;
+    }
+    void handleCloseRegistration();
   };
 
   if (loading) {
@@ -825,6 +881,38 @@ export default function TeamsTab({
               >
                 Generar horarios
               </Button>
+            </div>
+          )}
+          {groupSlots.length > 0 && teamsPendingSchedule.length > 0 && canEditAvailability && (
+            <div className="mt-3 p-3 rounded-md border-2 border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-950/40 space-y-3">
+              <div className="flex items-start gap-2 text-sm text-orange-950 dark:text-orange-100">
+                <AlertCircleIcon className="h-5 w-5 shrink-0 mt-0.5 text-orange-600 dark:text-orange-400" />
+                <div className="space-y-1">
+                  <p className="font-semibold">
+                    {teamsPendingSchedule.length === 1
+                      ? "1 pareja aún no consultó horarios"
+                      : `${teamsPendingSchedule.length} parejas aún no consultaron horarios`}
+                  </p>
+                  <p className="text-orange-900/90 dark:text-orange-200/90">
+                    Consultá la disponibilidad de cada pareja antes de cerrar la inscripción. Las filas
+                    pendientes están resaltadas en naranja.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {teamsPendingSchedule.map((team) => (
+                  <Button
+                    key={team.id}
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-orange-300 bg-white/80 text-orange-950 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/30 dark:text-orange-50 dark:hover:bg-orange-900/40"
+                    onClick={() => openRestrictionsDialog(team)}
+                  >
+                    <AlertCircleIcon className="mr-1.5 h-3.5 w-3.5" />
+                    {getTeamDisplayName(team)}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
           {/* Resumen */}
@@ -912,7 +1000,7 @@ export default function TeamsTab({
           )}
           <Button
             size="sm"
-            onClick={handleCloseRegistration}
+            onClick={handleCloseRegistrationClick}
             disabled={tournament.status !== "draft" || activeTeams.length < 3 || closing}
           >
             {closing && (
@@ -972,6 +1060,14 @@ export default function TeamsTab({
             {groupSlots.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border rounded-md px-3 py-2 bg-muted/40">
                 <span className="font-medium text-foreground">Disponibilidad horaria</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-orange-800 dark:text-orange-200">
+                  <span className="inline-block size-3 rounded-sm bg-orange-200 dark:bg-orange-900 border-2 border-orange-500/80" />
+                  Falta consultar ({scheduleRestrictionsStats.pending})
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2Icon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Consultado ({scheduleRestrictionsStats.loaded}/{scheduleRestrictionsStats.total})
+                </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="inline-block size-3 rounded-sm bg-emerald-200 dark:bg-emerald-800 border border-emerald-500/50" />
                   Puede en todos
@@ -1021,23 +1117,41 @@ export default function TeamsTab({
                 team.restricted_slot_ids,
                 groupSlotIdSet
               );
+              const needsScheduleConsultation = teamNeedsScheduleConsultation(
+                groupSlots.length > 0,
+                team.is_substitute,
+                team.schedule_restrictions_loaded
+              );
+              const scheduleConsultationDone =
+                groupSlots.length > 0 && !team.is_substitute && Boolean(team.schedule_restrictions_loaded);
               const availRow =
-                groupSlots.length > 0 && availability.level !== "none"
+                !needsScheduleConsultation &&
+                !scheduleConsultationDone &&
+                groupSlots.length > 0 &&
+                availability.level !== "none"
                   ? availabilityRowClassName(availability.level)
                   : "";
               const availTitle =
                 groupSlots.length > 0 && availability.level !== "none"
                   ? `Disponibilidad: puede jugar en ${availability.available} de ${availability.total} horarios del torneo`
-                  : undefined;
+                  : needsScheduleConsultation
+                    ? "Esta pareja aún no consultó horarios"
+                    : scheduleConsultationDone
+                      ? "Disponibilidad horaria consultada y cargada"
+                      : undefined;
 
               return (
                 <div
                   key={team.id}
                   title={availTitle}
                   className={cn(
-                    "flex items-center justify-between border rounded-md px-3 py-2",
+                    "flex items-center justify-between border rounded-md px-3 py-2 transition-colors",
                     team.is_substitute && "opacity-80",
-                    availRow || (team.is_substitute ? "bg-muted/30" : "bg-background")
+                    needsScheduleConsultation
+                      ? scheduleConsultationPendingRowClassName()
+                      : scheduleConsultationDone
+                        ? scheduleConsultationDoneRowClassName()
+                        : availRow || (team.is_substitute ? "bg-muted/30" : "bg-background")
                   )}
                 >
                   <div className="flex items-center gap-3 flex-1">
@@ -1084,7 +1198,29 @@ export default function TeamsTab({
                             {teamCategoryPoints(team).toFixed(1)} pts pareja
                           </span>
                         )}
-                        {groupSlots.length > 0 && availability.level !== "none" && (
+                        {needsScheduleConsultation && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold shrink-0",
+                              scheduleConsultationPendingBadgeClassName()
+                            )}
+                          >
+                            <AlertCircleIcon className="size-3.5" />
+                            Falta consultar
+                          </span>
+                        )}
+                        {scheduleConsultationDone && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0",
+                              scheduleConsultationDoneBadgeClassName()
+                            )}
+                          >
+                            <CheckCircle2Icon className="size-3" />
+                            Consultado
+                          </span>
+                        )}
+                        {groupSlots.length > 0 && availability.level !== "none" && scheduleConsultationDone && (
                           <span
                             className={cn(
                               "text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0",
@@ -1145,20 +1281,40 @@ export default function TeamsTab({
                   )}
                   {groupSlots.length > 0 && (
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedTeamForRestrictions(team);
-                        setRestrictionsDialogOpen(true);
-                      }}
+                      variant={needsScheduleConsultation ? "default" : "ghost"}
+                      size={needsScheduleConsultation ? "sm" : "icon"}
+                      className={cn(
+                        needsScheduleConsultation &&
+                          "bg-orange-600 hover:bg-orange-700 text-white shrink-0"
+                      )}
+                      onClick={() => openRestrictionsDialog(team)}
                       title={
                         canEditAvailability
-                          ? "Editar disponibilidad horaria"
+                          ? needsScheduleConsultation
+                            ? "Cargar disponibilidad horaria"
+                            : "Editar disponibilidad horaria"
                           : "Ver disponibilidad horaria (solo lectura)"
                       }
                     >
-                      <CalendarIcon className="w-4 h-4" />
+                      <CalendarIcon className={cn("w-4 h-4", needsScheduleConsultation && "mr-1")} />
+                      {needsScheduleConsultation && "Consultar"}
                     </Button>
+                  )}
+                  {groupSlots.length > 0 && canEditAvailability && (
+                    <div className="flex items-center gap-1 px-1">
+                      <Checkbox
+                        id={`schedule-loaded-${team.id}`}
+                        checked={Boolean(team.schedule_restrictions_loaded)}
+                        onCheckedChange={() => handleToggleScheduleRestrictionsLoaded(team)}
+                      />
+                      <Label
+                        htmlFor={`schedule-loaded-${team.id}`}
+                        className="text-xs cursor-pointer whitespace-nowrap"
+                        title="Marcar si ya se consultó y cargó la disponibilidad horaria de esta pareja"
+                      >
+                        Consultado
+                      </Label>
+                    </div>
                   )}
                   {tournament.status === "draft" && hasGroups && groupSlots.length === 0 && (
                     <Button
@@ -1665,6 +1821,38 @@ export default function TeamsTab({
             >
               {generatingSlots ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
               Sí, regenerar horarios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmCloseWithPendingScheduleOpen} onOpenChange={setConfirmCloseWithPendingScheduleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Faltan consultas de horarios</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  {teamsPendingSchedule.length === 1
+                    ? "Hay 1 pareja activa que aún no consultó horarios."
+                    : `Hay ${teamsPendingSchedule.length} parejas activas que aún no consultaron horarios.`}
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {teamsPendingSchedule.map((team) => (
+                    <li key={team.id}>{getTeamDisplayName(team)}</li>
+                  ))}
+                </ul>
+                <p>¿Querés cerrar la inscripción igual?</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCloseWithPendingScheduleOpen(false)}>
+              Volver a consultar
+            </Button>
+            <Button variant="destructive" onClick={() => void handleCloseRegistration()} disabled={closing}>
+              {closing ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Cerrar inscripción igual
             </Button>
           </DialogFooter>
         </DialogContent>
