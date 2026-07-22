@@ -44,3 +44,30 @@ export function formatBusinessDayLabel(businessDate: string): string {
   const to = end.toLocaleString("es-AR", opts);
   return `${businessDate} (${from} – ${to} UTC)`;
 }
+
+const BUSINESS_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseBusinessDateParam(value: string | null | undefined): string | null {
+  if (!value?.trim() || !BUSINESS_DATE_RE.test(value.trim())) return null;
+  return value.trim();
+}
+
+export function enumerateBusinessDates(fromDate: string, toDate: string): string[] {
+  if (!parseBusinessDateParam(fromDate) || !parseBusinessDateParam(toDate)) {
+    throw new Error("Rango de fechas inválido (usar YYYY-MM-DD)");
+  }
+  if (fromDate > toDate) {
+    throw new Error("fromDate no puede ser posterior a toDate");
+  }
+
+  const dates: string[] = [];
+  const current = new Date(`${fromDate}T12:00:00.000Z`);
+  const end = new Date(`${toDate}T12:00:00.000Z`);
+
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return dates;
+}
