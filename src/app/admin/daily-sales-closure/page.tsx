@@ -30,11 +30,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2Icon, LockIcon } from "lucide-react";
+import { Loader2Icon, LockIcon, CalendarRangeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { dailySalesClosuresService } from "@/services/daily-sales-closures.service";
-import { getCurrentBusinessDate, formatBusinessDayLabel } from "@/lib/business-day";
+import { getCurrentBusinessDate, getPreviousBusinessDate, formatBusinessDayLabel, enumerateBusinessDates } from "@/lib/business-day";
 import type { DailySalesClosureDTO, DailySalesClosurePreviewDTO } from "@/models/dto/daily-sales-closure";
+import type {
+  DailySalesClosuresBackfillResult,
+  DailySalesClosuresBackfillProgress,
+} from "@/services/daily-sales-closures.service";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function mapPreviewToDisplay(preview: NonNullable<DailySalesClosurePreviewDTO["preview"]>) {
   return {
@@ -233,10 +238,27 @@ function ClosureDetailTables({
 export default function DailySalesClosurePage() {
   const queryClient = useQueryClient();
   const defaultDate = useMemo(() => getCurrentBusinessDate(), []);
+  const defaultRangeTo = useMemo(() => getPreviousBusinessDate(), []);
+  const defaultRangeFrom = useMemo(() => {
+    const end = new Date(`${defaultRangeTo}T12:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() - 29);
+    return end.toISOString().slice(0, 10);
+  }, [defaultRangeTo]);
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [notes, setNotes] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [historyDate, setHistoryDate] = useState<string | null>(null);
+  const [rangeFrom, setRangeFrom] = useState(defaultRangeFrom);
+  const [rangeTo, setRangeTo] = useState(defaultRangeTo);
+  const [rangeNotes, setRangeNotes] = useState("");
+  const [rangeSkipExisting, setRangeSkipExisting] = useState(true);
+  const [rangeConfirmOpen, setRangeConfirmOpen] = useState(false);
+  const [rangeResult, setRangeResult] = useState<DailySalesClosuresBackfillResult | null>(null);
+  const [rangeRunning, setRangeRunning] = useState(false);
+  const [rangeProgress, setRangeProgress] = useState<DailySalesClosuresBackfillProgress | null>(
+    null
+  );
+  const [rangeFinished, setRangeFinished] = useState(false);
 
   const { data: previewData, isLoading: loadingPreview } = useQuery({
     queryKey: ["daily-sales-closure-preview", selectedDate],
@@ -272,6 +294,85 @@ export default function DailySalesClosurePage() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  const handleRangeBackfill = async () => {
+    setRangeRunning(true);
+    setRangeFinished(false);
+    setRangeProgress(null);
+    setRangeResult(null);
+
+    try {
+      const result = await dailySalesClosuresService.backfillRangeWithProgress(
+        {
+          fromDate: rangeFrom,
+          toDate: rangeTo,
+          notes: rangeNotes.trim() || undefined,
+          skipExisting: rangeSkipExisting,
+        },
+        (progress) => setRangeProgress(progress)
+      );
+
+      setRangeResult(result);
+      setRangeFinished(true);
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-closure-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-closures"] });
+
+      if (result.errors.length > 0) {
+        toast.error(
+          `Se crearon ${result.created.length} cierres, pero ${result.errors.length} días fallaron`
+        );
+      } else {
+        toast.success(
+          `Listo: ${result.created.length} creados, ${result.skipped.length} omitidos` +
+            (result.replaced.length > 0 ? `, ${result.replaced.length} reemplazados` : "")
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al generar los cierres");
+    } finally {
+      setRangeRunning(false);
+    }
+  };
+
+  const closeRangeDialog = () => {
+    if (rangeRunning) return;
+    setRangeConfirmOpen(false);
+    setRangeProgress(null);
+    setRangeFinished(false);
+  };
+
+  const rangeProgressPercent =
+    rangeProgress && rangeProgress.total > 0
+      ? Math.round((rangeProgress.current / rangeProgress.total) * 100)
+      : 0;
+
+  const rangeProgressLabel = (() => {
+    if (!rangeProgress) return "Preparando…";
+    switch (rangeProgress.action) {
+      case "processing":
+        return `Procesando ${rangeProgress.businessDate}…`;
+      case "skipped":
+        return `${rangeProgress.businessDate} — omitido (ya existía)`;
+      case "created":
+        return `${rangeProgress.businessDate} — cierre creado${rangeProgress.detail ? ` (${rangeProgress.detail})` : ""}`;
+      case "replaced":
+        return `${rangeProgress.businessDate} — cierre actualizado${rangeProgress.detail ? ` (${rangeProgress.detail})` : ""}`;
+      case "error":
+        return `${rangeProgress.businessDate} — error${rangeProgress.detail ? `: ${rangeProgress.detail}` : ""}`;
+      default:
+        return rangeProgress.businessDate;
+    }
+  })();
+
+  const rangeDayCount = useMemo(() => {
+    try {
+      return enumerateBusinessDates(rangeFrom, rangeTo).length;
+    } catch {
+      return null;
+    }
+  }, [rangeFrom, rangeTo]);
+
+  const rangeInvalid = rangeDayCount === null || rangeDayCount <= 0;
 
   const alreadyClosed = previewData?.alreadyClosed ?? false;
   const closure = previewData?.closure;
@@ -407,6 +508,141 @@ export default function DailySalesClosurePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarRangeIcon className="h-5 w-5" />
+            Cierre por rango de fechas
+          </CardTitle>
+          <CardDescription>
+            Generá varios cierres diarios de una vez. Por defecto solo crea los días que aún no
+            tienen cierre guardado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="range-from">Desde</Label>
+              <Input
+                id="range-from"
+                type="date"
+                value={rangeFrom}
+                onChange={(e) => {
+                  setRangeFrom(e.target.value);
+                  setRangeResult(null);
+                }}
+                className="w-44"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="range-to">Hasta</Label>
+              <Input
+                id="range-to"
+                type="date"
+                value={rangeTo}
+                onChange={(e) => {
+                  setRangeTo(e.target.value);
+                  setRangeResult(null);
+                }}
+                className="w-44"
+              />
+            </div>
+            {rangeDayCount !== null && !rangeInvalid ? (
+              <p className="text-sm text-muted-foreground pb-2">
+                {rangeDayCount} {rangeDayCount === 1 ? "día" : "días"} en el rango
+              </p>
+            ) : (
+              <p className="text-sm text-destructive pb-2">Rango de fechas inválido</p>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="range-notes">Notas para los cierres (opcional)</Label>
+            <Textarea
+              id="range-notes"
+              value={rangeNotes}
+              onChange={(e) => setRangeNotes(e.target.value)}
+              placeholder="Ej: Cierre histórico en lote"
+              rows={2}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="range-skip-existing"
+              checked={rangeSkipExisting}
+              onCheckedChange={(checked) => setRangeSkipExisting(checked === true)}
+            />
+            <Label htmlFor="range-skip-existing" className="cursor-pointer font-normal">
+              Solo días sin cierre (omitir los que ya existen)
+            </Label>
+          </div>
+
+          <Button
+            onClick={() => {
+              setRangeFinished(false);
+              setRangeResult(null);
+              setRangeConfirmOpen(true);
+            }}
+            disabled={rangeInvalid || rangeRunning}
+          >
+            {rangeRunning ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Generando cierres…
+              </>
+            ) : (
+              "Generar cierres del rango"
+            )}
+          </Button>
+
+          {rangeResult ? (
+            <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-2">
+              <p className="font-medium">Resultado del último proceso</p>
+              <p>
+                Rango: {rangeResult.fromDate} → {rangeResult.toDate} ({rangeResult.totalDays} días)
+              </p>
+              <p>
+                <strong>Creados:</strong> {rangeResult.created.length}
+                {" · "}
+                <strong>Omitidos:</strong> {rangeResult.skipped.length}
+                {" · "}
+                <strong>Reemplazados:</strong> {rangeResult.replaced.length}
+                {rangeResult.errors.length > 0 ? (
+                  <>
+                    {" · "}
+                    <strong className="text-destructive">Errores:</strong> {rangeResult.errors.length}
+                  </>
+                ) : null}
+              </p>
+              {rangeResult.created.length > 0 ? (
+                <details>
+                  <summary className="cursor-pointer text-muted-foreground">
+                    Ver días creados ({rangeResult.created.length})
+                  </summary>
+                  <ul className="mt-2 max-h-40 overflow-y-auto space-y-1 pl-4 list-disc">
+                    {rangeResult.created.map((row) => (
+                      <li key={row.businessDate}>
+                        {row.businessDate}: ${row.totalSales.toFixed(2)}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              {rangeResult.errors.length > 0 ? (
+                <ul className="text-destructive space-y-1 pl-4 list-disc">
+                  {rangeResult.errors.map((row) => (
+                    <li key={row.businessDate}>
+                      {row.businessDate}: {row.error}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Historial de cierres</CardTitle>
           <CardDescription>Últimos 30 cierres registrados.</CardDescription>
         </CardHeader>
@@ -493,6 +729,124 @@ export default function DailySalesClosurePage() {
                 : "Confirmar cierre"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={rangeConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) closeRangeDialog();
+          else setRangeConfirmOpen(true);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {rangeFinished
+                ? "Cierres del rango completados"
+                : rangeRunning
+                  ? "Generando cierres…"
+                  : "Confirmar cierres por rango"}
+            </DialogTitle>
+            {!rangeRunning && !rangeFinished ? (
+              <DialogDescription>
+                {rangeSkipExisting
+                  ? `Se generarán cierres para los días sin registro entre ${rangeFrom} y ${rangeTo}.`
+                  : `Se generarán o reemplazarán cierres para todos los días entre ${rangeFrom} y ${rangeTo}.`}
+              </DialogDescription>
+            ) : null}
+          </DialogHeader>
+
+          {!rangeRunning && !rangeFinished ? (
+            <>
+              <div className="text-sm space-y-1">
+                <p>
+                  <strong>Días en el rango:</strong> {rangeDayCount ?? "—"}
+                </p>
+                {rangeNotes.trim() ? (
+                  <p>
+                    <strong>Notas:</strong> {rangeNotes.trim()}
+                  </p>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeRangeDialog}>
+                  Cancelar
+                </Button>
+                <Button onClick={() => void handleRangeBackfill()} disabled={rangeInvalid}>
+                  Confirmar
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+
+          {rangeRunning || rangeFinished ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {rangeProgress
+                      ? `${rangeProgress.current} / ${rangeProgress.total} días`
+                      : "Preparando…"}
+                  </span>
+                  <span className="font-medium tabular-nums">{rangeProgressPercent}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                    style={{ width: `${rangeProgressPercent}%` }}
+                  />
+                </div>
+                <p className="text-sm">{rangeProgressLabel}</p>
+              </div>
+
+              {rangeProgress ? (
+                <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                  <div className="rounded-md border px-2 py-1.5">
+                    <div className="text-muted-foreground">Creados</div>
+                    <div className="font-semibold tabular-nums">{rangeProgress.created}</div>
+                  </div>
+                  <div className="rounded-md border px-2 py-1.5">
+                    <div className="text-muted-foreground">Omitidos</div>
+                    <div className="font-semibold tabular-nums">{rangeProgress.skipped}</div>
+                  </div>
+                  <div className="rounded-md border px-2 py-1.5">
+                    <div className="text-muted-foreground">Actualizados</div>
+                    <div className="font-semibold tabular-nums">{rangeProgress.replaced}</div>
+                  </div>
+                  <div className="rounded-md border px-2 py-1.5">
+                    <div className="text-muted-foreground">Errores</div>
+                    <div className="font-semibold tabular-nums text-destructive">
+                      {rangeProgress.errors}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {rangeFinished && rangeResult?.errors.length ? (
+                <ul className="max-h-32 overflow-y-auto text-sm text-destructive list-disc pl-4 space-y-1">
+                  {rangeResult.errors.map((row) => (
+                    <li key={row.businessDate}>
+                      {row.businessDate}: {row.error}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {rangeRunning ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2Icon className="h-4 w-4 animate-spin shrink-0" />
+                  Procesando un día a la vez…
+                </div>
+              ) : null}
+
+              {rangeFinished ? (
+                <DialogFooter>
+                  <Button onClick={closeRangeDialog}>Cerrar</Button>
+                </DialogFooter>
+              ) : null}
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 
