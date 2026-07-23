@@ -32,6 +32,7 @@ import ShareGroupScheduleTab from "./ShareGroupScheduleTab";
 import ShareGroupStandingsTab from "./ShareGroupStandingsTab";
 import ShareTournamentFlyerTab from "./ShareTournamentFlyerTab";
 import SharePlayoffsTab from "./SharePlayoffsTab";
+import SharePlayoffPreviewTab from "./SharePlayoffPreviewTab";
 import PlayoffPreviewTab from "./PlayoffPreviewTab";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
@@ -208,6 +209,7 @@ export default function TournamentDetailPage() {
                 <TabsTrigger value="share-schedule">Horarios Grupos</TabsTrigger>
                 <TabsTrigger value="share-standings-results">Resultados Grupos</TabsTrigger>
                 <TabsTrigger value="share-playoffs">Playoffs</TabsTrigger>
+                <TabsTrigger value="share-playoff-preview">Playoffs Preview</TabsTrigger>
               </TabsList>
             </div>
           </div>
@@ -288,6 +290,12 @@ export default function TournamentDetailPage() {
           {activeTab === "share-playoffs" && (
             <TabsContent value="share-playoffs" className="px-0 pt-1 pb-0">
               <SharePlayoffsTab tournament={tournament} />
+            </TabsContent>
+          )}
+
+          {activeTab === "share-playoff-preview" && (
+            <TabsContent value="share-playoff-preview" className="px-0 pt-1 pb-0">
+              <SharePlayoffPreviewTab tournament={tournament} />
             </TabsContent>
           )}
         </Tabs>

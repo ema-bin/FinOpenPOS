@@ -12,16 +12,18 @@
   --mb-text-on-orange: #ffffff;
   --mb-text-on-final: #1a3d28;
   --mb-line: rgba(255, 255, 255, 0.9);
-  --mb-col-w-first: 332px;
-  --mb-col-w-late: 112px;
-  --mb-gap-cols: 16px;
-  --mb-slot-unit: 38px;
+  /* Anchos/altos base (sobreescritos por inline style desde TS) */
+  --mb-col-w-first: 164px;
+  --mb-col-w-late: 48px;
+  --mb-gap-cols: 3px;
+  --mb-slot-unit: 13px;
+  --mb-match-gap: 0px;
 
   position: relative;
   display: inline-block;
   width: max-content;
   max-width: 100%;
-  padding: 6px 8px;
+  padding: 2px 3px;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   background: radial-gradient(ellipse 110% 75% at 12% 18%, #2d5016 0%, transparent 52%),
     radial-gradient(ellipse 85% 65% at 88% 82%, rgba(230, 126, 29, 0.22) 0%, transparent 48%),
@@ -41,18 +43,18 @@
 }
 
 .minimal-bracket-root::before {
-  width: 160px;
-  height: 160px;
-  top: -50px;
-  left: -30px;
+  width: 120px;
+  height: 120px;
+  top: -40px;
+  left: -24px;
   background: radial-gradient(circle, var(--mb-green-dark) 0%, transparent 70%);
 }
 
 .minimal-bracket-root::after {
-  width: 140px;
-  height: 140px;
-  bottom: -40px;
-  right: -24px;
+  width: 100px;
+  height: 100px;
+  bottom: -32px;
+  right: -20px;
   background: radial-gradient(circle, var(--mb-orange) 0%, transparent 70%);
 }
 
@@ -102,7 +104,8 @@
 }
 
 .minimal-bracket-col--first .minimal-team-box {
-  white-space: nowrap;
+  white-space: normal;
+  hyphens: auto;
 }
 
 .minimal-bracket-slot {
@@ -110,7 +113,7 @@
   flex-direction: column;
   justify-content: center;
   box-sizing: border-box;
-  padding: 1px 0;
+  padding: 0;
 }
 
 .minimal-bracket-connectors {
@@ -146,7 +149,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 3px;
+  gap: var(--mb-match-gap, 1px);
 }
 
 .minimal-match-paired--bye {
@@ -158,16 +161,16 @@
   align-items: center;
   justify-content: center;
   min-height: var(--mb-slot-unit);
-  padding: 5px 6px;
+  padding: 1px 3px;
   background: var(--mb-orange);
   color: var(--mb-text-on-orange);
-  border-radius: 6px;
-  font-size: 1rem;
+  border-radius: 3px;
+  font-size: 0.625rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1;
   text-align: center;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
   word-break: break-word;
   box-sizing: border-box;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -179,13 +182,13 @@
 
 .minimal-match-time {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 0.5625rem;
   font-weight: 800;
   font-style: normal;
   text-align: center;
   color: #ffffff;
-  letter-spacing: 0.03em;
-  line-height: 1.2;
+  letter-spacing: 0.02em;
+  line-height: 1;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
@@ -197,16 +200,16 @@
   align-self: center;
   width: 100%;
   margin: 0 auto;
-  min-height: 40px;
-  padding: 6px 8px;
+  min-height: var(--mb-slot-unit);
+  padding: 1px 3px;
   background: var(--mb-orange-soft);
   color: var(--mb-text-on-orange);
-  border-radius: 6px;
-  font-size: 1.02rem;
+  border-radius: 3px;
+  font-size: 0.625rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1;
   text-align: center;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
   white-space: nowrap;
   box-sizing: border-box;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -215,38 +218,269 @@
 .minimal-time-box--final {
   background: var(--mb-final-bg);
   color: var(--mb-text-on-final);
-  min-height: 44px;
-  font-size: 1.08rem;
-  box-shadow: inset 0 0 0 2px var(--mb-orange);
+  min-height: calc(var(--mb-slot-unit) + 1px);
+  font-size: 0.6875rem;
+  box-shadow: inset 0 0 0 1px var(--mb-orange);
 }
 
-/* Exportación: menos margen, texto más grande */
+.minimal-bracket-root .share-capture-title {
+  font-size: 0.9rem;
+  margin-bottom: 3px;
+  padding: 0 1px;
+  letter-spacing: 0.015em;
+}
+
+/* Exportación: tipografía grande para WhatsApp (1080×1920 o 1080 ancho) */
 .minimal-bracket-root.minimal-bracket-exporting {
-  padding: 5px 6px;
+  padding: 12px 14px;
 }
 
 .minimal-bracket-exporting .minimal-team-box {
-  font-size: 1.12rem;
-  min-height: 42px;
-  padding: 6px 8px;
-  line-height: 1.2;
+  font-size: 2.75rem;
+  padding: 14px 18px;
+  line-height: 1.24;
+  border-radius: 10px;
 }
 
 .minimal-bracket-exporting .minimal-time-box {
-  font-size: 1.18rem;
-  min-height: 44px;
-  padding: 7px 8px;
+  font-size: 2.6rem;
+  padding: 14px 18px;
+  line-height: 1.24;
+  border-radius: 10px;
 }
 
 .minimal-bracket-exporting .minimal-time-box--final {
-  font-size: 1.22rem;
+  font-size: 2.75rem;
 }
 
 .minimal-bracket-exporting .minimal-match-time {
-  font-size: 1.1rem;
+  font-size: 2.45rem;
   font-weight: 800;
 }
 
-.minimal-bracket-exporting {
-  --mb-slot-unit: 42px;
+.minimal-bracket-exporting .share-capture-title {
+  font-size: 4.5rem;
+  margin-bottom: 26px;
+  letter-spacing: 0.03em;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-team-box,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-team-box {
+  font-size: 3.25rem;
+  padding: 15px 20px;
+  line-height: 1.26;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-time-box,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-time-box {
+  font-size: 2.95rem;
+  padding: 15px 20px;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-match-time,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-match-time {
+  font-size: 2.8rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .share-capture-title,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .share-capture-title {
+  font-size: 4.95rem;
+  margin-bottom: 30px;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-team-box,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-team-box {
+  font-size: 1.75rem;
+  padding: 8px 10px;
+  line-height: 1.2;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-time-box,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-time-box {
+  font-size: 1.625rem;
+  padding: 8px 10px;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-time-box--final {
+  font-size: 1.75rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-match-time,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-match-time {
+  font-size: 1.5rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .share-capture-title,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .share-capture-title {
+  font-size: 2.85rem;
+  margin-bottom: 16px;
+}
+
+.minimal-bracket-slot--final-center {
+  justify-content: center;
+  align-items: center;
+}
+
+.minimal-bracket-col--final {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.minimal-bracket-trophy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+}
+
+.minimal-bracket-trophy--overlay {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.minimal-bracket-final-schedule {
+  margin: 0;
+  width: auto;
+  align-self: center;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.015em;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.minimal-bracket-trophy--overlay .minimal-bracket-final-schedule {
+  min-height: unset;
+  padding: 2px 8px;
+  background: var(--mb-orange-soft);
+  color: var(--mb-text-on-orange);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.minimal-bracket-trophy--playoffs .minimal-bracket-final-schedule {
+  font-size: 0.625rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-bracket-trophy--overlay .minimal-bracket-final-schedule,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-bracket-trophy--overlay .minimal-bracket-final-schedule {
+  font-size: 1.5rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.minimal-bracket-trophy--preview .minimal-bracket-final-schedule {
+  font-size: 0.75rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-bracket-final-schedule,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-bracket-final-schedule {
+  font-size: 2.8rem;
+}
+
+.minimal-bracket-trophy svg {
+  display: block;
+  width: 70px;
+  height: 96px;
+  color: #ffb300;
+  fill: #ffb300;
+  stroke: #fff8e1;
+  transform: scaleY(1.2);
+  transform-origin: center center;
+}
+
+.minimal-bracket-slot--final-center .minimal-match-paired {
+  position: relative;
+  z-index: 5;
+}
+
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-bracket-trophy svg,
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-bracket-trophy svg {
+  width: 160px;
+  height: 220px;
+  transform: scaleY(1.15);
+  transform-origin: center center;
+}
+
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-bracket-trophy svg,
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-bracket-trophy svg {
+  width: 120px;
+  height: 164px;
+  transform: scaleY(1.15);
+  transform-origin: center center;
+}
+
+.minimal-bracket-cols--centered {
+  justify-content: center;
+}
+
+.minimal-bracket-root--centered .minimal-bracket-body {
+  margin: 0 auto;
+}
+
+.minimal-bracket-root--centered .minimal-team-box {
+  font-size: 0.8125rem;
+  line-height: 1.12;
+  padding: 2px 4px;
+}
+
+.minimal-bracket-root--centered .minimal-match-time {
+  font-size: 0.75rem;
+}
+
+.minimal-bracket-root--centered .minimal-time-box {
+  font-size: 0.8125rem;
+  line-height: 1.12;
+  padding: 2px 4px;
+}
+
+.minimal-bracket-root--centered .minimal-time-box--final {
+  font-size: 0.875rem;
+}
+
+.minimal-bracket-root--centered .share-capture-title {
+  font-size: 1.15rem;
+  margin-bottom: 5px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-team-box {
+  font-size: 0.625rem;
+  line-height: 1.06;
+  padding: 1px 2px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-match-time {
+  font-size: 0.5625rem;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-time-box {
+  font-size: 0.625rem;
+  line-height: 1.06;
+  padding: 1px 2px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-time-box--final {
+  font-size: 0.6875rem;
+}
+
+.minimal-bracket-root--share-playoffs .share-capture-title {
+  font-size: 0.875rem;
+  margin-bottom: 3px;
+}
+
+@media (max-width: 640px) {
+  .share-playoffs-tab .minimal-bracket-root .share-capture-title {
+    font-size: 0.8125rem;
+    margin-bottom: 2px;
+  }
+
+  .share-playoffs-tab .minimal-bracket-root {
+    padding: 2px;
+  }
 }
