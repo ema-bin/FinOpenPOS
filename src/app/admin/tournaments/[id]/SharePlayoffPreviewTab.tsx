@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Loader2Icon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
-  TournamentBracketShare,
+  TournamentBracketShareCentered,
   type ShareBracketMatch,
-} from "@/components/tournament-bracket-share";
+} from "@/components/tournament-bracket-share-centered";
 import type { TournamentDTO } from "@/models/dto/tournament";
-import { SHARE_EXPORT_BG, scaleCanvasToShareWidth } from "@/lib/share-image-export";
+import { copySharePlayoffsBracketToClipboard } from "@/lib/copy-share-playoffs-bracket";
+import { BRACKET_SHARE_LAYOUT_CENTERED_EXPORT } from "@/lib/playoffs-bracket-share-layout";
 
 type PreviewMatch = {
   id?: number;
@@ -137,6 +138,7 @@ export default function SharePlayoffPreviewTab({
   );
   const captureRef = useRef<HTMLDivElement>(null);
   const [copying, setCopying] = useState(false);
+  const [exportLayout, setExportLayout] = useState(false);
 
   const handleCopyImage = async () => {
     const el = captureRef.current;
@@ -147,56 +149,7 @@ export default function SharePlayoffPreviewTab({
 
     setCopying(true);
     try {
-      const { toPng } = await import("html-to-image");
-
-      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      await new Promise((resolve) => setTimeout(resolve, 400));
-
-      el.classList.add("minimal-bracket-exporting");
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-      await new Promise<void>((resolve) => {
-        const logo = new Image();
-        logo.crossOrigin = "anonymous";
-        logo.onload = () => resolve();
-        logo.onerror = () => resolve();
-        logo.src = "/PCP-logo.png";
-      });
-
-      const dataUrl = await toPng(el, {
-        pixelRatio: 2,
-        backgroundColor: SHARE_EXPORT_BG,
-        cacheBust: true,
-        filter: (node: Node) => {
-          if (node instanceof HTMLElement) {
-            return !node.closest("[data-share-playoffs-exclude]");
-          }
-          return true;
-        },
-      });
-
-      el.classList.remove("minimal-bracket-exporting");
-
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(image);
-        image.onerror = reject;
-        image.src = dataUrl;
-      });
-
-      const raw = document.createElement("canvas");
-      raw.width = img.width;
-      raw.height = img.height;
-      raw.getContext("2d")!.drawImage(img, 0, 0);
-
-      const canvas = scaleCanvasToShareWidth(raw, 1080, 0, SHARE_EXPORT_BG);
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/png", 1),
-      );
-      if (!blob) throw new Error("Error al generar imagen");
-
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      await copySharePlayoffsBracketToClipboard(el, setExportLayout, { portrait: true });
       toast.success("Imagen copiada al portapapeles");
     } catch (copyError) {
       console.error("Error copying playoff preview bracket:", copyError);
@@ -245,7 +198,7 @@ export default function SharePlayoffPreviewTab({
       </div>
 
       <div className="overflow-x-auto">
-        <TournamentBracketShare
+        <TournamentBracketShareCentered
           ref={captureRef}
           rounds={bracket.rounds}
           matchesByRound={bracket.matchesByRound}
@@ -253,6 +206,7 @@ export default function SharePlayoffPreviewTab({
           tournamentCategory={tournament.category}
           isCategorySpecific={tournament.is_category_specific}
           isPuntuable={tournament.is_puntuable}
+          layout={exportLayout ? BRACKET_SHARE_LAYOUT_CENTERED_EXPORT : undefined}
         />
       </div>
     </div>

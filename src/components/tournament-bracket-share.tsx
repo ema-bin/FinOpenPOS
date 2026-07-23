@@ -2,29 +2,27 @@
 
 /**
  * Cuadro de playoffs minimalista solo para «Compartir».
- * Sin react-brackets: layout propio, estilo tipo flyer azul.
+ * Layout lineal (izquierda → derecha).
  */
 
 import React, { useMemo } from "react";
-import { formatTime } from "@/lib/date-utils";
 import { ShareTournamentTitle } from "@/components/share-tournament-title";
+import {
+  ShareBracketMatchSlot,
+  LINE_COLOR,
+  bracketPathToSegments,
+  type LineSegment,
+  type ShareBracketMatch,
+} from "@/components/tournament-bracket-share-parts";
+import {
+  BRACKET_SHARE_LAYOUT,
+  bracketLayoutCssVars,
+  getFirstRoundSlotHeight,
+  type BracketShareLayout,
+} from "@/lib/playoffs-bracket-share-layout";
 import "./playoffs-bracket-minimal.css";
 
-export type ShareBracketMatch = {
-  id: number;
-  round: string;
-  bracketPos: number;
-  team1: { id: number; name: string } | null;
-  team2: { id: number; name: string } | null;
-  winner?: { id: number } | null;
-  isFinished: boolean;
-  isBye?: boolean;
-  scores?: string;
-  sourceTeam1?: string | null;
-  sourceTeam2?: string | null;
-  matchDate?: string | null;
-  startTime?: string | null;
-};
+export type { ShareBracketMatch } from "@/components/tournament-bracket-share-parts";
 
 type BracketShareProps = {
   rounds: string[];
@@ -33,62 +31,37 @@ type BracketShareProps = {
   tournamentCategory?: string | null;
   isCategorySpecific?: boolean;
   isPuntuable?: boolean;
+  layout?: BracketShareLayout;
 };
 
-const DAY_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
-
-const SLOT_UNIT = 38;
-/** Altura de un partido en la 1ª ronda (2 cajas + horario). */
-const FIRST_ROUND_SLOT = SLOT_UNIT * 2 + 3 + 18 + 3 + SLOT_UNIT * 2;
-const COL_W_FIRST = 332;
-const COL_W_LATE = 112;
-const COL_GAP = 16;
-
-function getColWidth(roundIndex: number): number {
-  return roundIndex === 0 ? COL_W_FIRST : COL_W_LATE;
+function getColWidth(roundIndex: number, layout: BracketShareLayout): number {
+  return roundIndex === 0 ? layout.colWFirst : layout.colWLate;
 }
 
-function getColLeft(roundIndex: number): number {
+function getColLeft(roundIndex: number, layout: BracketShareLayout): number {
   if (roundIndex <= 0) return 0;
-  return COL_W_FIRST + COL_GAP + (roundIndex - 1) * (COL_W_LATE + COL_GAP);
+  return (
+    layout.colWFirst +
+    layout.colGap +
+    (roundIndex - 1) * (layout.colWLate + layout.colGap)
+  );
 }
 
-function getColRight(roundIndex: number): number {
-  return getColLeft(roundIndex) + getColWidth(roundIndex);
+function getColRight(roundIndex: number, layout: BracketShareLayout): number {
+  return getColLeft(roundIndex, layout) + getColWidth(roundIndex, layout);
 }
 
-function formatCompactSchedule(
-  date: string | null | undefined,
-  time: string | null | undefined,
-): string {
-  if (!date && !time) return "";
-  let dayPart = "";
-  if (date) {
-    const d = new Date(date.includes("T") ? date : `${date}T00:00:00`);
-    if (!isNaN(d.getTime())) dayPart = DAY_SHORT[d.getDay()] ?? "";
-  }
-  const t = formatTime(time);
-  if (dayPart && t) return `${dayPart} ${t}`;
-  return dayPart || t;
-}
-
-/** Solo horario para rondas posteriores (ej. «17:00 HS»). */
-function formatTimeOnly(time: string | null | undefined): string {
-  const t = formatTime(time);
-  return t ? `${t}\u00A0HS` : "";
-}
-
-/** Cada ronda duplica el alto del slot para centrar con la ronda anterior. */
-function getSlotMinHeight(roundIndex: number): number {
-  return FIRST_ROUND_SLOT * Math.pow(2, roundIndex);
+function getSlotMinHeight(roundIndex: number, layout: BracketShareLayout): number {
+  return getFirstRoundSlotHeight(layout) * Math.pow(2, roundIndex);
 }
 
 function getBracketBodyHeight(
   rounds: string[],
   matchesByRound: Record<string, ShareBracketMatch[]>,
+  layout: BracketShareLayout,
 ): number {
   const firstCount = matchesByRound[rounds[0]]?.length ?? 1;
-  return getSlotMinHeight(0) * firstCount;
+  return getSlotMinHeight(0, layout) * firstCount;
 }
 
 function slotCenterY(
@@ -96,124 +69,33 @@ function slotCenterY(
   matchIndex: number,
   rounds: string[],
   matchesByRound: Record<string, ShareBracketMatch[]>,
+  layout: BracketShareLayout,
 ): number {
-  const totalH = getBracketBodyHeight(rounds, matchesByRound);
+  const totalH = getBracketBodyHeight(rounds, matchesByRound, layout);
   const matchCount = matchesByRound[rounds[roundIndex]]?.length ?? 1;
   const slotH = totalH / matchCount;
   return matchIndex * slotH + slotH / 2;
 }
 
-const LINE_STROKE = 3;
-const LINE_COLOR = "rgba(255, 255, 255, 0.9)";
-
-type LineSegment = { left: number; top: number; width: number; height: number };
-
-/** Segmentos HTML (exportan bien con html-to-image; el SVG con var() no). */
-function bracketPathToSegments(
-  x0: number,
-  y0: number,
-  xMid: number,
-  y1: number,
-  x2: number,
-): LineSegment[] {
-  const t = LINE_STROKE / 2;
-  return [
-    { left: x0, top: y0 - t, width: xMid - x0, height: LINE_STROKE },
-    {
-      left: xMid - t,
-      top: Math.min(y0, y1),
-      width: LINE_STROKE,
-      height: Math.abs(y1 - y0) || LINE_STROKE,
-    },
-    { left: xMid, top: y1 - t, width: x2 - xMid, height: LINE_STROKE },
-  ];
-}
-
 function buildConnectorSegments(
   rounds: string[],
   matchesByRound: Record<string, ShareBracketMatch[]>,
+  layout: BracketShareLayout,
 ): LineSegment[] {
   const segments: LineSegment[] = [];
   for (let r = 0; r < rounds.length - 1; r++) {
     const m0 = matchesByRound[rounds[r]]?.length ?? 0;
     for (let i = 0; i < m0; i++) {
-      const y0 = slotCenterY(r, i, rounds, matchesByRound);
+      const y0 = slotCenterY(r, i, rounds, matchesByRound, layout);
       const j = Math.floor(i / 2);
-      const y1 = slotCenterY(r + 1, j, rounds, matchesByRound);
-      const x0 = getColRight(r);
-      const xMid = x0 + COL_GAP / 2;
-      const x2 = getColLeft(r + 1);
+      const y1 = slotCenterY(r + 1, j, rounds, matchesByRound, layout);
+      const x0 = getColRight(r, layout);
+      const xMid = x0 + layout.colGap / 2;
+      const x2 = getColLeft(r + 1, layout);
       segments.push(...bracketPathToSegments(x0, y0, xMid, y1, x2));
     }
   }
   return segments;
-}
-
-function MatchSlot({
-  match,
-  isFirstRound,
-  isFinal,
-}: {
-  match: ShareBracketMatch;
-  isFirstRound: boolean;
-  isFinal: boolean;
-}) {
-  if (!isFirstRound) {
-    const timeLabel = formatTimeOnly(match.startTime);
-    return (
-      <div
-        className={`minimal-time-box${isFinal ? " minimal-time-box--final" : ""}`}
-      >
-        {timeLabel || "—"}
-      </div>
-    );
-  }
-
-  const schedule = formatCompactSchedule(match.matchDate, match.startTime);
-  const team1 = match.team1?.name?.trim() || "";
-  const team2 = match.team2?.name?.trim() || "";
-  const hasTeam1 = team1.length > 0 && team1 !== "—";
-  const hasTeam2 = team2.length > 0 && team2 !== "—";
-  const team1Winner =
-    match.winner && match.team1 && match.winner.id === match.team1.id;
-  const team2Winner =
-    match.winner && match.team2 && match.winner.id === match.team2.id;
-  const isBye =
-    match.isBye ?? (hasTeam1 !== hasTeam2 && (hasTeam1 || hasTeam2));
-
-  if (isBye) {
-    const singleName = hasTeam1 ? team1 : team2;
-    const singleWinner = hasTeam1 ? team1Winner : team2Winner;
-    return (
-      <div className="minimal-match-paired minimal-match-paired--bye">
-        <div
-          className={`minimal-team-box${singleWinner ? " minimal-team-box--winner" : ""}`}
-        >
-          {singleName}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="minimal-match-paired">
-      {hasTeam1 ? (
-        <div
-          className={`minimal-team-box${team1Winner ? " minimal-team-box--winner" : ""}`}
-        >
-          {team1}
-        </div>
-      ) : null}
-      {schedule ? <p className="minimal-match-time">{schedule}</p> : null}
-      {hasTeam2 ? (
-        <div
-          className={`minimal-team-box${team2Winner ? " minimal-team-box--winner" : ""}`}
-        >
-          {team2}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketShareProps>(
@@ -225,20 +107,28 @@ export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketSh
       tournamentCategory,
       isCategorySpecific,
       isPuntuable,
+      layout: layoutProp,
     },
     ref,
   ) {
+    const layout = layoutProp ?? BRACKET_SHARE_LAYOUT;
+    const layoutStyle = bracketLayoutCssVars(layout);
+
     const bodyHeight = useMemo(
-      () => getBracketBodyHeight(rounds, matchesByRound),
-      [rounds, matchesByRound],
+      () => getBracketBodyHeight(rounds, matchesByRound, layout),
+      [rounds, matchesByRound, layout],
     );
     const connectorSegments = useMemo(
-      () => buildConnectorSegments(rounds, matchesByRound),
-      [rounds, matchesByRound],
+      () => buildConnectorSegments(rounds, matchesByRound, layout),
+      [rounds, matchesByRound, layout],
     );
 
     return (
-      <div ref={ref} className="minimal-bracket-root">
+      <div
+        ref={ref}
+        className="minimal-bracket-root"
+        style={layoutStyle as React.CSSProperties}
+      >
         <ShareTournamentTitle
           tournamentName={tournamentName}
           tournamentCategory={tournamentCategory}
@@ -248,10 +138,7 @@ export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketSh
         <div className="minimal-bracket-watermark" aria-hidden>
           <img src="/PCP-logo.png" alt="" crossOrigin="anonymous" draggable={false} />
         </div>
-        <div
-          className="minimal-bracket-body"
-          style={{ minHeight: bodyHeight }}
-        >
+        <div className="minimal-bracket-body" style={{ minHeight: bodyHeight }}>
           <div
             className="minimal-bracket-connectors"
             style={{ height: bodyHeight }}
@@ -284,15 +171,17 @@ export const TournamentBracketShare = React.forwardRef<HTMLDivElement, BracketSh
                 <React.Fragment key={round}>
                   {roundIdx > 0 ? <div className="minimal-bracket-gap" aria-hidden /> : null}
                   <div
-                    className={`minimal-bracket-col${isFirstRound ? " minimal-bracket-col--first" : " minimal-bracket-col--late"}`}
+                    className={`minimal-bracket-col${
+                      isFirstRound ? " minimal-bracket-col--first" : " minimal-bracket-col--late"
+                    }`}
                   >
                     {matches.map((match) => (
                       <div
                         key={match.id}
                         className="minimal-bracket-slot"
-                        style={{ minHeight: getSlotMinHeight(roundIdx) }}
+                        style={{ minHeight: getSlotMinHeight(roundIdx, layout) }}
                       >
-                        <MatchSlot
+                        <ShareBracketMatchSlot
                           match={match}
                           isFirstRound={isFirstRound}
                           isFinal={isFinal}
