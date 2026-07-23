@@ -206,6 +206,7 @@ export default function SharePlayoffPreviewTab({
           tournamentCategory={tournament.category}
           isCategorySpecific={tournament.is_category_specific}
           isPuntuable={tournament.is_puntuable}
+          shareVariant="preview"
           layout={exportLayout ? BRACKET_SHARE_LAYOUT_CENTERED_EXPORT : undefined}
         />
       </div>

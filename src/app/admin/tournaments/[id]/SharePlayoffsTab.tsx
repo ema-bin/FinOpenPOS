@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Loader2Icon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
-  TournamentBracketShare,
+  TournamentBracketShareCentered,
   type ShareBracketMatch,
-} from "@/components/tournament-bracket-share";
+} from "@/components/tournament-bracket-share-centered";
 import type { PlayoffRow, TeamDTO, TournamentDTO } from "@/models/dto/tournament";
 import { copySharePlayoffsBracketToClipboard } from "@/lib/copy-share-playoffs-bracket";
-import { BRACKET_SHARE_LAYOUT_EXPORT } from "@/lib/playoffs-bracket-share-layout";
+import { BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED_EXPORT } from "@/lib/playoffs-bracket-share-layout";
 
 function teamLabelBracket(team: TeamDTO | null) {
   if (!team) return "—";
@@ -203,7 +203,7 @@ export default function SharePlayoffsTab({
       </div>
 
       <div className="overflow-x-auto">
-        <TournamentBracketShare
+        <TournamentBracketShareCentered
           ref={captureRef}
           rounds={bracket.rounds}
           matchesByRound={bracket.matchesByRound}
@@ -211,7 +211,8 @@ export default function SharePlayoffsTab({
           tournamentCategory={tournament.category}
           isCategorySpecific={tournament.is_category_specific}
           isPuntuable={tournament.is_puntuable}
-          layout={exportLayout ? BRACKET_SHARE_LAYOUT_EXPORT : undefined}
+          shareVariant="playoffs"
+          layout={exportLayout ? BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED_EXPORT : undefined}
         />
       </div>
     </div>

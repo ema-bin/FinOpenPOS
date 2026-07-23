@@ -264,28 +264,56 @@
   letter-spacing: 0.03em;
 }
 
-.minimal-bracket-exporting.minimal-bracket-root--centered .minimal-team-box,
-.minimal-bracket-root--centered.minimal-bracket-exporting .minimal-team-box {
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-team-box,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-team-box {
   font-size: 3.25rem;
   padding: 15px 20px;
   line-height: 1.26;
 }
 
-.minimal-bracket-exporting.minimal-bracket-root--centered .minimal-time-box,
-.minimal-bracket-root--centered.minimal-bracket-exporting .minimal-time-box {
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-time-box,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-time-box {
   font-size: 2.95rem;
   padding: 15px 20px;
 }
 
-.minimal-bracket-exporting.minimal-bracket-root--centered .minimal-match-time,
-.minimal-bracket-root--centered.minimal-bracket-exporting .minimal-match-time {
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-match-time,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-match-time {
   font-size: 2.8rem;
 }
 
-.minimal-bracket-exporting.minimal-bracket-root--centered .share-capture-title,
-.minimal-bracket-root--centered.minimal-bracket-exporting .share-capture-title {
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .share-capture-title,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .share-capture-title {
   font-size: 4.95rem;
   margin-bottom: 30px;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-team-box,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-team-box {
+  font-size: 1.75rem;
+  padding: 8px 10px;
+  line-height: 1.2;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-time-box,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-time-box {
+  font-size: 1.625rem;
+  padding: 8px 10px;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-time-box--final {
+  font-size: 1.75rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-match-time,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-match-time {
+  font-size: 1.5rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .share-capture-title,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .share-capture-title {
+  font-size: 2.85rem;
+  margin-bottom: 16px;
 }
 
 .minimal-bracket-slot--final-center {
@@ -311,12 +339,55 @@
   z-index: 4;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.minimal-bracket-final-schedule {
+  margin: 0;
+  width: auto;
+  align-self: center;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.015em;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.minimal-bracket-trophy--overlay .minimal-bracket-final-schedule {
+  min-height: unset;
+  padding: 2px 8px;
+  background: var(--mb-orange-soft);
+  color: var(--mb-text-on-orange);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.minimal-bracket-trophy--playoffs .minimal-bracket-final-schedule {
+  font-size: 0.625rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-bracket-trophy--overlay .minimal-bracket-final-schedule,
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-bracket-trophy--overlay .minimal-bracket-final-schedule {
+  font-size: 1.5rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.minimal-bracket-trophy--preview .minimal-bracket-final-schedule {
+  font-size: 0.75rem;
+}
+
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-bracket-final-schedule,
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-bracket-final-schedule {
+  font-size: 2.8rem;
 }
 
 .minimal-bracket-trophy svg {
   display: block;
-  width: 52px;
-  height: 72px;
+  width: 70px;
+  height: 96px;
   color: #ffb300;
   fill: #ffb300;
   stroke: #fff8e1;
@@ -329,10 +400,18 @@
   z-index: 5;
 }
 
-.minimal-bracket-root--centered.minimal-bracket-exporting .minimal-bracket-trophy svg,
-.minimal-bracket-exporting.minimal-bracket-root--centered .minimal-bracket-trophy svg {
-  width: 130px;
-  height: 178px;
+.minimal-bracket-root--share-preview.minimal-bracket-exporting .minimal-bracket-trophy svg,
+.minimal-bracket-exporting.minimal-bracket-root--share-preview .minimal-bracket-trophy svg {
+  width: 160px;
+  height: 220px;
+  transform: scaleY(1.15);
+  transform-origin: center center;
+}
+
+.minimal-bracket-root--share-playoffs.minimal-bracket-exporting .minimal-bracket-trophy svg,
+.minimal-bracket-exporting.minimal-bracket-root--share-playoffs .minimal-bracket-trophy svg {
+  width: 120px;
+  height: 164px;
   transform: scaleY(1.15);
   transform-origin: center center;
 }
@@ -368,6 +447,31 @@
 .minimal-bracket-root--centered .share-capture-title {
   font-size: 1.15rem;
   margin-bottom: 5px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-team-box {
+  font-size: 0.625rem;
+  line-height: 1.06;
+  padding: 1px 2px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-match-time {
+  font-size: 0.5625rem;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-time-box {
+  font-size: 0.625rem;
+  line-height: 1.06;
+  padding: 1px 2px;
+}
+
+.minimal-bracket-root--share-playoffs .minimal-time-box--final {
+  font-size: 0.6875rem;
+}
+
+.minimal-bracket-root--share-playoffs .share-capture-title {
+  font-size: 0.875rem;
+  margin-bottom: 3px;
 }
 
 @media (max-width: 640px) {

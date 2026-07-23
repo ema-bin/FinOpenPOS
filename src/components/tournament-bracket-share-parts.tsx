@@ -42,8 +42,7 @@ export function formatCompactSchedule(
 }
 
 export function formatTimeOnly(time: string | null | undefined): string {
-  const t = formatTime(time);
-  return t ? `${t}\u00A0HS` : "";
+  return formatTime(time);
 }
 
 export function bracketPathToSegments(
@@ -82,10 +81,12 @@ export function ShareBracketMatchSlot({
   match,
   isFirstRound,
   isFinal,
+  hideFinalSchedule,
 }: {
   match: ShareBracketMatch;
   isFirstRound: boolean;
   isFinal: boolean;
+  hideFinalSchedule?: boolean;
 }) {
   if (!isFirstRound) {
     const timeLabel = formatTimeOnly(match.startTime);
@@ -96,7 +97,10 @@ export function ShareBracketMatchSlot({
     );
   }
 
-  const schedule = formatCompactSchedule(match.matchDate, match.startTime);
+  const schedule =
+    isFinal && hideFinalSchedule
+      ? ""
+      : formatCompactSchedule(match.matchDate, match.startTime);
   const team1 = match.team1?.name?.trim() || "";
   const team2 = match.team2?.name?.trim() || "";
   const hasTeam1 = team1.length > 0 && team1 !== "—";

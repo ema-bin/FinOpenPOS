@@ -29,6 +29,16 @@ export const BRACKET_SHARE_LAYOUT_CENTERED: BracketShareLayout = {
   colGap: 4,
 };
 
+/** Playoffs compartir (centrado): tipografía compacta. */
+export const BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED: BracketShareLayout = {
+  slotUnit: 13,
+  matchGap: 0,
+  timeBlock: 5,
+  colWFirst: 160,
+  colWLate: 46,
+  colGap: 3,
+};
+
 /** Al exportar imagen — tamaño pensado para WhatsApp (1080px). */
 export const BRACKET_SHARE_LAYOUT_EXPORT: BracketShareLayout = {
   slotUnit: 70,
@@ -47,6 +57,16 @@ export const BRACKET_SHARE_LAYOUT_CENTERED_EXPORT: BracketShareLayout = {
   colWFirst: 440,
   colWLate: 148,
   colGap: 16,
+};
+
+/** Playoffs compartir al exportar (tipografía más chica que preview). */
+export const BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED_EXPORT: BracketShareLayout = {
+  slotUnit: 42,
+  matchGap: 3,
+  timeBlock: 16,
+  colWFirst: 320,
+  colWLate: 104,
+  colGap: 10,
 };
 
 export function getFirstRoundSlotHeight(layout: BracketShareLayout): number {

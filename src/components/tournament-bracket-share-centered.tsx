@@ -5,6 +5,7 @@ import { ShareTournamentTitle } from "@/components/share-tournament-title";
 import {
   ShareBracketMatchSlot,
   BracketTrophyIcon,
+  formatTimeOnly,
   LINE_COLOR,
   bracketPathToSegments,
   type LineSegment,
@@ -12,6 +13,7 @@ import {
 } from "@/components/tournament-bracket-share-parts";
 import {
   BRACKET_SHARE_LAYOUT_CENTERED,
+  BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED,
   bracketLayoutCssVars,
   getFirstRoundSlotHeight,
   type BracketShareLayout,
@@ -19,6 +21,8 @@ import {
 import "./playoffs-bracket-minimal.css";
 
 export type { ShareBracketMatch } from "@/components/tournament-bracket-share-parts";
+
+export type CenteredBracketShareVariant = "preview" | "playoffs";
 
 type CenteredBracketProps = {
   rounds: string[];
@@ -28,6 +32,8 @@ type CenteredBracketProps = {
   isCategorySpecific?: boolean;
   isPuntuable?: boolean;
   layout?: BracketShareLayout;
+  /** preview: tipografía grande. playoffs: tipografía más chica, sin horario en final. */
+  shareVariant?: CenteredBracketShareVariant;
 };
 
 type CenteredColumn = {
@@ -281,12 +287,18 @@ export const TournamentBracketShareCentered = React.forwardRef<
     tournamentName,
     tournamentCategory,
     isCategorySpecific,
-    isPuntuable,
-    layout: layoutProp,
-  },
-  ref,
-) {
-  const layout = layoutProp ?? BRACKET_SHARE_LAYOUT_CENTERED;
+      isPuntuable,
+      layout: layoutProp,
+      shareVariant = "preview",
+    },
+    ref,
+  ) {
+  const defaultLayout =
+    shareVariant === "playoffs"
+      ? BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED
+      : BRACKET_SHARE_LAYOUT_CENTERED;
+  const layout = layoutProp ?? defaultLayout;
+  const showTrophy = true;
   const layoutStyle = bracketLayoutCssVars(layout);
   const preFinalCount = rounds.filter((r) => r !== "final").length;
 
@@ -316,10 +328,16 @@ export const TournamentBracketShareCentered = React.forwardRef<
     [columnLayout],
   );
 
+  const finalSchedule = useMemo(() => {
+    const finalMatch = matchesByRound.final?.[0];
+    if (!finalMatch) return "";
+    return formatTimeOnly(finalMatch.startTime);
+  }, [matchesByRound]);
+
   return (
     <div
       ref={ref}
-      className="minimal-bracket-root minimal-bracket-root--centered"
+      className={`minimal-bracket-root minimal-bracket-root--centered minimal-bracket-root--share-${shareVariant}`}
       style={layoutStyle as React.CSSProperties}
     >
       <ShareTournamentTitle
@@ -352,9 +370,9 @@ export const TournamentBracketShareCentered = React.forwardRef<
           ))}
         </div>
 
-        {centerColEntry ? (
+        {showTrophy && centerColEntry ? (
           <div
-            className="minimal-bracket-trophy minimal-bracket-trophy--overlay"
+            className={`minimal-bracket-trophy minimal-bracket-trophy--overlay minimal-bracket-trophy--${shareVariant}`}
             style={{
               left: centerColEntry.left + centerColEntry.width / 2,
               top: bodyHeight / 2,
@@ -362,6 +380,9 @@ export const TournamentBracketShareCentered = React.forwardRef<
             aria-hidden
           >
             <BracketTrophyIcon />
+            {shareVariant === "playoffs" && finalSchedule ? (
+              <p className="minimal-bracket-final-schedule">{finalSchedule}</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -399,6 +420,7 @@ export const TournamentBracketShareCentered = React.forwardRef<
                         match={match}
                         isFirstRound={isFirstRound || isFinal}
                         isFinal={isFinal}
+                        hideFinalSchedule={isFinal && shareVariant === "playoffs"}
                       />
                     </div>
                   ))}
