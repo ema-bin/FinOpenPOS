@@ -42,11 +42,11 @@ type ShareMatchTeam = {
 } | null | undefined;
 
 /** Para fliers: muestra el cabeza de zona primero en "Equipo A vs Equipo B". */
-export function orderShareMatchTeamLabels(
-  team1: ShareMatchTeam,
-  team2: ShareMatchTeam,
-  matchOrder: number | null | undefined,
-  label: (team: ShareMatchTeam, isTeam1: boolean) => string,
+export function orderShareMatchTeamLabels<T extends ShareMatchTeam>(
+  team1: T,
+  team2: T,
+  _matchOrder: number | null | undefined,
+  label: (team: T, isTeam1: boolean) => string,
 ): [string, string] {
   if (!team1?.id || !team2?.id) {
     return [label(team1, true), label(team2, false)];
