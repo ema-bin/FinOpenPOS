@@ -2,6 +2,10 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { GroupMatchPayload } from "@/lib/tournament-scheduler";
+import {
+  buildTeamDisplayOrderMap,
+  sortTeamIdsWithZoneHeadFirst,
+} from "@/lib/group-zone-team-order";
 
 type RouteParams = { params: { id: string } };
 
@@ -77,7 +81,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // 2) traer equipos (excluyendo suplentes - las restricciones horarias se obtienen después desde tournament_team_schedule_restrictions)
   const { data: teams, error: teamsError } = await supabase
     .from("tournament_teams")
-    .select("id")
+    .select("id, display_order")
     .eq("tournament_id", tournamentId)
     .eq("is_substitute", false)  // Excluir suplentes de la generación del torneo
     .order("display_order", { ascending: true })
@@ -230,6 +234,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
     
     pass++;
+  }
+
+  const displayOrderByTeamId = buildTeamDisplayOrderMap(
+    teams as Array<{ id: number; display_order?: number | null }>,
+  );
+  for (let i = 0; i < teamsPerGroup.length; i++) {
+    teamsPerGroup[i] = sortTeamIdsWithZoneHeadFirst(teamsPerGroup[i], displayOrderByTeamId);
   }
 
   // Ahora asignar los equipos a los grupos en el orden final
