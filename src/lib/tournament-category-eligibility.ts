@@ -1,6 +1,8 @@
 import type { Tournament } from "@/models/db/tournament";
 import type { CategoriesRepository } from "@/repositories/categories.repository";
 
+type CategoryType = "libre" | "damas";
+
 type PlayerWithCategory = {
   id: number;
   first_name: string;
@@ -8,53 +10,108 @@ type PlayerWithCategory = {
   category_id: number | null;
   female_category_id?: number | null;
 };
-type PlayerForSuma13 = { first_name: string; last_name: string; gender: string | null; female_category_id: number | null };
+type PlayerForSuma13 = {
+  first_name: string;
+  last_name: string;
+  gender: string | null;
+  female_category_id: number | null;
+};
+
+type CategoryMeta = { display_order: number; type: CategoryType };
 
 /**
- * For puntuable + category-specific tournaments: a player may only register if
- * their category is the same or "worse" than the tournament's (e.g. 6ta, 7ma, 8va can play in a 6ta tournament; 5ta cannot).
- * We use display_order: lower order = worse category, so allowed when playerOrder <= tournamentOrder.
+ * Torneos de categoría específica: puede inscribirse quien tenga la misma categoría
+ * o una peor (ej. 8va damas sí en torneo 7ma damas; 5ta damas no).
+ * display_order mayor = mejor categoría → permitido cuando playerOrder <= tournamentOrder.
+ */
+export function resolvePlayerCategoryIdForTournament(
+  player: PlayerWithCategory,
+  tournamentType: CategoryType,
+  categoryMetaById: Map<number, CategoryMeta>,
+): number | null {
+  if (tournamentType === "damas") {
+    if (player.female_category_id != null) return player.female_category_id;
+    if (player.category_id != null) {
+      const meta = categoryMetaById.get(player.category_id);
+      if (meta?.type === "damas") return player.category_id;
+    }
+    return null;
+  }
+
+  if (player.category_id != null) {
+    const meta = categoryMetaById.get(player.category_id);
+    if (meta?.type === "libre") return player.category_id;
+  }
+  return null;
+}
+
+export function resolvePlayerCategoryIdForRanking(
+  player: Pick<PlayerWithCategory, "category_id" | "female_category_id">,
+  rankingCategoryType: CategoryType,
+  categoryMetaById: Map<number, CategoryMeta>,
+): number | null {
+  return resolvePlayerCategoryIdForTournament(
+    player as PlayerWithCategory,
+    rankingCategoryType,
+    categoryMetaById,
+  );
+}
+
+export function isPlayerCategoryEligibleForTournament(
+  playerOrder: number,
+  tournamentOrder: number,
+): boolean {
+  return playerOrder <= tournamentOrder;
+}
+
+/**
+ * For category-specific tournaments: players must have same or worse category than the tournament.
  */
 export async function validateCategoryEligibility(
   tournament: Tournament,
   player1: PlayerWithCategory | null,
   player2: PlayerWithCategory | null,
-  categoriesRepo: CategoriesRepository
+  categoriesRepo: CategoriesRepository,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!tournament.is_puntuable || !tournament.is_category_specific || tournament.category_id == null) {
+  if (!tournament.is_category_specific || tournament.category_id == null) {
     return { ok: true };
   }
 
-  const categoryIds: number[] = [tournament.category_id];
+  const tournamentMetaMap = await categoriesRepo.getMetaByIds([tournament.category_id]);
+  const tournamentMeta = tournamentMetaMap.get(tournament.category_id);
+  if (!tournamentMeta) {
+    return { ok: true };
+  }
 
-  const metaById = await categoriesRepo.getMetaByIds([tournament.category_id]);
-  const tournamentMeta = metaById.get(tournament.category_id);
-  const isDamasTournament = tournamentMeta?.type === "damas";
+  const playerCategoryIds: number[] = [];
+  for (const player of [player1, player2]) {
+    if (!player) continue;
+    if (player.category_id != null) playerCategoryIds.push(player.category_id);
+    if (player.female_category_id != null) playerCategoryIds.push(player.female_category_id);
+  }
+
+  const categoryMetaById = playerCategoryIds.length
+    ? await categoriesRepo.getMetaByIds(playerCategoryIds)
+    : new Map<number, CategoryMeta>();
+
+  const tournamentOrder = tournamentMeta.display_order;
 
   for (const player of [player1, player2]) {
     if (!player) continue;
-    const playerCatId = isDamasTournament ? player.female_category_id : player.category_id;
-    if (playerCatId != null) categoryIds.push(playerCatId);
-  }
 
-  const orderByCategoryId = await categoriesRepo.getDisplayOrdersByIds(categoryIds);
-  const tournamentOrder = orderByCategoryId.get(tournament.category_id);
-  if (tournamentOrder === undefined) {
-    return { ok: true }; // tournament category missing in DB, skip validation
-  }
+    const playerCatId = resolvePlayerCategoryIdForTournament(
+      player,
+      tournamentMeta.type,
+      categoryMetaById,
+    );
+    if (playerCatId == null) continue;
 
-  for (const player of [player1, player2]) {
-    if (!player) continue;
-    const playerCatId = isDamasTournament ? player.female_category_id : player.category_id;
-    if (playerCatId == null) continue; // Sin categoría asignada: se permite inscribir
-    const playerOrder = orderByCategoryId.get(playerCatId);
-    if (playerOrder === undefined) {
-      return {
-        ok: false,
-        error: `No se pudo verificar la categoría de ${player.first_name} ${player.last_name}.`,
-      };
+    const playerMeta = categoryMetaById.get(playerCatId);
+    if (!playerMeta || playerMeta.type !== tournamentMeta.type) {
+      continue;
     }
-    if (playerOrder > tournamentOrder) {
+
+    if (!isPlayerCategoryEligibleForTournament(playerMeta.display_order, tournamentOrder)) {
       return {
         ok: false,
         error: `${player.first_name} ${player.last_name} no se puede inscribir: su categoría es superior a la del torneo (solo se permiten misma categoría o inferior).`,
@@ -76,7 +133,7 @@ export async function validateSuma13DamasEligibility(
   tournament: Tournament,
   player1: PlayerForSuma13 | null,
   player2: PlayerForSuma13 | null,
-  categoriesRepo: CategoriesRepository
+  categoriesRepo: CategoriesRepository,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!tournament.is_suma_13_damas) {
     return { ok: true };
@@ -84,7 +141,8 @@ export async function validateSuma13DamasEligibility(
 
   for (const player of [player1, player2]) {
     if (!player) continue;
-    const isFemale = player.gender != null && FEMALE_GENDER_VALUES.has(player.gender.toLowerCase().trim());
+    const isFemale =
+      player.gender != null && FEMALE_GENDER_VALUES.has(player.gender.toLowerCase().trim());
     if (!isFemale) {
       return {
         ok: false,
