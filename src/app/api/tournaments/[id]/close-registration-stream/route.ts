@@ -10,6 +10,10 @@ import {
   GroupMatchPayload,
   scheduleGroupMatches,
 } from "@/lib/tournament-scheduler";
+import {
+  buildTeamDisplayOrderMap,
+  sortTeamIdsWithZoneHeadFirst,
+} from "@/lib/group-zone-team-order";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
@@ -165,15 +169,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           // Obtener equipos del torneo
           const { data: teams, error: teamsError } = await supabase
             .from("tournament_teams")
-            .select("id")
-            .eq("tournament_id", tournamentId);
+            .select("id, display_order")
+            .eq("tournament_id", tournamentId)
+            .eq("is_substitute", false)
+            .order("display_order", { ascending: true })
+            .order("id", { ascending: true });
 
           if (teamsError || !teams || teams.length === 0) {
             sendError("No hay equipos en el torneo");
             return;
           }
 
-          const teamIds = teams.map((t) => t.id);
+          const teamIds = teams.map((t) => t.id as number);
           sendLog(`Encontrados ${teamIds.length} equipos`);
           sendProgress(20, "Verificando grupos existentes...");
 
@@ -345,6 +352,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }
             
             pass++;
+          }
+
+          const displayOrderByTeamId = buildTeamDisplayOrderMap(
+            teams as Array<{ id: number; display_order?: number | null }>,
+          );
+          for (let i = 0; i < teamsPerGroup.length; i++) {
+            teamsPerGroup[i] = sortTeamIdsWithZoneHeadFirst(
+              teamsPerGroup[i],
+              displayOrderByTeamId,
+            );
           }
 
           // Ahora asignar los equipos a los grupos en el orden final

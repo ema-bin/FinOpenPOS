@@ -32,6 +32,7 @@ import {
   captureShareElementToPng,
   scaleCanvasToInstagramStory,
 } from "@/lib/share-image-export";
+import { orderShareMatchTeamLabels } from "@/lib/group-zone-team-order";
 import "@/components/group-schedule-share.css";
 import "@/components/share-portrait-capture.css";
 
@@ -315,8 +316,12 @@ export default function ShareGroupScheduleTab({
                   <div className="share-group-schedule-matches">
                     {matches.map(({ match, groupName }) => {
                       const time = match.start_time ? formatTime(match.start_time) : "";
-                      const team1 = teamLabel(match.team1, match.match_order, true);
-                      const team2 = teamLabel(match.team2, match.match_order, false);
+                      const [team1, team2] = orderShareMatchTeamLabels(
+                        match.team1,
+                        match.team2,
+                        match.match_order,
+                        (team, isTeam1) => teamLabel(team, match.match_order, isTeam1),
+                      );
                       const zoneColorIndex = resolveZoneColorIndex(
                         match.tournament_group_id,
                         groupName,

@@ -32,6 +32,10 @@ import {
   captureShareElementToPng,
   scaleCanvasToInstagramStory,
 } from "@/lib/share-image-export";
+import {
+  compareTeamsByDisplayOrder,
+  orderShareMatchTeamLabels,
+} from "@/lib/group-zone-team-order";
 import "@/components/group-schedule-share.css";
 import "@/components/group-standings-share.css";
 import "@/components/share-portrait-capture.css";
@@ -267,6 +271,7 @@ export default function ShareGroupStandingsTab({
 
             const groupTeams = (data.groupTeams || [])
               .filter((gt) => gt.tournament_group_id === group.id)
+              .sort((a, b) => compareTeamsByDisplayOrder(a.team, b.team))
               .map((gt) => gt.team)
               .filter((team): team is NonNullable<typeof team> => team !== null);
 
@@ -415,8 +420,12 @@ export default function ShareGroupStandingsTab({
                           {groupMatches.map((match) => {
                             const meta = formatMatchMeta(match);
                             const score = formatMatchScore(match);
-                            const team1 = teamLabel(match.team1, match.match_order, true);
-                            const team2 = teamLabel(match.team2, match.match_order, false);
+                            const [team1, team2] = orderShareMatchTeamLabels(
+                              match.team1,
+                              match.team2,
+                              match.match_order,
+                              (team, isTeam1) => teamLabel(team, match.match_order, isTeam1),
+                            );
 
                             return (
                               <div key={match.id} className="share-group-standings-result-row">

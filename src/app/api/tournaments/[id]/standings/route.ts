@@ -132,6 +132,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
         id,
         display_name,
         seed_number,
+        display_order,
         player1:player1_id ( first_name, last_name ),
         player2:player2_id ( first_name, last_name )
       )
