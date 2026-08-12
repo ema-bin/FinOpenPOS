@@ -66,7 +66,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Jugador 2 no encontrado" }, { status: 400 });
     }
 
-    // Puntuable + category-specific: players must have same or lower category than tournament
+    // Category-specific: players must have same or worse category than tournament
     const eligibility = await validateCategoryEligibility(
       tournament,
       player1 ?? null,

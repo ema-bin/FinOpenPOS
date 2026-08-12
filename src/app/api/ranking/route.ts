@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { createClient } from "@/lib/supabase/server";
+import { resolvePlayerCategoryIdForRanking } from "@/lib/tournament-category-eligibility";
 
 export async function GET(request: Request) {
   try {
@@ -65,21 +66,6 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    const { data: sameTypeCategories, error: sameTypeCategoriesError } =
-      await supabase
-        .from("categories")
-        .select("id, display_order")
-        .eq("type", currentCategory.type);
-    if (sameTypeCategoriesError) {
-      return NextResponse.json(
-        { error: "Failed to fetch categories" },
-        { status: 500 }
-      );
-    }
-    const categoryOrderById = new Map(
-      (sameTypeCategories ?? []).map((c) => [c.id as number, c.display_order as number])
-    );
-
     const lowerRanking = lowerCategory
       ? await repos.playerTournamentPoints.getRankingByCategoryAndYear(
           Number(lowerCategory.id),
@@ -118,32 +104,26 @@ export async function GET(request: Request) {
       female_category_id: number | null;
     }>;
     const playerMap = new Map(playerRows.map((p) => [p.id, p]));
-    const isDamasCategory = currentCategory.type === "damas";
+    const rankingCategoryType = currentCategory.type as "libre" | "damas";
+
+    const playerCategoryIds: number[] = [];
+    for (const player of playerRows) {
+      if (player.category_id != null) playerCategoryIds.push(player.category_id);
+      if (player.female_category_id != null) {
+        playerCategoryIds.push(player.female_category_id);
+      }
+    }
+    const categoryMetaById = playerCategoryIds.length
+      ? await repos.categories.getMetaByIds(playerCategoryIds)
+      : new Map();
 
     const merged = new Map<
       number,
       { total_points: number; tournaments_played: number }
     >();
 
-    const isPlayerEligibleForRequestedCategory = (
-      playerCategoryId: number | null
-    ) => {
-      // Si no tiene categoría seteada, también debe aparecer.
-      if (playerCategoryId == null) return true;
-      const playerOrder = categoryOrderById.get(playerCategoryId);
-      if (playerOrder == null) return false;
-      // Igual o inferior a la categoría consultada.
-      return playerOrder <= currentCategory.display_order;
-    };
-
+    // Puntos del torneo: cuentan en la categoría del torneo (category_id guardado).
     for (const row of ranking) {
-      const player = playerMap.get(row.player_id);
-      if (!player) continue;
-      const playerCategoryId = isDamasCategory
-        ? player.female_category_id
-        : player.category_id;
-      if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) continue;
-
       const current = merged.get(row.player_id) ?? {
         total_points: 0,
         tournaments_played: 0,
@@ -156,13 +136,13 @@ export async function GET(request: Request) {
     for (const row of lowerRanking) {
       const player = playerMap.get(row.player_id);
       if (!player) continue;
-      const playerCategoryId = isDamasCategory
-        ? player.female_category_id
-        : player.category_id;
-      if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) continue;
+      const playerCategoryId = resolvePlayerCategoryIdForRanking(
+        player,
+        rankingCategoryType,
+        categoryMetaById,
+      );
       // La ponderación 50% de la categoría inferior aplica solo si el jugador
       // hoy pertenece exactamente a la categoría consultada (caso ascenso).
-      // Ej: hoy 7ma, torneo viejo de 8va -> cuenta al 50% en ranking de 7ma.
       if (playerCategoryId !== categoryId) continue;
 
       const current = merged.get(row.player_id) ?? {

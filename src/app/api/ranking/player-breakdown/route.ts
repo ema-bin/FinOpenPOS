@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { createClient } from "@/lib/supabase/server";
+import { resolvePlayerCategoryIdForRanking } from "@/lib/tournament-category-eligibility";
 
 export async function GET(request: Request) {
   try {
@@ -49,32 +50,8 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    const { data: sameTypeCategories, error: sameTypeCategoriesError } =
-      await supabase
-        .from("categories")
-        .select("id, display_order")
-        .eq("type", currentCategory.type);
-    if (sameTypeCategoriesError) {
-      return NextResponse.json(
-        { error: "Failed to fetch categories" },
-        { status: 500 }
-      );
-    }
-
-    const categoryOrderById = new Map(
-      (sameTypeCategories ?? []).map((c) => [c.id as number, c.display_order as number])
-    );
-    const isDamasCategory = currentCategory.type === "damas";
+    const rankingCategoryType = currentCategory.type as "libre" | "damas";
     const lowerCategoryId = lowerCategory ? Number(lowerCategory.id) : null;
-
-    const isPlayerEligibleForRequestedCategory = (
-      playerCategoryId: number | null
-    ) => {
-      if (playerCategoryId == null) return true;
-      const playerOrder = categoryOrderById.get(playerCategoryId);
-      if (playerOrder == null) return false;
-      return playerOrder <= currentCategory.display_order;
-    };
 
     const { data: player, error: playerError } = await supabase
       .from("players")
@@ -85,21 +62,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
 
-    const playerCategoryId = isDamasCategory
-      ? (player.female_category_id as number | null)
-      : (player.category_id as number | null);
-
-    if (!isPlayerEligibleForRequestedCategory(playerCategoryId)) {
-      return NextResponse.json({
-        category_id: categoryId,
-        year,
-        player_id: playerId,
-        first_name: player.first_name,
-        last_name: player.last_name,
-        total_points: 0,
-        entries: [],
-      });
-    }
+    const categoryMetaById = await repos.categories.getMetaByIds(
+      [player.category_id, player.female_category_id].filter(
+        (id): id is number => id != null,
+      ),
+    );
+    const playerCategoryId = resolvePlayerCategoryIdForRanking(
+      player as {
+        category_id: number | null;
+        female_category_id: number | null;
+      },
+      rankingCategoryType,
+      categoryMetaById,
+    );
 
     const categoryIds = [categoryId, ...(lowerCategoryId != null ? [lowerCategoryId] : [])];
     const rawRows = await repos.playerTournamentPoints.findByPlayerYearAndCategories(

@@ -83,7 +83,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         );
       }
 
-      // Puntuable + category-specific: both players must have same or lower category than tournament
+      // Category-specific: both players must have same or worse category than tournament
       const finalPlayer1 = await repos.players.findById(finalPlayer1Id);
       const finalPlayer2 = await repos.players.findById(finalPlayer2Id);
       const eligibility = await validateCategoryEligibility(

@@ -131,12 +131,19 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 }
 
-function pickCategoryName(row: Record<string, unknown>): string | null {
+function pickCategoryName(
+  row: Record<string, unknown>,
+  listMode: string,
+): string | null {
   const libre = row.category as { name: string } | { name: string }[] | null;
   const damas = row.female_category as { name: string } | { name: string }[] | null;
   const pick = (v: typeof libre) =>
     v == null ? null : Array.isArray(v) ? (v[0]?.name ?? null) : v.name ?? null;
-  return pick(libre) ?? pick(damas);
+
+  if (listMode === "libre_category") {
+    return pick(libre);
+  }
+  return pick(damas);
 }
 
 function buildResponse(
@@ -174,7 +181,7 @@ function buildResponse(
         first_name: p.first_name as string,
         last_name: p.last_name as string,
         phone,
-        category_label: pickCategoryName(p),
+        category_label: pickCategoryName(p, input.listMode),
         has_phone: Boolean(phone?.trim()),
         is_notified: notifiedAt != null,
         notified_at: notifiedAt,
