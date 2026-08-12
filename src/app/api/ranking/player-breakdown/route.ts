@@ -2,7 +2,11 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { createClient } from "@/lib/supabase/server";
-import { resolvePlayerCategoryIdForRanking } from "@/lib/tournament-category-eligibility";
+import { findImmediateLowerCategoryId } from "@/lib/category-skill-order";
+import {
+  isPlayerEligibleForRankingCategory,
+  resolvePlayerCategoryIdForRanking,
+} from "@/lib/tournament-category-eligibility";
 
 export async function GET(request: Request) {
   try {
@@ -34,24 +38,41 @@ export async function GET(request: Request) {
 
     const { data: currentCategory, error: currentCategoryError } = await supabase
       .from("categories")
-      .select("id, type, display_order")
+      .select("id, type, display_order, name")
       .eq("id", categoryId)
       .single();
     if (currentCategoryError || !currentCategory) {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
-    const { data: lowerCategory } = await supabase
-      .from("categories")
-      .select("id")
-      .eq("type", currentCategory.type)
-      .lt("display_order", currentCategory.display_order)
-      .order("display_order", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const rankingCategoryMeta = {
+      display_order: currentCategory.display_order as number,
+      type: currentCategory.type as "libre" | "damas",
+      name: currentCategory.name as string,
+    };
+    const rankingCategoryType = rankingCategoryMeta.type;
 
-    const rankingCategoryType = currentCategory.type as "libre" | "damas";
-    const lowerCategoryId = lowerCategory ? Number(lowerCategory.id) : null;
+    const { data: sameTypeCategories, error: sameTypeCategoriesError } =
+      await supabase
+        .from("categories")
+        .select("id, name, type, display_order")
+        .eq("type", rankingCategoryType);
+    if (sameTypeCategoriesError) {
+      return NextResponse.json(
+        { error: "Failed to fetch categories" },
+        { status: 500 }
+      );
+    }
+
+    const lowerCategoryId = findImmediateLowerCategoryId(
+      (sameTypeCategories ?? []) as Array<{
+        id: number;
+        name: string;
+        type: "libre" | "damas";
+        display_order: number;
+      }>,
+      categoryId,
+    );
 
     const { data: player, error: playerError } = await supabase
       .from("players")
@@ -75,6 +96,21 @@ export async function GET(request: Request) {
       rankingCategoryType,
       categoryMetaById,
     );
+    const playerCategoryMeta = playerCategoryId
+      ? categoryMetaById.get(playerCategoryId)
+      : undefined;
+
+    if (!isPlayerEligibleForRankingCategory(playerCategoryMeta, rankingCategoryMeta)) {
+      return NextResponse.json({
+        category_id: categoryId,
+        year,
+        player_id: playerId,
+        first_name: player.first_name,
+        last_name: player.last_name,
+        total_points: 0,
+        entries: [],
+      });
+    }
 
     const categoryIds = [categoryId, ...(lowerCategoryId != null ? [lowerCategoryId] : [])];
     const rawRows = await repos.playerTournamentPoints.findByPlayerYearAndCategories(
