@@ -85,10 +85,10 @@ INSERT INTO categories (name, type, display_order, sum_value) VALUES
   ('4ta', 'libre', 6, NULL),
   ('3ra', 'libre', 7, NULL),
   ('8va damas', 'damas', 0, NULL),
-  ('4ta damas', 'damas', 1, 4),
-  ('5ta damas', 'damas', 2, 5),
-  ('6ta damas', 'damas', 3, 6),
-  ('7ma damas', 'damas', 4, 7),
+  ('7ma damas', 'damas', 1, 7),
+  ('6ta damas', 'damas', 2, 6),
+  ('5ta damas', 'damas', 3, 5),
+  ('4ta damas', 'damas', 4, 4),
   ('Suma 13 damas', 'damas', 5, NULL);
 
 -- =========================================================

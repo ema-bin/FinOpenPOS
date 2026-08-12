@@ -33,18 +33,27 @@ export class CategoriesRepository {
    */
   async getMetaByIds(
     ids: number[]
-  ): Promise<Map<number, { display_order: number; type: "libre" | "damas" }>> {
+  ): Promise<Map<number, { display_order: number; type: "libre" | "damas"; name: string }>> {
     if (ids.length === 0) return new Map();
     const unique = Array.from(new Set(ids));
     const { data, error } = await this.supabase
       .from("categories")
-      .select("id, display_order, type")
+      .select("id, display_order, type, name")
       .in("id", unique);
     if (error) throw new Error(`Failed to fetch categories: ${error.message}`);
-    const map = new Map<number, { display_order: number; type: "libre" | "damas" }>();
-    const rows = (data ?? []) as { id: number; display_order: number; type: "libre" | "damas" }[];
+    const map = new Map<number, { display_order: number; type: "libre" | "damas"; name: string }>();
+    const rows = (data ?? []) as {
+      id: number;
+      display_order: number;
+      type: "libre" | "damas";
+      name: string;
+    }[];
     for (const row of rows) {
-      map.set(row.id, { display_order: row.display_order, type: row.type });
+      map.set(row.id, {
+        display_order: row.display_order,
+        type: row.type,
+        name: row.name,
+      });
     }
     return map;
   }

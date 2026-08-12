@@ -1,5 +1,6 @@
 import type { Tournament } from "@/models/db/tournament";
 import type { CategoriesRepository } from "@/repositories/categories.repository";
+import { getCategorySkillOrder, isPlayerVisibleInRankingCategory } from "@/lib/category-skill-order";
 
 type CategoryType = "libre" | "damas";
 
@@ -17,7 +18,7 @@ type PlayerForSuma13 = {
   female_category_id: number | null;
 };
 
-type CategoryMeta = { display_order: number; type: CategoryType };
+type CategoryMeta = { display_order: number; type: CategoryType; name: string };
 
 /**
  * Torneos de categoría específica: puede inscribirse quien tenga la misma categoría
@@ -61,7 +62,32 @@ export function isPlayerCategoryEligibleForTournament(
   playerOrder: number,
   tournamentOrder: number,
 ): boolean {
-  return playerOrder <= tournamentOrder;
+  return isPlayerVisibleInRankingCategory(playerOrder, tournamentOrder);
+}
+
+export function isPlayerEligibleForRankingCategory(
+  playerCategoryMeta: CategoryMeta | undefined,
+  rankingCategoryMeta: CategoryMeta,
+): boolean {
+  if (!playerCategoryMeta || playerCategoryMeta.type !== rankingCategoryMeta.type) {
+    return false;
+  }
+  const playerSkill = getCategorySkillOrder(playerCategoryMeta);
+  const rankingSkill = getCategorySkillOrder(rankingCategoryMeta);
+  return isPlayerVisibleInRankingCategory(playerSkill, rankingSkill);
+}
+
+export function isPlayerCategoryEligibleForTournamentByMeta(
+  playerMeta: CategoryMeta | undefined,
+  tournamentMeta: CategoryMeta,
+): boolean {
+  if (!playerMeta || playerMeta.type !== tournamentMeta.type) {
+    return false;
+  }
+  return isPlayerCategoryEligibleForTournament(
+    getCategorySkillOrder(playerMeta),
+    getCategorySkillOrder(tournamentMeta),
+  );
 }
 
 /**
@@ -94,8 +120,6 @@ export async function validateCategoryEligibility(
     ? await categoriesRepo.getMetaByIds(playerCategoryIds)
     : new Map<number, CategoryMeta>();
 
-  const tournamentOrder = tournamentMeta.display_order;
-
   for (const player of [player1, player2]) {
     if (!player) continue;
 
@@ -111,7 +135,7 @@ export async function validateCategoryEligibility(
       continue;
     }
 
-    if (!isPlayerCategoryEligibleForTournament(playerMeta.display_order, tournamentOrder)) {
+    if (!isPlayerCategoryEligibleForTournamentByMeta(playerMeta, tournamentMeta)) {
       return {
         ok: false,
         error: `${player.first_name} ${player.last_name} no se puede inscribir: su categoría es superior a la del torneo (solo se permiten misma categoría o inferior).`,

@@ -2,7 +2,11 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { createClient } from "@/lib/supabase/server";
-import { resolvePlayerCategoryIdForRanking } from "@/lib/tournament-category-eligibility";
+import { findImmediateLowerCategoryId } from "@/lib/category-skill-order";
+import {
+  isPlayerEligibleForRankingCategory,
+  resolvePlayerCategoryIdForRanking,
+} from "@/lib/tournament-category-eligibility";
 
 export async function GET(request: Request) {
   try {
@@ -38,16 +42,10 @@ export async function GET(request: Request) {
     }
 
     const repos = await createRepositories();
-    const ranking = await repos.playerTournamentPoints.getRankingByCategoryAndYear(
-      categoryId,
-      year
-    );
 
-    // Regla de ascenso: al ranking de la categoría actual se le suma
-    // 50% de puntos/torneos de la categoría inmediatamente inferior.
     const { data: currentCategory, error: currentCategoryError } = await supabase
       .from("categories")
-      .select("id, type, display_order")
+      .select("id, type, display_order, name")
       .eq("id", categoryId)
       .single();
     if (currentCategoryError || !currentCategory) {
@@ -57,18 +55,43 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: lowerCategory } = await supabase
-      .from("categories")
-      .select("id")
-      .eq("type", currentCategory.type)
-      .lt("display_order", currentCategory.display_order)
-      .order("display_order", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const rankingCategoryMeta = {
+      display_order: currentCategory.display_order as number,
+      type: currentCategory.type as "libre" | "damas",
+      name: currentCategory.name as string,
+    };
+    const rankingCategoryType = rankingCategoryMeta.type;
 
-    const lowerRanking = lowerCategory
+    const { data: sameTypeCategories, error: sameTypeCategoriesError } =
+      await supabase
+        .from("categories")
+        .select("id, name, type, display_order")
+        .eq("type", rankingCategoryType);
+    if (sameTypeCategoriesError) {
+      return NextResponse.json(
+        { error: "Failed to fetch categories" },
+        { status: 500 }
+      );
+    }
+
+    const lowerCategoryId = findImmediateLowerCategoryId(
+      (sameTypeCategories ?? []) as Array<{
+        id: number;
+        name: string;
+        type: "libre" | "damas";
+        display_order: number;
+      }>,
+      categoryId,
+    );
+
+    const ranking = await repos.playerTournamentPoints.getRankingByCategoryAndYear(
+      categoryId,
+      year
+    );
+
+    const lowerRanking = lowerCategoryId
       ? await repos.playerTournamentPoints.getRankingByCategoryAndYear(
-          Number(lowerCategory.id),
+          lowerCategoryId,
           year
         )
       : [];
@@ -82,9 +105,7 @@ export async function GET(request: Request) {
     }
 
     const playerIds = Array.from(
-      new Set(
-        [...ranking, ...lowerRanking].map((r) => r.player_id)
-      )
+      new Set([...ranking, ...lowerRanking].map((r) => r.player_id))
     );
     const { data: players, error: playersError } = await supabase
       .from("players")
@@ -104,7 +125,6 @@ export async function GET(request: Request) {
       female_category_id: number | null;
     }>;
     const playerMap = new Map(playerRows.map((p) => [p.id, p]));
-    const rankingCategoryType = currentCategory.type as "libre" | "damas";
 
     const playerCategoryIds: number[] = [];
     for (const player of playerRows) {
@@ -122,8 +142,22 @@ export async function GET(request: Request) {
       { total_points: number; tournaments_played: number }
     >();
 
-    // Puntos del torneo: cuentan en la categoría del torneo (category_id guardado).
     for (const row of ranking) {
+      const player = playerMap.get(row.player_id);
+      if (!player) continue;
+
+      const playerCategoryId = resolvePlayerCategoryIdForRanking(
+        player,
+        rankingCategoryType,
+        categoryMetaById,
+      );
+      const playerCategoryMeta = playerCategoryId
+        ? categoryMetaById.get(playerCategoryId)
+        : undefined;
+      if (!isPlayerEligibleForRankingCategory(playerCategoryMeta, rankingCategoryMeta)) {
+        continue;
+      }
+
       const current = merged.get(row.player_id) ?? {
         total_points: 0,
         tournaments_played: 0,
@@ -136,13 +170,18 @@ export async function GET(request: Request) {
     for (const row of lowerRanking) {
       const player = playerMap.get(row.player_id);
       if (!player) continue;
+
       const playerCategoryId = resolvePlayerCategoryIdForRanking(
         player,
         rankingCategoryType,
         categoryMetaById,
       );
-      // La ponderación 50% de la categoría inferior aplica solo si el jugador
-      // hoy pertenece exactamente a la categoría consultada (caso ascenso).
+      const playerCategoryMeta = playerCategoryId
+        ? categoryMetaById.get(playerCategoryId)
+        : undefined;
+      if (!isPlayerEligibleForRankingCategory(playerCategoryMeta, rankingCategoryMeta)) {
+        continue;
+      }
       if (playerCategoryId !== categoryId) continue;
 
       const current = merged.get(row.player_id) ?? {
