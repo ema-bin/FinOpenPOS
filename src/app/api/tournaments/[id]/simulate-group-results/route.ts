@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isGroupTestToolsEnabledServer } from "@/lib/group-test-tools";
 
 type RouteParams = { params: { id: string } };
 
@@ -10,6 +11,10 @@ type RouteParams = { params: { id: string } };
  * Llama al endpoint de resultados para cada match para que se actualicen los standings
  */
 export async function POST(req: Request, { params }: RouteParams) {
+  if (!isGroupTestToolsEnabledServer()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const supabase = createClient();
   const {
     data: { user },

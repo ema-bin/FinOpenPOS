@@ -51,6 +51,7 @@ import {
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentsService, tournamentMatchesService } from "@/services";
 import { allGroupMatchesHaveResults } from "@/lib/group-match-results";
+import { isGroupTestToolsEnabledClient } from "@/lib/group-test-tools";
 
 // Using TournamentDetailDTO from models
 
@@ -187,6 +188,8 @@ export default function GroupsTab({
   const [reopeningReview, setReopeningReview] = useState(false);
   const [showDeleteGroupsDialog, setShowDeleteGroupsDialog] = useState(false);
   const [simulatingResults, setSimulatingResults] = useState(false);
+  const [clearingResults, setClearingResults] = useState(false);
+  const groupTestToolsEnabled = isGroupTestToolsEnabledClient();
   const [markingPlayoffsReady, setMarkingPlayoffsReady] = useState(false);
   const [reopeningGroupsPhase, setReopeningGroupsPhase] = useState(false);
 
@@ -459,6 +462,43 @@ export default function GroupsTab({
     }
   };
 
+  const handleClearAllResults = async () => {
+    if (
+      !confirm(
+        "¿Limpiar todos los resultados de zona? Los partidos volverán a estado programado y se resetearán las tablas de posiciones."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setClearingResults(true);
+      const response = await fetch(`/api/tournaments/${tournament.id}/clear-group-results`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.error || "Error al limpiar resultados");
+        return;
+      }
+
+      const result = await response.json();
+      alert(result.message || "Resultados limpiados");
+      load();
+      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      if (tournament.status === "playoffs_ready") {
+        window.location.reload();
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Error al limpiar resultados");
+    } finally {
+      setClearingResults(false);
+    }
+  };
+
   const handleDeleteGroupsPhase = async () => {
     try {
       setDeletingGroups(true);
@@ -599,24 +639,45 @@ export default function GroupsTab({
               )}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSimulateResults}
-            disabled={true}
-            hidden={true}
-          >
-            {simulatingResults ? (
-              <>
-                <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-                Simulando...
-              </>
-            ) : (
-              <>
-                🎲 Simular resultados
-              </>
-            )}
-          </Button>
+          {groupTestToolsEnabled && !hasPlayoffs && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSimulateResults}
+                disabled={simulatingResults || clearingResults}
+              >
+                {simulatingResults ? (
+                  <>
+                    <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
+                    Simulando...
+                  </>
+                ) : (
+                  <>🎲 Simular resultados</>
+                )}
+              </Button>
+              {hasResults && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearAllResults}
+                  disabled={simulatingResults || clearingResults}
+                >
+                  {clearingResults ? (
+                    <>
+                      <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
+                      Limpiando...
+                    </>
+                  ) : (
+                    <>
+                      <XIcon className="h-3 w-3 mr-1" />
+                      Limpiar resultados
+                    </>
+                  )}
+                </Button>
+              )}
+            </>
+          )}
           <Button
             variant="destructive"
             size="sm"
