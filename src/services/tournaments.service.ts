@@ -184,6 +184,32 @@ class TournamentsService {
     return response.json();
   }
 
+  async getGroupsSchedulePreview(
+    queryString = ""
+  ): Promise<{
+    tournaments: Array<{
+      id: number;
+      name: string;
+      status: string;
+      match_duration: number | null;
+      groups: GroupsApiResponse["groups"];
+      matches: GroupsApiResponse["matches"];
+      tournamentGroupSlots: GroupsApiResponse["tournamentGroupSlots"];
+      groupScheduleCourtIds: number[];
+    }>;
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/schedule-review/groups-preview${queryString}`
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo cargar la vista previa de grupos");
+    }
+    return {
+      tournaments: data.tournaments ?? [],
+    };
+  }
+
   async getGroupSlots(tournamentId: number): Promise<Array<{ id: number; slot_date: string; start_time: string; end_time: string }>> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`);
     if (!response.ok) {

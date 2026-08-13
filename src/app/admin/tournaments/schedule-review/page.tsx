@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon, ExternalLinkIcon, CalendarCogIcon } from "lucide-react";
+import { Loader2Icon, ExternalLinkIcon, CalendarCogIcon, CalendarClockIcon } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TournamentScheduleDialog } from "@/components/tournament-schedule-dialog";
+import { GlobalGroupScheduleViewer } from "@/components/global-group-schedule-viewer";
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
 import ScheduleReviewTab from "../[id]/ScheduleReviewTab";
@@ -22,6 +23,7 @@ type ReviewTournament = Pick<TournamentDTO, "id" | "name" | "match_duration" | "
 export default function GlobalScheduleReviewPage() {
   const queryClient = useQueryClient();
   const [globalDialogOpen, setGlobalDialogOpen] = useState(false);
+  const [globalViewerOpen, setGlobalViewerOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery<ReviewTournament[]>({
     queryKey: ["tournaments", "global-schedule-review"],
@@ -53,7 +55,13 @@ export default function GlobalScheduleReviewPage() {
     });
     void queryClient.invalidateQueries({ queryKey: ["tournament-groups"] });
     void queryClient.invalidateQueries({ queryKey: ["tournament"] });
+    void queryClient.invalidateQueries({ queryKey: ["groups-schedule-preview"] });
   };
+
+  const tournamentIds = useMemo(
+    () => tournaments.map((t) => t.id),
+    [tournaments]
+  );
 
   if (isLoading) {
     return (
@@ -84,7 +92,7 @@ export default function GlobalScheduleReviewPage() {
           <CardDescription>
             Gestioná desde un solo lugar todos los torneos que están en revisión de horarios.
           </CardDescription>
-          <div className="flex items-center gap-2 pt-3">
+          <div className="flex flex-wrap items-center gap-2 pt-3">
             <Button
               type="button"
               onClick={() => setGlobalDialogOpen(true)}
@@ -93,6 +101,16 @@ export default function GlobalScheduleReviewPage() {
               <CalendarCogIcon className="h-4 w-4 mr-2" />
               Generar horarios en conjunto
             </Button>
+            {tournaments.length >= 2 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setGlobalViewerOpen(true)}
+              >
+                <CalendarClockIcon className="h-4 w-4 mr-2" />
+                Revisar y editar horarios en conjunto
+              </Button>
+            )}
           </div>
         </CardHeader>
       </Card>
@@ -105,6 +123,13 @@ export default function GlobalScheduleReviewPage() {
         tournamentMatchDuration={maxScheduleReviewDuration}
         globalScheduleReview
         showLogs
+      />
+
+      <GlobalGroupScheduleViewer
+        open={globalViewerOpen}
+        onOpenChange={setGlobalViewerOpen}
+        tournamentIds={tournamentIds}
+        onScheduleUpdated={handleGlobalScheduleConfirm}
       />
 
       {tournaments.length === 0 ? (
