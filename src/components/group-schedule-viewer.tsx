@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon } from "lucide-react";
+import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon, AlertTriangleIcon } from "lucide-react";
 import { formatDate, formatTime, formatTimeRange } from "@/lib/date-utils";
 import { toHHMM } from "@/lib/build-schedule-days-from-slots";
 import { parseLocalDate } from "@/lib/court-slots-utils";
@@ -27,6 +27,7 @@ import type { MatchDTO, TeamDTO, GroupDTO, TournamentGroupSlotSummary } from "@/
 import type { CourtDTO } from "@/models/dto/court";
 import { useQuery } from "@tanstack/react-query";
 import { tournamentMatchesService } from "@/services";
+import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -42,7 +43,7 @@ interface GroupScheduleViewerProps {
   matches: MatchDTO[];
   groups: GroupDTO[];
   tournamentId: number;
-  onScheduleUpdated?: () => void;
+  onScheduleUpdated?: () => void | Promise<void>;
   /** Slots del torneo para detectar si un partido viola restricción horaria de algún equipo */
   tournamentGroupSlots?: TournamentGroupSlotSummary[];
   /**
@@ -50,6 +51,10 @@ interface GroupScheduleViewerProps {
    * Sin esto, solo se infieren canchas ya asignadas a partidos y puede faltar una cancha sin uso.
    */
   groupScheduleCourtIds?: number[];
+  /** Revisión conjunta de varios torneos en revisión de horarios */
+  globalMode?: boolean;
+  tournamentNameByGroupId?: Map<number, string>;
+  invalidateTournamentIds?: number[];
 }
 
 function teamShortLabel(team: TeamDTO): string {
@@ -98,6 +103,82 @@ function getGroupColor(groupIndex: number): { bg: string; text: string; border: 
   ];
   
   return colorSchemes[groupIndex % colorSchemes.length] || colorSchemes[0];
+}
+
+const GLOBAL_TOURNAMENT_PALETTE = [
+  {
+    row: "bg-blue-50/90 hover:bg-blue-100/80 dark:bg-blue-950/40 dark:hover:bg-blue-950/60",
+    border: "border-l-blue-500 dark:border-l-blue-400",
+    swatch: "bg-blue-400 dark:bg-blue-500",
+    label: "text-blue-900 dark:text-blue-100",
+    badge: "bg-blue-100 text-blue-900 border-blue-200 dark:bg-blue-950 dark:text-blue-100",
+  },
+  {
+    row: "bg-emerald-50/90 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60",
+    border: "border-l-emerald-500 dark:border-l-emerald-400",
+    swatch: "bg-emerald-400 dark:bg-emerald-500",
+    label: "text-emerald-900 dark:text-emerald-100",
+    badge: "bg-emerald-100 text-emerald-900 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-100",
+  },
+  {
+    row: "bg-amber-50/90 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:hover:bg-amber-950/60",
+    border: "border-l-amber-500 dark:border-l-amber-400",
+    swatch: "bg-amber-400 dark:bg-amber-500",
+    label: "text-amber-900 dark:text-amber-100",
+    badge: "bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950 dark:text-amber-100",
+  },
+  {
+    row: "bg-violet-50/90 hover:bg-violet-100/80 dark:bg-violet-950/40 dark:hover:bg-violet-950/60",
+    border: "border-l-violet-500 dark:border-l-violet-400",
+    swatch: "bg-violet-400 dark:bg-violet-500",
+    label: "text-violet-900 dark:text-violet-100",
+    badge: "bg-violet-100 text-violet-900 border-violet-200 dark:bg-violet-950 dark:text-violet-100",
+  },
+  {
+    row: "bg-rose-50/90 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:hover:bg-rose-950/60",
+    border: "border-l-rose-500 dark:border-l-rose-400",
+    swatch: "bg-rose-400 dark:bg-rose-500",
+    label: "text-rose-900 dark:text-rose-100",
+    badge: "bg-rose-100 text-rose-900 border-rose-200 dark:bg-rose-950 dark:text-rose-100",
+  },
+  {
+    row: "bg-cyan-50/90 hover:bg-cyan-100/80 dark:bg-cyan-950/40 dark:hover:bg-cyan-950/60",
+    border: "border-l-cyan-500 dark:border-l-cyan-400",
+    swatch: "bg-cyan-400 dark:bg-cyan-500",
+    label: "text-cyan-900 dark:text-cyan-100",
+    badge: "bg-cyan-100 text-cyan-900 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-100",
+  },
+] as const;
+
+function normalizeMatchDate(date: string): string {
+  return date.trim().split("T")[0];
+}
+
+function scheduleSnapshotFromMatch(match: MatchDTO) {
+  return {
+    date: match.match_date ? normalizeMatchDate(match.match_date) : "",
+    start_time: match.start_time ?? "",
+    end_time: match.end_time ?? null,
+    court_id: match.court_id ?? null,
+  };
+}
+
+function applyScheduleToMatch(
+  match: MatchDTO,
+  schedule: {
+    date: string;
+    start_time: string;
+    end_time: string | null;
+    court_id: number | null;
+  }
+): MatchDTO {
+  return {
+    ...match,
+    match_date: normalizeMatchDate(schedule.date),
+    start_time: schedule.start_time,
+    end_time: schedule.end_time,
+    court_id: schedule.court_id,
+  };
 }
 
 // Calcular diferencia en minutos entre dos horarios
@@ -157,8 +238,23 @@ export function GroupScheduleViewer({
   onScheduleUpdated,
   tournamentGroupSlots = [],
   groupScheduleCourtIds = [],
+  globalMode = false,
+  tournamentNameByGroupId,
+  invalidateTournamentIds,
 }: GroupScheduleViewerProps) {
   const queryClient = useQueryClient();
+
+  const invalidateGroupsCache = () => {
+    const ids =
+      invalidateTournamentIds && invalidateTournamentIds.length > 0
+        ? invalidateTournamentIds
+        : [tournamentId];
+    for (const id of ids) {
+      void queryClient.invalidateQueries({ queryKey: ["tournament-groups", id] });
+    }
+    void queryClient.invalidateQueries({ queryKey: ["groups-schedule-preview"] });
+  };
+  const [localMatches, setLocalMatches] = useState(matches);
   const [mode, setMode] = useState<"matches" | "groups" | "teams">("matches");
   const [selectedGroup1, setSelectedGroup1] = useState<number | null>(null);
   const [selectedGroup2, setSelectedGroup2] = useState<number | null>(null);
@@ -206,7 +302,7 @@ export function GroupScheduleViewer({
 
   // Filtrar solo partidos con horarios asignados y ordenarlos
   const scheduledMatches = useMemo(() => {
-    return matches
+    return localMatches
       .filter((m) => m.match_date && m.start_time)
       .sort((a, b) => {
         if (a.match_date && b.match_date) {
@@ -218,20 +314,20 @@ export function GroupScheduleViewer({
         }
         return 0;
       });
-  }, [matches]);
+  }, [localMatches]);
 
   /** Lista persistida ∪ canchas ya asignadas en partidos (evita perder una cancha si la API viene incompleta). */
   const tournamentCourtIds = useMemo(() => {
     const persisted = groupScheduleCourtIds.filter((id) => Number.isFinite(id));
     const fromMatches = new Set<number>();
-    for (const m of matches) {
+    for (const m of localMatches) {
       if (m.phase === "group" && m.court_id != null) fromMatches.add(m.court_id);
     }
     if (persisted.length > 0) {
       return Array.from(new Set([...persisted, ...Array.from(fromMatches)])).sort((a, b) => a - b);
     }
     return Array.from(fromMatches).sort((a, b) => a - b);
-  }, [matches, groupScheduleCourtIds]);
+  }, [localMatches, groupScheduleCourtIds]);
 
   type ScheduleRow =
     | {
@@ -370,10 +466,44 @@ export function GroupScheduleViewer({
     return rows;
   }, [scheduledMatches, tournamentGroupSlots, tournamentCourtIds]);
 
+  const courtConflictKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of scheduledMatches) {
+      if (!m.match_date || !m.start_time || m.court_id == null) continue;
+      const d = String(m.match_date).trim().slice(0, 10);
+      const key = `${d}\t${toHHMM(m.start_time)}\t${m.court_id}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([key]) => key)
+    );
+  }, [scheduledMatches]);
+
+  const globalTournamentLegend = useMemo(() => {
+    if (!globalMode || !tournamentNameByGroupId?.size) return [];
+    const names = Array.from(new Set(tournamentNameByGroupId.values())).sort((a, b) =>
+      a.localeCompare(b, "es")
+    );
+    return names.map((name, index) => ({
+      name,
+      color: GLOBAL_TOURNAMENT_PALETTE[index % GLOBAL_TOURNAMENT_PALETTE.length],
+    }));
+  }, [globalMode, tournamentNameByGroupId]);
+
+  const tournamentColorByName = useMemo(() => {
+    const map = new Map<string, (typeof GLOBAL_TOURNAMENT_PALETTE)[number]>();
+    for (const item of globalTournamentLegend) {
+      map.set(item.name, item.color);
+    }
+    return map;
+  }, [globalTournamentLegend]);
+
   /** Zonas de 4: los cuatro equipos obtenidos de los partidos de 1ª ronda (match_order 1 y 2). */
   const fourTeamsByGroupId = useMemo(() => {
     const map = new Map<number, Map<number, TeamDTO>>();
-    for (const m of matches) {
+    for (const m of localMatches) {
       if (!m.tournament_group_id) continue;
       if (m.match_order !== 1 && m.match_order !== 2) continue;
       const gid = m.tournament_group_id;
@@ -388,7 +518,7 @@ export function GroupScheduleViewer({
       if (arr.length === 4) out.set(gid, arr);
     });
     return out;
-  }, [matches]);
+  }, [localMatches]);
 
   // Calcular diferencias de tiempo para cada partido (mínima y máxima diferencia con otro partido del mismo equipo en el mismo día)
   const matchTimeDiffs = useMemo(() => {
@@ -569,7 +699,7 @@ export function GroupScheduleViewer({
   // Obtener equipos únicos por grupo
   const teamsByGroup = useMemo(() => {
     const map = new Map<number, Set<number>>();
-    matches.forEach((match) => {
+    localMatches.forEach((match) => {
       if (!match.tournament_group_id) return;
       if (!map.has(match.tournament_group_id)) {
         map.set(match.tournament_group_id, new Set());
@@ -579,12 +709,12 @@ export function GroupScheduleViewer({
       if (match.team2?.id) groupSet.add(match.team2.id);
     });
     return map;
-  }, [matches]);
+  }, [localMatches]);
 
   // Obtener equipos únicos con información completa
   const teamsList = useMemo(() => {
     const teamMap = new Map<number, { team: TeamDTO; groupId: number }>();
-    matches.forEach((match) => {
+    localMatches.forEach((match) => {
       if (!match.tournament_group_id) return;
       if (match.team1?.id && !teamMap.has(match.team1.id)) {
         teamMap.set(match.team1.id, { team: match.team1, groupId: match.tournament_group_id });
@@ -594,12 +724,12 @@ export function GroupScheduleViewer({
       }
     });
     return Array.from(teamMap.values());
-  }, [matches]);
+  }, [localMatches]);
 
   // Cabezas de zona fijados: menor display_order por grupo.
   const fixedHeadTeamIds = useMemo(() => {
     const byGroup = new Map<number, { teamId: number; displayOrder: number; tieId: number }>();
-    matches.forEach((match) => {
+    localMatches.forEach((match) => {
       if (!match.tournament_group_id) return;
       [match.team1, match.team2].forEach((team) => {
         if (!team?.id || team.display_order == null) return;
@@ -619,7 +749,7 @@ export function GroupScheduleViewer({
       });
     });
     return new Set(Array.from(byGroup.values()).map((x) => x.teamId));
-  }, [matches]);
+  }, [localMatches]);
 
   // ¿El partido viola restricción horaria? En zona de 4, ronda ganadores/perdedores (3–4): cualquiera de los 4 puede jugar → se marca si alguno no puede en ese slot.
   const matchSlotViolation = useMemo(() => {
@@ -833,6 +963,49 @@ export function GroupScheduleViewer({
     };
   }, [matchTimeDiffs, scheduledMatches, groupMap, matchMultiDayInfo]);
 
+  const scheduleIssuesSummary = useMemo(() => {
+    const lines: string[] = [];
+
+    for (const match of scheduledMatches) {
+      const violation = matchSlotViolation.get(match.id);
+      if (!violation) continue;
+
+      const hasRestriction =
+        violation.team1 ||
+        violation.team2 ||
+        (violation.round2TeamsCantPlay?.length ?? 0) > 0;
+      if (!hasRestriction) continue;
+
+      const dateLabel = match.match_date ? formatDate(match.match_date) : "—";
+      const timeLabel = match.start_time
+        ? formatTimeRange(match.start_time, match.end_time)
+        : "—";
+      const groupName = match.tournament_group_id
+        ? groupMap.get(match.tournament_group_id)?.name
+        : null;
+      const slotLabel = `${dateLabel} · ${timeLabel}${groupName ? ` · ${groupName}` : ""}`;
+
+      if (violation.round2TeamsCantPlay?.length) {
+        const names = violation.round2TeamsCantPlay.map((t) => teamShortLabel(t)).join(", ");
+        lines.push(`${slotLabel}: ${names} no pueden en este horario (ronda 2)`);
+      } else {
+        const blocked: string[] = [];
+        if (violation.team1) {
+          blocked.push(teamLabel(match.team1, match.match_order, true));
+        }
+        if (violation.team2) {
+          blocked.push(teamLabel(match.team2, match.match_order, false));
+        }
+        lines.push(`${slotLabel}: ${blocked.join(" y ")} no pueden en este horario`);
+      }
+    }
+
+    return {
+      hasIssues: lines.length > 0,
+      lines,
+    };
+  }, [scheduledMatches, matchSlotViolation, groupMap]);
+
 
   const handleSelectRow = (rowKey: string) => {
     if (selectedRow1 === null) {
@@ -871,66 +1044,89 @@ export function GroupScheduleViewer({
       if (matchRows.length === 2) {
         const match1 = matchRows[0].match;
         const match2 = matchRows[1].match;
+        const schedule1 = scheduleSnapshotFromMatch(match1);
+        const schedule2 = scheduleSnapshotFromMatch(match2);
 
         // Guardar estado anterior para undo
         setLastSwap({
           match1Id: match1.id,
           match2Id: match2.id,
           match1Original: {
-            date: match1.match_date!,
-            start_time: match1.start_time!,
-            end_time: match1.end_time || null,
-            court_id: match1.court_id ?? null,
+            date: schedule1.date,
+            start_time: schedule1.start_time,
+            end_time: schedule1.end_time,
+            court_id: schedule1.court_id,
           },
           match2Original: {
-            date: match2.match_date!,
-            start_time: match2.start_time!,
-            end_time: match2.end_time || null,
-            court_id: match2.court_id ?? null,
+            date: schedule2.date,
+            start_time: schedule2.start_time,
+            end_time: schedule2.end_time,
+            court_id: schedule2.court_id,
           },
         });
 
         await Promise.all([
           tournamentMatchesService.scheduleMatch(match1.id, {
-            date: match2.match_date!,
-            start_time: match2.start_time!,
-            end_time: match2.end_time || undefined,
-            court_id: match2.court_id ?? null,
+            date: schedule2.date,
+            start_time: schedule2.start_time,
+            end_time: schedule2.end_time || undefined,
+            court_id: schedule2.court_id,
           }),
           tournamentMatchesService.scheduleMatch(match2.id, {
-            date: match1.match_date!,
-            start_time: match1.start_time!,
-            end_time: match1.end_time || undefined,
-            court_id: match1.court_id ?? null,
+            date: schedule1.date,
+            start_time: schedule1.start_time,
+            end_time: schedule1.end_time || undefined,
+            court_id: schedule1.court_id,
           }),
         ]);
+
+        setLocalMatches((prev) =>
+          prev.map((m) => {
+            if (m.id === match1.id) return applyScheduleToMatch(m, schedule2);
+            if (m.id === match2.id) return applyScheduleToMatch(m, schedule1);
+            return m;
+          })
+        );
       } else if (matchRows.length === 1 && freeRows.length === 1) {
         const match = matchRows[0].match;
         const freeSlot = freeRows[0];
+        const original = scheduleSnapshotFromMatch(match);
+        const targetSchedule = {
+          date: freeSlot.slotDate,
+          start_time: freeSlot.startTime,
+          end_time: freeSlot.endTime,
+          court_id: freeSlot.courtId ?? null,
+        };
 
         setLastSwap({
           match1Id: match.id,
           match2Id: match.id,
           match1Original: {
-            date: match.match_date!,
-            start_time: match.start_time!,
-            end_time: match.end_time || null,
-            court_id: match.court_id ?? null,
+            date: original.date,
+            start_time: original.start_time,
+            end_time: original.end_time,
+            court_id: original.court_id,
           },
           match2Original: {
-            date: match.match_date!,
-            start_time: match.start_time!,
-            end_time: match.end_time || null,
-            court_id: match.court_id ?? null,
+            date: original.date,
+            start_time: original.start_time,
+            end_time: original.end_time,
+            court_id: original.court_id,
           },
         });
 
         await tournamentMatchesService.scheduleMatch(match.id, {
-          date: freeSlot.slotDate,
-          start_time: freeSlot.startTime,
-          end_time: freeSlot.endTime || undefined,
-          court_id: freeSlot.courtId ?? null,
+          date: targetSchedule.date,
+          start_time: targetSchedule.start_time,
+          end_time: targetSchedule.end_time || undefined,
+          court_id: targetSchedule.court_id,
         });
+
+        setLocalMatches((prev) =>
+          prev.map((m) =>
+            m.id === match.id ? applyScheduleToMatch(m, targetSchedule) : m
+          )
+        );
       } else {
         alert("Seleccioná dos partidos o un partido y un slot libre");
         return;
@@ -939,12 +1135,6 @@ export function GroupScheduleViewer({
       // Limpiar selección
       setSelectedRow1(null);
       setSelectedRow2(null);
-
-      // Invalidar cache y recargar
-      queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournamentId] });
-      if (onScheduleUpdated) {
-        onScheduleUpdated();
-      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Error al intercambiar horarios");
@@ -976,14 +1166,20 @@ export function GroupScheduleViewer({
         }),
       ]);
 
+      setLocalMatches((prev) =>
+        prev.map((m) => {
+          if (m.id === lastSwap.match1Id) {
+            return applyScheduleToMatch(m, lastSwap.match1Original);
+          }
+          if (m.id === lastSwap.match2Id) {
+            return applyScheduleToMatch(m, lastSwap.match2Original);
+          }
+          return m;
+        })
+      );
+
       // Limpiar estado de undo
       setLastSwap(null);
-
-      // Invalidar cache y recargar
-      queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournamentId] });
-      if (onScheduleUpdated) {
-        onScheduleUpdated();
-      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Error al deshacer intercambio");
@@ -1009,9 +1205,9 @@ export function GroupScheduleViewer({
       setSelectedGroup2(null);
 
       // Invalidar cache y recargar
-      queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournamentId] });
+      invalidateGroupsCache();
       if (onScheduleUpdated) {
-        onScheduleUpdated();
+        await onScheduleUpdated();
       }
     } catch (err: any) {
       console.error(err);
@@ -1046,9 +1242,9 @@ export function GroupScheduleViewer({
       setSelectedTeam2(null);
 
       // Invalidar cache y recargar
-      queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournamentId] });
+      invalidateGroupsCache();
       if (onScheduleUpdated) {
-        onScheduleUpdated();
+        await onScheduleUpdated();
       }
     } catch (err: any) {
       console.error(err);
@@ -1069,20 +1265,140 @@ export function GroupScheduleViewer({
       setSelectedTeam2(null);
       setLastSwap(null);
       setMode("matches");
+      invalidateGroupsCache();
+      void onScheduleUpdated?.();
+    } else {
+      setLocalMatches(matches);
+      if (globalMode) {
+        setMode("matches");
+      }
     }
     onOpenChange(isOpen);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Revisar y editar horarios de partidos</DialogTitle>
-          <DialogDescription>
-            Seleccioná partidos, zonas o equipos para intercambiar sus horarios. En la tabla de partidos también se muestran los slots libres para poder mover un partido a un horario disponible sin partido asignado. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo. En zonas de cuatro, los partidos de ronda de ganadores o perdedores se marcan si el horario no sirve para alguno de los cuatro equipos (cualquiera puede llegar a ese cruce).
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
+        <div className="shrink-0 border-b bg-background px-6 pt-6 pb-4 space-y-3">
+          <DialogHeader className="space-y-1">
+            <DialogTitle>
+              {globalMode
+                ? "Revisar y editar horarios en conjunto"
+                : "Revisar y editar horarios de partidos"}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {globalMode
+                ? "Seleccioná dos filas y usá Intercambiar. El banner rojo indica parejas en un slot que marcaron como no disponible."
+                : "Seleccioná partidos o slots libres. El banner rojo indica parejas en un slot que marcaron como no disponible."}
+            </DialogDescription>
+          </DialogHeader>
 
+          {mode === "matches" && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+              <span className="text-sm text-muted-foreground flex-1 min-w-[180px]">
+                {selectedRow1 && selectedRow2
+                  ? "2 elementos seleccionados — podés intercambiar o mover a slot libre"
+                  : selectedRow1
+                    ? "1 elemento seleccionado — elegí otro en la tabla"
+                    : "Seleccioná dos filas en la tabla (partido ↔ partido o partido ↔ slot libre)"}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={handleSwapSchedules}
+                  disabled={!selectedRow1 || !selectedRow2 || swapping}
+                >
+                  {swapping ? (
+                    <>
+                      <Loader2Icon className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      Intercambiando...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowLeftRightIcon className="h-3.5 w-3.5 mr-1.5" />
+                      Intercambiar horarios
+                    </>
+                  )}
+                </Button>
+                {(selectedRow1 || selectedRow2) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelSelection}
+                    disabled={swapping}
+                    title="Limpiar selección"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {lastSwap && !selectedRow1 && !selectedRow2 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleUndoSwap}
+                    disabled={swapping}
+                  >
+                    {swapping ? (
+                      <Loader2Icon className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <UndoIcon className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Deshacer
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {scheduleIssuesSummary.hasIssues && (
+            <div
+              role="alert"
+              className="rounded-lg border-2 border-red-400 bg-red-50 px-3 py-2.5 dark:bg-red-950/50 dark:border-red-600"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                    {scheduleIssuesSummary.lines.length === 1
+                      ? "1 partido en un horario restringido para la pareja"
+                      : `${scheduleIssuesSummary.lines.length} partidos en horarios restringidos para la pareja`}
+                  </p>
+                  <ul className="text-xs text-red-800 dark:text-red-200 space-y-0.5 list-disc list-inside">
+                    {scheduleIssuesSummary.lines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {globalMode && globalTournamentLegend.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Torneos
+              </span>
+              {globalTournamentLegend.map(({ name, color }) => (
+                <span
+                  key={name}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    color.badge
+                  )}
+                >
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", color.swatch)} />
+                  {name}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0 dark:bg-gray-500" />
+                Slot libre
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
         {/* Resumen de métricas */}
         <div className="space-y-4 p-4 bg-muted/50 rounded-lg border">
           <h3 className="text-sm font-semibold">Métricas del scheduling</h3>
@@ -1170,98 +1486,28 @@ export function GroupScheduleViewer({
           )}
         </div>
 
-        <Tabs value={mode} onValueChange={(v) => setMode(v as "matches" | "groups" | "teams")}>
+        <Tabs value={mode} onValueChange={(v) => !globalMode && setMode(v as "matches" | "groups" | "teams")}>
+          {globalMode ? (
+            <TabsList className="sr-only">
+              <TabsTrigger value="matches">Intercambiar partidos</TabsTrigger>
+            </TabsList>
+          ) : (
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="matches">Intercambiar partidos</TabsTrigger>
             <TabsTrigger value="groups">Intercambiar zonas</TabsTrigger>
             <TabsTrigger value="teams">Intercambiar equipos</TabsTrigger>
           </TabsList>
+          )}
 
           <TabsContent value="matches" className="space-y-4 mt-4">
           <TooltipProvider>
-          {/* Barra de acciones para selección */}
-          {(selectedRow1 || selectedRow2) && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <span className="text-sm font-medium text-blue-900">
-                {selectedRow1 && selectedRow2
-                  ? "2 elementos seleccionados. Podés intercambiar partidos o mover un partido a un slot libre."
-                  : "1 elemento seleccionado. Seleccioná otro para intercambiar o mover."}
-              </span>
-              {selectedRow1 && selectedRow2 && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={handleSwapSchedules}
-                    disabled={swapping}
-                    className="ml-auto"
-                  >
-                    {swapping ? (
-                      <>
-                        <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-                        Intercambiando...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowLeftRightIcon className="h-3 w-3 mr-1" />
-                        Intercambiar horarios
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCancelSelection}
-                    disabled={swapping}
-                  >
-                    <XIcon className="h-3 w-3" />
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Barra de acciones para undo */}
-          {lastSwap && !selectedRow1 && !selectedRow2 && (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <span className="text-sm font-medium text-amber-900">
-                Último intercambio realizado. ¿Deshacer?
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleUndoSwap}
-                disabled={swapping}
-                className="ml-auto bg-white hover:bg-amber-100"
-              >
-                {swapping ? (
-                  <>
-                    <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-                    Deshaciendo...
-                  </>
-                ) : (
-                  <>
-                    <UndoIcon className="h-3 w-3 mr-1" />
-                    Deshacer
-                  </>
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setLastSwap(null)}
-                disabled={swapping}
-              >
-                <XIcon className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
-
           {/* Tabla de partidos */}
           <div className="border rounded-lg">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                 <TableRow>
                   <TableHead className="w-12">Sel.</TableHead>
+                  {globalMode && <TableHead className="w-28 min-w-[100px]">Torneo</TableHead>}
                   <TableHead className="w-24 min-w-[100px]">Grupo</TableHead>
                   <TableHead>Equipo 1</TableHead>
                   <TableHead>Equipo 2</TableHead>
@@ -1275,7 +1521,7 @@ export function GroupScheduleViewer({
               <TableBody>
                 {scheduleRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={globalMode ? 10 : 9} className="text-center text-muted-foreground py-8">
                       No hay slots ni partidos para mostrar
                     </TableCell>
                   </TableRow>
@@ -1325,18 +1571,66 @@ export function GroupScheduleViewer({
                         if (slotViolation.team2) parts.push(teamLabel(match.team2, match.match_order, false));
                         return parts.length ? `${parts.join(" y ")} no pueden en este horario` : "";
                       })();
+                    const courtConflictKey =
+                      match?.match_date &&
+                      match.start_time &&
+                      match.court_id != null
+                        ? `${normalizeMatchDate(match.match_date)}\t${toHHMM(match.start_time)}\t${match.court_id}`
+                        : null;
+                    const hasCourtConflict =
+                      !!courtConflictKey && courtConflictKeys.has(courtConflictKey);
+                    const tournamentName =
+                      match?.tournament_group_id != null
+                        ? tournamentNameByGroupId?.get(match.tournament_group_id)
+                        : undefined;
+                    const tournamentColor =
+                      globalMode && tournamentName
+                        ? tournamentColorByName.get(tournamentName)
+                        : undefined;
                     const row = (
                       <TableRow
                         key={rowItem.key}
-                        className={`cursor-pointer ${
-                          violatesSlotRestriction
-                            ? "bg-red-100 hover:bg-red-200"
-                            : rowItem.type === "free"
-                              ? "bg-emerald-50 hover:bg-emerald-100"
-                            : isSelected
-                              ? "bg-blue-50 hover:bg-blue-100"
-                              : "hover:bg-muted/50"
-                        }`}
+                        className={cn(
+                          "cursor-pointer border-l-4 transition-colors",
+                          hasCourtConflict &&
+                            "bg-red-200 hover:bg-red-300 border-l-red-600 dark:bg-red-950/50",
+                          !hasCourtConflict &&
+                            violatesSlotRestriction &&
+                            "bg-red-100 hover:bg-red-200 border-l-red-400",
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            rowItem.type === "free" &&
+                            "bg-gray-100/90 hover:bg-gray-200/80 border-l-gray-400 dark:bg-gray-900/40 dark:hover:bg-gray-800/60 dark:border-l-gray-500 text-muted-foreground",
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            rowItem.type === "match" &&
+                            globalMode &&
+                            tournamentColor &&
+                            !isSelected &&
+                            tournamentColor.row,
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            rowItem.type === "match" &&
+                            globalMode &&
+                            tournamentColor &&
+                            tournamentColor.border,
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            rowItem.type === "match" &&
+                            !globalMode &&
+                            isSelected &&
+                            "bg-blue-50 hover:bg-blue-100 border-l-blue-500",
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            rowItem.type === "match" &&
+                            !globalMode &&
+                            !isSelected &&
+                            "hover:bg-muted/50 border-l-transparent",
+                          !hasCourtConflict &&
+                            !violatesSlotRestriction &&
+                            isSelected &&
+                            "ring-2 ring-inset ring-blue-500/70 bg-blue-50/90 hover:bg-blue-100/90 border-l-blue-600"
+                        )}
                         onClick={() => handleSelectRow(rowItem.key)}
                       >
                         <TableCell>
@@ -1348,6 +1642,23 @@ export function GroupScheduleViewer({
                             </div>
                           )}
                         </TableCell>
+                        {globalMode && (
+                          <TableCell className="whitespace-nowrap">
+                            {rowItem.type === "free" ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-semibold whitespace-nowrap border",
+                                  tournamentColor?.badge
+                                )}
+                              >
+                                {tournamentName ?? "—"}
+                              </Badge>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <div className="flex flex-col gap-1 items-start">
                             <Badge className={`${groupColor.badgeBg} ${groupColor.badgeText} border-0`}>
@@ -1483,6 +1794,7 @@ export function GroupScheduleViewer({
           </TooltipProvider>
           </TabsContent>
 
+          {!globalMode && (
           <TabsContent value="groups" className="space-y-4 mt-4">
             <div className="space-y-4">
               <div className="flex items-center gap-4">
@@ -1569,7 +1881,9 @@ export function GroupScheduleViewer({
               </div>
             </div>
           </TabsContent>
+          )}
 
+          {!globalMode && (
           <TabsContent value="teams" className="space-y-4 mt-4">
             <div className="space-y-4">
               <div className="flex items-center gap-4">
@@ -1700,7 +2014,9 @@ export function GroupScheduleViewer({
               </div>
             </div>
           </TabsContent>
+          )}
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
