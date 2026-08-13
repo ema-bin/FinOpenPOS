@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon } from "lucide-react";
+import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon, AlertTriangleIcon } from "lucide-react";
 import { formatDate, formatTime, formatTimeRange } from "@/lib/date-utils";
 import { toHHMM } from "@/lib/build-schedule-days-from-slots";
 import { parseLocalDate } from "@/lib/court-slots-utils";
@@ -467,7 +467,6 @@ export function GroupScheduleViewer({
   }, [scheduledMatches, tournamentGroupSlots, tournamentCourtIds]);
 
   const courtConflictKeys = useMemo(() => {
-    if (!globalMode) return new Set<string>();
     const counts = new Map<string, number>();
     for (const m of scheduledMatches) {
       if (!m.match_date || !m.start_time || m.court_id == null) continue;
@@ -480,7 +479,7 @@ export function GroupScheduleViewer({
         .filter(([, count]) => count > 1)
         .map(([key]) => key)
     );
-  }, [globalMode, scheduledMatches]);
+  }, [scheduledMatches]);
 
   const globalTournamentLegend = useMemo(() => {
     if (!globalMode || !tournamentNameByGroupId?.size) return [];
@@ -964,6 +963,49 @@ export function GroupScheduleViewer({
     };
   }, [matchTimeDiffs, scheduledMatches, groupMap, matchMultiDayInfo]);
 
+  const scheduleIssuesSummary = useMemo(() => {
+    const lines: string[] = [];
+
+    for (const match of scheduledMatches) {
+      const violation = matchSlotViolation.get(match.id);
+      if (!violation) continue;
+
+      const hasRestriction =
+        violation.team1 ||
+        violation.team2 ||
+        (violation.round2TeamsCantPlay?.length ?? 0) > 0;
+      if (!hasRestriction) continue;
+
+      const dateLabel = match.match_date ? formatDate(match.match_date) : "—";
+      const timeLabel = match.start_time
+        ? formatTimeRange(match.start_time, match.end_time)
+        : "—";
+      const groupName = match.tournament_group_id
+        ? groupMap.get(match.tournament_group_id)?.name
+        : null;
+      const slotLabel = `${dateLabel} · ${timeLabel}${groupName ? ` · ${groupName}` : ""}`;
+
+      if (violation.round2TeamsCantPlay?.length) {
+        const names = violation.round2TeamsCantPlay.map((t) => teamShortLabel(t)).join(", ");
+        lines.push(`${slotLabel}: ${names} no pueden en este horario (ronda 2)`);
+      } else {
+        const blocked: string[] = [];
+        if (violation.team1) {
+          blocked.push(teamLabel(match.team1, match.match_order, true));
+        }
+        if (violation.team2) {
+          blocked.push(teamLabel(match.team2, match.match_order, false));
+        }
+        lines.push(`${slotLabel}: ${blocked.join(" y ")} no pueden en este horario`);
+      }
+    }
+
+    return {
+      hasIssues: lines.length > 0,
+      lines,
+    };
+  }, [scheduledMatches, matchSlotViolation, groupMap]);
+
 
   const handleSelectRow = (rowKey: string) => {
     if (selectedRow1 === null) {
@@ -1246,8 +1288,8 @@ export function GroupScheduleViewer({
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
               {globalMode
-                ? "Seleccioná dos filas y usá Intercambiar. Rojo intenso = conflicto de cancha."
-                : "Seleccioná partidos o slots libres para intercambiar o mover horarios."}
+                ? "Seleccioná dos filas y usá Intercambiar. El banner rojo indica parejas en un slot que marcaron como no disponible."
+                : "Seleccioná partidos o slots libres. El banner rojo indica parejas en un slot que marcaron como no disponible."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1304,6 +1346,29 @@ export function GroupScheduleViewer({
                     Deshacer
                   </Button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {scheduleIssuesSummary.hasIssues && (
+            <div
+              role="alert"
+              className="rounded-lg border-2 border-red-400 bg-red-50 px-3 py-2.5 dark:bg-red-950/50 dark:border-red-600"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                    {scheduleIssuesSummary.lines.length === 1
+                      ? "1 partido en un horario restringido para la pareja"
+                      : `${scheduleIssuesSummary.lines.length} partidos en horarios restringidos para la pareja`}
+                  </p>
+                  <ul className="text-xs text-red-800 dark:text-red-200 space-y-0.5 list-disc list-inside">
+                    {scheduleIssuesSummary.lines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
           )}
@@ -1507,11 +1572,10 @@ export function GroupScheduleViewer({
                         return parts.length ? `${parts.join(" y ")} no pueden en este horario` : "";
                       })();
                     const courtConflictKey =
-                      globalMode &&
                       match?.match_date &&
                       match.start_time &&
                       match.court_id != null
-                        ? `${String(match.match_date).trim().slice(0, 10)}\t${toHHMM(match.start_time)}\t${match.court_id}`
+                        ? `${normalizeMatchDate(match.match_date)}\t${toHHMM(match.start_time)}\t${match.court_id}`
                         : null;
                     const hasCourtConflict =
                       !!courtConflictKey && courtConflictKeys.has(courtConflictKey);
