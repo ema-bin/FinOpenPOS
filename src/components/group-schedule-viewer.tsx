@@ -1236,20 +1236,104 @@ export function GroupScheduleViewer({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {globalMode
-              ? "Revisar y editar horarios en conjunto"
-              : "Revisar y editar horarios de partidos"}
-          </DialogTitle>
-          <DialogDescription>
-            {globalMode
-              ? "Todos los torneos en revisión en un solo cronograma. Seleccioná partidos o slots libres para intercambiar o mover horarios entre torneos. Una misma cancha no puede usarse dos veces en el mismo horario — las filas en rojo intenso indican conflicto de cancha."
-              : "Seleccioná partidos, zonas o equipos para intercambiar sus horarios. En la tabla de partidos también se muestran los slots libres para poder mover un partido a un horario disponible sin partido asignado. La métrica muestra la diferencia mínima de tiempo entre partidos del mismo equipo en el mismo día. Las filas en rojo indican que el horario asignado no respeta la restricción de algún equipo. En zonas de cuatro, los partidos de ronda de ganadores o perdedores se marcan si el horario no sirve para alguno de los cuatro equipos (cualquiera puede llegar a ese cruce)."}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
+        <div className="shrink-0 border-b bg-background px-6 pt-6 pb-4 space-y-3">
+          <DialogHeader className="space-y-1">
+            <DialogTitle>
+              {globalMode
+                ? "Revisar y editar horarios en conjunto"
+                : "Revisar y editar horarios de partidos"}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {globalMode
+                ? "Seleccioná dos filas y usá Intercambiar. Rojo intenso = conflicto de cancha."
+                : "Seleccioná partidos o slots libres para intercambiar o mover horarios."}
+            </DialogDescription>
+          </DialogHeader>
 
+          {mode === "matches" && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+              <span className="text-sm text-muted-foreground flex-1 min-w-[180px]">
+                {selectedRow1 && selectedRow2
+                  ? "2 elementos seleccionados — podés intercambiar o mover a slot libre"
+                  : selectedRow1
+                    ? "1 elemento seleccionado — elegí otro en la tabla"
+                    : "Seleccioná dos filas en la tabla (partido ↔ partido o partido ↔ slot libre)"}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={handleSwapSchedules}
+                  disabled={!selectedRow1 || !selectedRow2 || swapping}
+                >
+                  {swapping ? (
+                    <>
+                      <Loader2Icon className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      Intercambiando...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowLeftRightIcon className="h-3.5 w-3.5 mr-1.5" />
+                      Intercambiar horarios
+                    </>
+                  )}
+                </Button>
+                {(selectedRow1 || selectedRow2) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelSelection}
+                    disabled={swapping}
+                    title="Limpiar selección"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {lastSwap && !selectedRow1 && !selectedRow2 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleUndoSwap}
+                    disabled={swapping}
+                  >
+                    {swapping ? (
+                      <Loader2Icon className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <UndoIcon className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Deshacer
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {globalMode && globalTournamentLegend.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Torneos
+              </span>
+              {globalTournamentLegend.map(({ name, color }) => (
+                <span
+                  key={name}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    color.badge
+                  )}
+                >
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", color.swatch)} />
+                  {name}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0 dark:bg-gray-500" />
+                Slot libre
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
         {/* Resumen de métricas */}
         <div className="space-y-4 p-4 bg-muted/50 rounded-lg border">
           <h3 className="text-sm font-semibold">Métricas del scheduling</h3>
@@ -1352,111 +1436,10 @@ export function GroupScheduleViewer({
 
           <TabsContent value="matches" className="space-y-4 mt-4">
           <TooltipProvider>
-          {/* Barra de acciones para selección */}
-          {(selectedRow1 || selectedRow2) && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <span className="text-sm font-medium text-blue-900">
-                {selectedRow1 && selectedRow2
-                  ? "2 elementos seleccionados. Podés intercambiar partidos o mover un partido a un slot libre."
-                  : "1 elemento seleccionado. Seleccioná otro para intercambiar o mover."}
-              </span>
-              {selectedRow1 && selectedRow2 && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={handleSwapSchedules}
-                    disabled={swapping}
-                    className="ml-auto"
-                  >
-                    {swapping ? (
-                      <>
-                        <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-                        Intercambiando...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowLeftRightIcon className="h-3 w-3 mr-1" />
-                        Intercambiar horarios
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCancelSelection}
-                    disabled={swapping}
-                  >
-                    <XIcon className="h-3 w-3" />
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Barra de acciones para undo */}
-          {lastSwap && !selectedRow1 && !selectedRow2 && (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <span className="text-sm font-medium text-amber-900">
-                Último intercambio realizado. ¿Deshacer?
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleUndoSwap}
-                disabled={swapping}
-                className="ml-auto bg-white hover:bg-amber-100"
-              >
-                {swapping ? (
-                  <>
-                    <Loader2Icon className="h-3 w-3 animate-spin mr-1" />
-                    Deshaciendo...
-                  </>
-                ) : (
-                  <>
-                    <UndoIcon className="h-3 w-3 mr-1" />
-                    Deshacer
-                  </>
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setLastSwap(null)}
-                disabled={swapping}
-              >
-                <XIcon className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
-
-          {globalMode && globalTournamentLegend.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-lg border bg-background">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Torneos
-              </span>
-              {globalTournamentLegend.map(({ name, color }) => (
-                <span
-                  key={name}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
-                    color.badge
-                  )}
-                >
-                  <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", color.swatch)} />
-                  {name}
-                </span>
-              ))}
-              <span className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
-                <span className="h-2.5 w-2.5 rounded-full bg-gray-400 shrink-0 dark:bg-gray-500" />
-                Slot libre
-              </span>
-            </div>
-          )}
-
           {/* Tabla de partidos */}
           <div className="border rounded-lg">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                 <TableRow>
                   <TableHead className="w-12">Sel.</TableHead>
                   {globalMode && <TableHead className="w-28 min-w-[100px]">Torneo</TableHead>}
@@ -1969,6 +1952,7 @@ export function GroupScheduleViewer({
           </TabsContent>
           )}
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
