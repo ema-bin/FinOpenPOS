@@ -11,6 +11,7 @@ import {
 import { Loader2Icon } from "lucide-react";
 import { TournamentBracketV2 } from "@/components/tournament-bracket-v2";
 import type { TournamentDTO } from "@/models/dto/tournament";
+import { tournamentsService } from "@/services/tournaments.service";
 
 type PreviewMatch = {
   id?: number;
@@ -31,6 +32,7 @@ type PreviewResponse = {
   slotsNeeded: number;
   slotsAvailable: number;
   placeholdersUsed: boolean;
+  projectedFromRegistration: boolean;
 };
 
 const fetchPreview = async (tournamentId: number) => {
@@ -63,9 +65,27 @@ const labels: Record<string, string> = {
   return labels[round] || round;
 }
 
-export default function PlayoffPreviewTab({ tournament }: { tournament: Pick<TournamentDTO, "id"> }) {
+export default function PlayoffPreviewTab({
+  tournament,
+}: {
+  tournament: Pick<TournamentDTO, "id" | "status">;
+}) {
+  const isDraft = tournament.status === "draft";
+
+  const { data: teams } = useQuery({
+    queryKey: ["tournament-teams", tournament.id],
+    queryFn: () => tournamentsService.getTeams(tournament.id),
+    enabled: isDraft,
+  });
+
+  const activeTeamCount = teams?.filter((team) => !team.is_substitute).length ?? 0;
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["tournament-playoff-preview", tournament.id],
+    queryKey: [
+      "tournament-playoff-preview",
+      tournament.id,
+      isDraft ? activeTeamCount : null,
+    ],
     queryFn: () => fetchPreview(tournament.id),
     staleTime: 1000 * 30,
   });
@@ -133,7 +153,10 @@ export default function PlayoffPreviewTab({ tournament }: { tournament: Pick<Tou
       <CardHeader className="px-0 pt-0">
         <CardTitle>Playoffs Preview</CardTitle>
         <CardDescription>
-          Bracket preliminar generado con los equipos clasificados por grupo. Las etiquetas 1A/2B aparecen si la fase de grupos aún no finalizó.
+          Bracket preliminar según la cantidad de equipos inscriptos y el formato de zonas.
+          {isDraft
+            ? " Durante la inscripción se proyectan las zonas y se muestran etiquetas 1A/2B."
+            : " Las etiquetas 1A/2B aparecen si la fase de grupos aún no finalizó."}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-0 pt-4 space-y-6">
@@ -158,7 +181,12 @@ export default function PlayoffPreviewTab({ tournament }: { tournament: Pick<Tou
           }, {} as Record<string, any[]>)}
         />
         <div className="text-sm text-muted-foreground">
-          {data.placeholdersUsed ? (
+          {data.projectedFromRegistration ? (
+            <p>
+              Vista proyectada según {activeTeamCount || "los"} equipos inscriptos. Se actualiza al
+              agregar o quitar equipos.
+            </p>
+          ) : data.placeholdersUsed ? (
             <p>Algunos equipos se muestran como 1A/2B porque la fase de grupos aún no concluyó.</p>
           ) : (
             <p>Todos los equipos ya están asignados.</p>

@@ -1,6 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  buildProjectedQualifiedTeams,
+  computeGroupSizes,
+} from "@/lib/tournament-group-sizes";
 import { generatePlayoffs, type PlayoffMatch } from "@/lib/tournament-playoffs";
 import type { ScheduleConfig, ScheduleDay } from "@/models/dto/tournament";
 import type { TournamentMatch } from "@/models/db/tournament";
@@ -35,6 +39,7 @@ type PreviewResponse = {
   slotsNeeded: number;
   slotsAvailable: number;
   placeholdersUsed: boolean;
+  projectedFromRegistration: boolean;
 };
 
 function generateTimeSlots(
@@ -333,48 +338,92 @@ export async function POST(req: Request, { params }: RouteParams) {
     .eq("tournament_id", tournamentId)
     .order("group_order", { ascending: true });
 
-  if (groupsError || !groups || groups.length === 0) {
-    return NextResponse.json({ error: "No groups found" }, { status: 400 });
+  if (groupsError) {
+    console.error("Error fetching groups:", groupsError);
+    return NextResponse.json({ error: "Failed to fetch groups" }, { status: 500 });
   }
 
-  const groupIds = groups.map((g) => g.id);
+  let qualified: Array<{ team_id: number; from_group_id: number; pos: number }>;
+  let placeholderMap: Map<number, string>;
+  let groupOrderMap: Map<number, number>;
+  let totalPairs: number;
+  let allGroupMatchesFinished: boolean;
+  let projectedFromRegistration: boolean;
 
-  const { data: groupTeams, error: groupTeamsError } = await supabase
-    .from("tournament_group_teams")
-    .select("tournament_group_id, team_id")
-    .in("tournament_group_id", groupIds);
+  if (!groups || groups.length === 0) {
+    const { data: teams, error: teamsError } = await supabase
+      .from("tournament_teams")
+      .select("id")
+      .eq("tournament_id", tournamentId)
+      .eq("is_substitute", false);
 
-  if (groupTeamsError || !groupTeams) {
-    console.error("Error fetching group teams:", groupTeamsError);
-    return NextResponse.json({ error: "Failed to fetch group teams" }, { status: 500 });
+    if (teamsError || !teams) {
+      console.error("Error fetching teams:", teamsError);
+      return NextResponse.json({ error: "Failed to fetch teams" }, { status: 500 });
+    }
+
+    if (teams.length < 3) {
+      return NextResponse.json(
+        { error: "Se necesitan al menos 3 equipos inscriptos para previsualizar playoffs" },
+        { status: 400 }
+      );
+    }
+
+    const groupSizes = computeGroupSizes(teams.length);
+    const projected = buildProjectedQualifiedTeams(groupSizes);
+    qualified = projected.qualified;
+    placeholderMap = projected.placeholderMap;
+    groupOrderMap = projected.groupOrderMap;
+    totalPairs = projected.totalPairs;
+    allGroupMatchesFinished = false;
+    projectedFromRegistration = true;
+  } else {
+    const groupIds = groups.map((g) => g.id);
+
+    const { data: groupTeams, error: groupTeamsError } = await supabase
+      .from("tournament_group_teams")
+      .select("tournament_group_id, team_id")
+      .in("tournament_group_id", groupIds);
+
+    if (groupTeamsError || !groupTeams) {
+      console.error("Error fetching group teams:", groupTeamsError);
+      return NextResponse.json({ error: "Failed to fetch group teams" }, { status: 500 });
+    }
+
+    const { data: matches, error: matchesError } = await supabase
+      .from("tournament_matches")
+      .select(
+        "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status"
+      )
+      .eq("tournament_id", tournamentId)
+      .eq("phase", "group");
+
+    if (matchesError || !matches) {
+      console.error("Error fetching matches:", matchesError);
+      return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
+    }
+
+    const standingsMap = buildStandings(matches as MatchRow[]);
+    ({ qualified, placeholderMap } = computeQualifiedTeams(groups, groupTeams, standingsMap));
+
+    if (qualified.length < 2) {
+      return NextResponse.json({ error: "Not enough qualified teams for playoffs" }, { status: 400 });
+    }
+
+    groupOrderMap = new Map<number, number>();
+    groups.forEach((group) => {
+      groupOrderMap.set(group.id, group.group_order ?? 999);
+    });
+
+    totalPairs = groupTeams.length;
+    allGroupMatchesFinished = matches.every((m) => m.status === "finished");
+    projectedFromRegistration = false;
   }
-
-  const { data: matches, error: matchesError } = await supabase
-    .from("tournament_matches")
-    .select(
-      "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status"
-    )
-    .eq("tournament_id", tournamentId)
-    .eq("phase", "group");
-
-  if (matchesError || !matches) {
-    console.error("Error fetching matches:", matchesError);
-    return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
-  }
-
-  const standingsMap = buildStandings(matches as MatchRow[]);
-  const { qualified, placeholderMap } = computeQualifiedTeams(groups, groupTeams, standingsMap);
 
   if (qualified.length < 2) {
     return NextResponse.json({ error: "Not enough qualified teams for playoffs" }, { status: 400 });
   }
 
-  const groupOrderMap = new Map<number, number>();
-  groups.forEach((group) => {
-    groupOrderMap.set(group.id, group.group_order ?? 999);
-  });
-
-  const totalPairs = groupTeams?.length ?? 0;
   const allMatches = generatePlayoffs(qualified, groupOrderMap, totalPairs);
 
   const teamIdToLabel = new Map<number, string>();
@@ -394,8 +443,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     display_team2: match.team2_id ? (teamIdToLabel.get(match.team2_id) ?? null) : null,
   })) as PlayoffPreviewMatch[];
 
-  const allGroupMatchesFinished = matches.every((m) => m.status === "finished");
-  const minRoundValue = applyPlaceholders(allMatchesWithSchedule, placeholderMap, !allGroupMatchesFinished);
+  const minRoundValue = applyPlaceholders(
+    allMatchesWithSchedule,
+    placeholderMap,
+    !allGroupMatchesFinished
+  );
 
   if (minRoundValue !== null) {
     const roundOrder: Record<string, number> = {
@@ -435,6 +487,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     slotsNeeded,
     slotsAvailable,
     placeholdersUsed: !allGroupMatchesFinished,
+    projectedFromRegistration,
   };
 
   return NextResponse.json(response);
