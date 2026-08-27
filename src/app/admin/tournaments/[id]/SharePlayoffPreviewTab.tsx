@@ -12,6 +12,7 @@ import {
 import type { TournamentDTO } from "@/models/dto/tournament";
 import { copySharePlayoffsBracketToClipboard } from "@/lib/copy-share-playoffs-bracket";
 import { BRACKET_SHARE_LAYOUT_CENTERED_EXPORT } from "@/lib/playoffs-bracket-share-layout";
+import { tournamentsService } from "@/services/tournaments.service";
 
 type PreviewMatch = {
   id?: number;
@@ -32,6 +33,7 @@ type PreviewResponse = {
   slotsNeeded: number;
   slotsAvailable: number;
   placeholdersUsed: boolean;
+  projectedFromRegistration: boolean;
 };
 
 const roundOrder: Record<string, number> = {
@@ -123,11 +125,25 @@ export default function SharePlayoffPreviewTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific" | "status"
   >;
 }) {
+  const isDraft = tournament.status === "draft";
+
+  const { data: teams } = useQuery({
+    queryKey: ["tournament-teams", tournament.id],
+    queryFn: () => tournamentsService.getTeams(tournament.id),
+    enabled: isDraft,
+  });
+
+  const activeTeamCount = teams?.filter((team) => !team.is_substitute).length ?? 0;
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["tournament-playoff-preview", tournament.id],
+    queryKey: [
+      "tournament-playoff-preview",
+      tournament.id,
+      isDraft ? activeTeamCount : null,
+    ],
     queryFn: () => fetchPreview(tournament.id),
     staleTime: 1000 * 30,
   });
