@@ -218,6 +218,7 @@ export class TournamentTeamsRepository extends BaseRepository {
         is_substitute,
         schedule_notes,
         schedule_restrictions_loaded,
+        needs_same_day_close_matches,
         player1:player1_id (
           id,
           first_name,
@@ -235,7 +236,7 @@ export class TournamentTeamsRepository extends BaseRepository {
 
     if (error) {
       // Si el error es por columnas faltantes, intentar query sin campos nuevos
-      if (error.message.includes('column') && (error.message.includes('display_order') || error.message.includes('is_substitute') || error.message.includes('schedule_notes') || error.message.includes('schedule_restrictions_loaded'))) {
+      if (error.message.includes('column') && (error.message.includes('display_order') || error.message.includes('is_substitute') || error.message.includes('schedule_notes') || error.message.includes('schedule_restrictions_loaded') || error.message.includes('needs_same_day_close_matches'))) {
         // Query fallback sin los campos nuevos
         const { data: fallbackData, error: fallbackError } = await this.supabase
           .from("tournament_teams")
@@ -388,6 +389,9 @@ export class TournamentTeamsRepository extends BaseRepository {
         is_substitute: useDefaults ? false : (item.is_substitute ?? false),
         schedule_notes: useDefaults ? null : (item.schedule_notes ?? null),
         schedule_restrictions_loaded: useDefaults ? false : (item.schedule_restrictions_loaded ?? false),
+        needs_same_day_close_matches: useDefaults
+          ? false
+          : (item.needs_same_day_close_matches ?? false),
         player1,
         player2,
         restricted_slot_ids: restrictedSlotIdsMap.get(item.id) || [],
@@ -430,6 +434,7 @@ export class TournamentTeamsRepository extends BaseRepository {
         is_substitute: input.is_substitute ?? false,
         schedule_notes: input.schedule_notes ?? null,
         schedule_restrictions_loaded: input.schedule_restrictions_loaded ?? false,
+        needs_same_day_close_matches: input.needs_same_day_close_matches ?? false,
         user_uid: this.userId,
       })
       .select("*")

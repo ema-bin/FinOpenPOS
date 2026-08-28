@@ -8,6 +8,7 @@ import {
   parseTournamentPhysicalSlotSelections,
 } from "@/lib/tournament-schedule-stream-payload";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
+import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
@@ -620,6 +621,28 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               : "Iniciando algoritmo de asignación (sin restricciones)..."
           );
           sendLog(`Llamando a scheduleGroupMatches con ${matchesPayload.length} partidos...`);
+
+          const schedulerTeamIds = Array.from(
+            new Set(
+              matchesPayload
+                .flatMap((match) => [match.team1_id, match.team2_id])
+                .filter((id): id is number => id != null)
+            )
+          );
+          let teamsNeedSameDayCloseMatches: Set<number> | undefined;
+          if (schedulerTeamIds.length > 0) {
+            const { data: sameDayTeamRows } = await supabase
+              .from("tournament_teams")
+              .select("id, needs_same_day_close_matches")
+              .in("id", schedulerTeamIds);
+            const sameDaySet = buildTeamsNeedSameDayCloseSet(sameDayTeamRows ?? []);
+            if (sameDaySet.size > 0) {
+              teamsNeedSameDayCloseMatches = sameDaySet;
+              sendLog(
+                `${sameDaySet.size} equipo(s) requieren sus 2 partidos el mismo día y cercanos.`
+              );
+            }
+          }
           
           let schedulerResult;
           try {
@@ -651,6 +674,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                   : {}),
                 ...(teamDisplayNames ? { teamDisplayNames } : {}),
                 ...(groupDisplayNames.size > 0 ? { groupDisplayNames } : {}),
+                ...(teamsNeedSameDayCloseMatches?.size
+                  ? { teamsNeedSameDayCloseMatches }
+                  : {}),
               }
             );
 

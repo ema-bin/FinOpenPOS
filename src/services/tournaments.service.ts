@@ -296,6 +296,7 @@ class TournamentsService {
       is_substitute?: boolean;
       schedule_notes?: string | null;
       schedule_restrictions_loaded?: boolean;
+      needs_same_day_close_matches?: boolean;
     }
   ): Promise<TeamDTO> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}`, {
@@ -349,11 +350,19 @@ class TournamentsService {
     tournamentId: number,
     teamId: number,
     restrictedSlotIds: number[],
-    scheduleNotes?: string | null
+    scheduleNotes?: string | null,
+    needsSameDayCloseMatches?: boolean
   ): Promise<void> {
-    const body: { restricted_slot_ids: number[]; schedule_notes?: string | null } = { restricted_slot_ids: restrictedSlotIds };
+    const body: {
+      restricted_slot_ids: number[];
+      schedule_notes?: string | null;
+      needs_same_day_close_matches?: boolean;
+    } = { restricted_slot_ids: restrictedSlotIds };
     if (scheduleNotes !== undefined) {
       body.schedule_notes = scheduleNotes;
+    }
+    if (needsSameDayCloseMatches !== undefined) {
+      body.needs_same_day_close_matches = needsSameDayCloseMatches;
     }
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams/${teamId}/restrictions`, {
       method: "PATCH",

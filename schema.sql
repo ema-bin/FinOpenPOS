@@ -727,7 +727,8 @@ CREATE TABLE tournament_teams (
     display_order       INTEGER DEFAULT 0,  -- Orden de visualización de las parejas
     is_substitute       BOOLEAN NOT NULL DEFAULT FALSE,  -- Si es suplente, no se incluye en la generación del torneo
     schedule_notes      TEXT,              -- Notas sobre disponibilidad horaria
-    schedule_restrictions_loaded BOOLEAN NOT NULL DEFAULT FALSE  -- Si ya se consultó y cargó la disponibilidad horaria
+    schedule_restrictions_loaded BOOLEAN NOT NULL DEFAULT FALSE,  -- Si ya se consultó y cargó la disponibilidad horaria
+    needs_same_day_close_matches BOOLEAN NOT NULL DEFAULT FALSE  -- Requiere sus 2 partidos de zona el mismo día y cercanos
 );
 
 -- =========================================================

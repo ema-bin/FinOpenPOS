@@ -458,7 +458,8 @@ export default function TeamsTab({
 
   const handleSaveRestrictions = async (
     restrictedSlotIds: number[],
-    scheduleNotes?: string | null
+    scheduleNotes?: string | null,
+    needsSameDayCloseMatches?: boolean
   ) => {
     if (!selectedTeamForRestrictions) return;
     try {
@@ -466,7 +467,8 @@ export default function TeamsTab({
         tournament.id,
         selectedTeamForRestrictions.id,
         restrictedSlotIds,
-        scheduleNotes
+        scheduleNotes,
+        needsSameDayCloseMatches
       );
       queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
       setSelectedTeamForRestrictions(null);
@@ -1254,6 +1256,11 @@ export default function TeamsTab({
                           📅 {team.schedule_notes}
                         </span>
                       )}
+                      {team.needs_same_day_close_matches ? (
+                        <span className="text-xs text-orange-700 dark:text-orange-300 mt-1 block">
+                          ⏱ Mismo día y horarios cercanos para sus 2 partidos
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   {canEditTeamPlayers && (

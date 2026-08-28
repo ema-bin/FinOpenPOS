@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
+import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 
 function normalizeTimeHHMM(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -366,7 +367,7 @@ export async function POST(req: NextRequest) {
         sendProgress(50, "Cargando equipos...");
         const { data: teamsData, error: teamsError } = await supabase
           .from("tournament_teams")
-          .select("id, display_name, player1:player1_id(last_name), player2:player2_id(last_name)")
+          .select("id, display_name, needs_same_day_close_matches, player1:player1_id(last_name), player2:player2_id(last_name)")
           .in("id", teamIds.length > 0 ? teamIds : [-1]);
 
         if (teamsError) {
@@ -567,6 +568,17 @@ export async function POST(req: NextRequest) {
           }))
         );
 
+        const sameDaySet = buildTeamsNeedSameDayCloseSet(
+          (teamsData ?? []) as Array<{ id: number; needs_same_day_close_matches?: boolean | null }>
+        );
+        const teamsNeedSameDayCloseMatches =
+          sameDaySet.size > 0 ? sameDaySet : undefined;
+        if (teamsNeedSameDayCloseMatches) {
+          sendLog(
+            `${teamsNeedSameDayCloseMatches.size} equipo(s) requieren sus 2 partidos el mismo día y cercanos.`
+          );
+        }
+
         const schedulerResult = useRestrictions
           ? await scheduleGroupMatches(
               matchesPayload,
@@ -588,6 +600,9 @@ export async function POST(req: NextRequest) {
                 blockedCourtIdsByTournamentSlotId,
                 teamDisplayNames,
                 groupDisplayNames,
+                ...(teamsNeedSameDayCloseMatches
+                  ? { teamsNeedSameDayCloseMatches }
+                  : {}),
               }
             )
           : await scheduleGroupMatches(

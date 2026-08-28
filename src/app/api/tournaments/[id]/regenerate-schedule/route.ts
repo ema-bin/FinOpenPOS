@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
+import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
@@ -394,6 +395,23 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   console.log(`Regenerating schedule for ${matchesPayload.length} matches (algorithm: ${useRestrictions ? "with-restrictions" : "default"})${useRestrictions && tournamentSlots ? `, ${tournamentSlots.length} slots del torneo` : ""}`);
 
+  const schedulerTeamIds = Array.from(
+    new Set(
+      matchesPayload
+        .flatMap((match) => [match.team1_id, match.team2_id])
+        .filter((id): id is number => id != null)
+    )
+  );
+  let teamsNeedSameDayCloseMatches: Set<number> | undefined;
+  if (schedulerTeamIds.length > 0) {
+    const { data: sameDayTeamRows } = await supabase
+      .from("tournament_teams")
+      .select("id, needs_same_day_close_matches")
+      .in("id", schedulerTeamIds);
+    const sameDaySet = buildTeamsNeedSameDayCloseSet(sameDayTeamRows ?? []);
+    if (sameDaySet.size > 0) teamsNeedSameDayCloseMatches = sameDaySet;
+  }
+
   const schedulerResult = await scheduleGroupMatches(
     matchesPayload,
     scheduleConfig.days,
@@ -415,6 +433,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         : {}),
       ...(teamDisplayNames ? { teamDisplayNames } : {}),
       ...(groupDisplayNames ? { groupDisplayNames } : {}),
+      ...(teamsNeedSameDayCloseMatches?.size ? { teamsNeedSameDayCloseMatches } : {}),
     }
   );
 

@@ -28,7 +28,11 @@ interface TeamScheduleRestrictionsDialogProps {
   onOpenChange: (open: boolean) => void;
   team: TeamDTO | null;
   slots: TournamentGroupSlotDisplay[];
-  onSave: (restrictedSlotIds: number[], scheduleNotes?: string | null) => Promise<void>;
+  onSave: (
+    restrictedSlotIds: number[],
+    scheduleNotes?: string | null,
+    needsSameDayCloseMatches?: boolean
+  ) => Promise<void>;
   /** Si se pasa, se muestra un botón para inicializar disponibilidad (una fila por slot con puede jugar). */
   onInitialize?: () => Promise<void>;
   /** Solo lectura: no permite guardar ni cambiar checkboxes (p. ej. fuera de borrador o con grupos ya generados). */
@@ -46,6 +50,7 @@ export function TeamScheduleRestrictionsDialog({
 }: TeamScheduleRestrictionsDialogProps) {
   const [restrictedSlotIds, setRestrictedSlotIds] = useState<Set<number>>(new Set());
   const [scheduleNotes, setScheduleNotes] = useState<string>("");
+  const [needsSameDayCloseMatches, setNeedsSameDayCloseMatches] = useState(false);
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(false);
 
@@ -55,11 +60,13 @@ export function TeamScheduleRestrictionsDialog({
     if (open && team) {
       setRestrictedSlotIds(new Set(teamRestrictedSlotIds));
       setScheduleNotes(team.schedule_notes || "");
+      setNeedsSameDayCloseMatches(Boolean(team.needs_same_day_close_matches));
     } else if (!open) {
       setRestrictedSlotIds(new Set());
       setScheduleNotes("");
+      setNeedsSameDayCloseMatches(false);
     }
-  }, [open, team?.id, team?.schedule_notes, teamRestrictedSlotIds.join(",")]);
+  }, [open, team?.id, team?.schedule_notes, team?.needs_same_day_close_matches, teamRestrictedSlotIds.join(",")]);
 
   const handleToggleSlot = (slotId: number) => {
     setRestrictedSlotIds((prev) => {
@@ -87,7 +94,11 @@ export function TeamScheduleRestrictionsDialog({
   const handleSave = async () => {
     try {
       setSaving(true);
-      await onSave(Array.from(restrictedSlotIds), scheduleNotes.trim() || null);
+      await onSave(
+        Array.from(restrictedSlotIds),
+        scheduleNotes.trim() || null,
+        needsSameDayCloseMatches
+      );
       onOpenChange(false);
     } catch (err: unknown) {
       console.error(err);
@@ -232,6 +243,29 @@ export function TeamScheduleRestrictionsDialog({
                 })}
             </div>
           )}
+
+          <div className="space-y-2 pt-4 border-t">
+            <div className="flex items-start space-x-2 rounded-lg border p-3">
+              <Checkbox
+                id="needs-same-day-close-matches"
+                checked={needsSameDayCloseMatches}
+                disabled={readOnly}
+                onCheckedChange={(checked) => setNeedsSameDayCloseMatches(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label
+                  htmlFor="needs-same-day-close-matches"
+                  className={`text-sm font-medium leading-none ${readOnly ? "" : "cursor-pointer"}`}
+                >
+                  Necesita ambos partidos el mismo día y cercanos
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Además de los horarios marcados arriba, esta pareja debe jugar sus dos partidos de zona
+                  el mismo día y con poco tiempo entre uno y otro.
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-2 pt-4 border-t">
             <Label htmlFor="schedule-notes" className="text-sm font-medium">

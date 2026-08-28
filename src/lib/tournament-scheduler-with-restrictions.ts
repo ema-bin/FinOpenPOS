@@ -5,6 +5,7 @@
 import type { ScheduleDay, AvailableSchedule } from "@/models/dto/tournament";
 import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot, TournamentSlotInput } from "./tournament-scheduler";
 import { calculateEndTime, generateTimeSlots, slotViolatesRestriction } from "./tournament-scheduler";
+import { assignmentSatisfiesSameDayCloseTeams } from "./team-same-day-match-constraint";
 
 type Group = {
   groupId: number;
@@ -70,6 +71,8 @@ type BeamSearchOptions = {
   teamDisplayNames?: Map<number, string>;
   /** Por grupo (tournament_group_id), nombre de la zona (ej. "Zona E" desde tournament_groups.name). */
   groupDisplayNames?: Map<number, string>;
+  /** Equipos que deben jugar sus 2 partidos de zona el mismo día y cercanos. */
+  teamsNeedSameDayCloseMatches?: Set<number>;
 };
 
 function groupLetter(groupIdx: number): string {
@@ -230,7 +233,8 @@ function generateCandidates(
   usedSlotIds: Set<string>,
   matchDurationMs: number,
   maxCandidates: number,
-  matchRestrictions?: Map<number, Set<string>>
+  matchRestrictions?: Map<number, Set<string>>,
+  teamsNeedSameDayClose?: Set<number>
 ): Array<{ slots: Slot[]; score: number }> {
   const isAllowedForMatch = (slotId: string, matchIdx: number): boolean =>
     !matchRestrictions?.get(matchIdx)?.has(slotId);
@@ -310,8 +314,20 @@ function generateCandidates(
   };
   addValidCombinations(freeSlots, n);
 
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates.slice(0, maxCandidates);
+  const filtered =
+    teamsNeedSameDayClose && teamsNeedSameDayClose.size > 0
+      ? candidates.filter((candidate) =>
+          assignmentSatisfiesSameDayCloseTeams(
+            candidate.slots,
+            group,
+            teamsNeedSameDayClose,
+            matchDurationMs
+          )
+        )
+      : candidates;
+
+  filtered.sort((a, b) => b.score - a.score);
+  return filtered.slice(0, maxCandidates);
 }
 
 /**
@@ -406,6 +422,7 @@ function runBeamSearch(
   const teamCannotPlaySlotIds = options?.teamCannotPlaySlotIds;
   const teamDisplayNames = options?.teamDisplayNames;
   const groupDisplayNames = options?.groupDisplayNames;
+  const teamsNeedSameDayCloseMatches = options?.teamsNeedSameDayCloseMatches;
   const totalSlots = slots.length;
   const groupLabel = (group: Group, groupIdx: number) =>
     groupDisplayNames?.get(group.groupId) ?? groupLetter(groupIdx);
@@ -426,7 +443,8 @@ function runBeamSearch(
         state.usedSlots,
         matchDurationMs,
         maxCandidates,
-        matchRestrictions
+        matchRestrictions,
+        teamsNeedSameDayCloseMatches
       );
       if (candidates.length === 0 && isLastZone) {
         const fallback = generateLastZoneFallback(group, slots, state.usedSlots, matchRestrictions);
@@ -532,7 +550,8 @@ export async function scheduleGroupMatchesWithRestrictions(
   teamCannotPlaySlotIds?: Map<number, Set<number>>,
   blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>,
   teamDisplayNames?: Map<number, string>,
-  groupDisplayNames?: Map<number, string>
+  groupDisplayNames?: Map<number, string>,
+  teamsNeedSameDayCloseMatches?: Set<number>
 ): Promise<SchedulerResult> {
   const useTournamentSlots =
     tournamentSlots != null &&
@@ -709,6 +728,7 @@ export async function scheduleGroupMatchesWithRestrictions(
     ...(useTournamentSlots && tournamentSlots && teamCannotPlaySlotIds
       ? { tournamentSlots, teamCannotPlaySlotIds, blockedCourtIdsByTournamentSlotId }
       : {}),
+    ...(teamsNeedSameDayCloseMatches?.size ? { teamsNeedSameDayCloseMatches } : {}),
   });
 
   if (!result.ok) {
