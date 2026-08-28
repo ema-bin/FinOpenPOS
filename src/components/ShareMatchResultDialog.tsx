@@ -41,6 +41,105 @@ function onlyLastNames(full: string): string {
     .join(" / ");
 }
 
+const SUPER_TIEBREAK_BADGE_BG = "#c2410c";
+const SUPER_TIEBREAK_BADGE_RING = "rgba(251, 146, 60, 0.75)";
+const MAIN_CAP_RADIUS_PX = 14;
+const MINI_CAP_RADIUS_PX = 7;
+/** Separación entre bordes: negativo = apenas superpuesto en el borde, sin tapar el número. */
+const CAP_GAP_PX = -2;
+const SUPER_BADGE_ANGLE_DEG = 50;
+
+function superBadgeOffset(mainRadius: number, miniRadius: number, gap: number) {
+  const distance = mainRadius + miniRadius + gap;
+  const angle = (SUPER_BADGE_ANGLE_DEG * Math.PI) / 180;
+  return {
+    dx: Math.cos(angle) * distance,
+    dy: Math.sin(angle) * distance,
+  };
+}
+
+function ShareSetScoreBadge({
+  value,
+  superValue,
+}: {
+  value: number | string;
+  superValue?: number | null;
+}) {
+  const { dx, dy } = superBadgeOffset(MAIN_CAP_RADIUS_PX, MINI_CAP_RADIUS_PX, CAP_GAP_PX);
+
+  return (
+    <div
+      className={`relative flex h-7 min-w-[1.75rem] items-center justify-center overflow-visible${
+        superValue != null ? " mr-1.5" : ""
+      }`}
+    >
+      <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-white/20 px-1 text-[10px] font-bold text-white">
+        {value}
+      </div>
+      {superValue != null ? (
+        <div
+          className="absolute flex h-3.5 min-w-[0.875rem] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-orange-700 px-0.5 text-[7px] font-bold leading-none text-white shadow-sm ring-1 ring-orange-400/80"
+          style={{
+            left: `calc(50% + ${dx}px)`,
+            top: `calc(50% + ${dy}px)`,
+          }}
+        >
+          {superValue}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function drawCapScore(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  textBaselineY: number,
+  capR: number,
+  mainVal: number | undefined | null,
+  superVal: number | null | undefined,
+  Sw: (n: number) => number,
+  Sh: (n: number) => number,
+) {
+  const arcCy = textBaselineY - Sh(4);
+  const mainText = String(mainVal ?? "–");
+
+  ctx.fillStyle = "rgba(255,255,255,0.2)";
+  ctx.beginPath();
+  ctx.arc(cx, arcCy, capR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${Sw(10)}px system-ui,sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(mainText, cx, textBaselineY);
+
+  if (superVal != null) {
+    const miniR = capR * (MINI_CAP_RADIUS_PX / MAIN_CAP_RADIUS_PX);
+    const gap = capR * (CAP_GAP_PX / MAIN_CAP_RADIUS_PX);
+    const { dx, dy } = superBadgeOffset(capR, miniR, gap);
+    const miniCx = cx + dx;
+    const miniCy = arcCy + dy;
+
+    ctx.fillStyle = SUPER_TIEBREAK_BADGE_BG;
+    ctx.beginPath();
+    ctx.arc(miniCx, miniCy, miniR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = SUPER_TIEBREAK_BADGE_RING;
+    ctx.lineWidth = Math.max(1, Sw(1));
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${Sw(7)}px system-ui,sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(superVal), miniCx, miniCy);
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
 export function ShareMatchResultDialog({
   open,
   onOpenChange,
@@ -248,26 +347,28 @@ export function ShareMatchResultDialog({
           capStartX + capR + (capR * 2 + capGap) * i
         );
         [set1.team1, set2.team1, set3?.team1].forEach((v, i) => {
-          const cx = capCenters[i];
-          ctx.fillStyle = "rgba(255,255,255,0.2)";
-          ctx.beginPath();
-          ctx.arc(cx, row1Y - Sh(4), capR, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = `bold ${Sw(10)}px system-ui,sans-serif`;
-          ctx.textAlign = "center";
-          ctx.fillText(String(v ?? "–"), cx, row1Y);
+          drawCapScore(
+            ctx,
+            capCenters[i],
+            row1Y,
+            capR,
+            v,
+            i === 2 ? superTiebreak?.team1 : null,
+            Sw,
+            Sh,
+          );
         });
         [set1.team2, set2.team2, set3?.team2].forEach((v, i) => {
-          const cx = capCenters[i];
-          ctx.fillStyle = "rgba(255,255,255,0.2)";
-          ctx.beginPath();
-          ctx.arc(cx, row2Y - Sh(4), capR, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = `bold ${Sw(10)}px system-ui,sans-serif`;
-          ctx.textAlign = "center";
-          ctx.fillText(String(v ?? "–"), cx, row2Y);
+          drawCapScore(
+            ctx,
+            capCenters[i],
+            row2Y,
+            capR,
+            v,
+            i === 2 ? superTiebreak?.team2 : null,
+            Sw,
+            Sh,
+          );
         });
 
         const blob = await new Promise<Blob | null>((resolve) =>
@@ -387,14 +488,15 @@ export function ShareMatchResultDialog({
                 <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
                   {team1Apellidos.toUpperCase()}
                 </span>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex flex-shrink-0 items-center gap-1 overflow-visible">
                   {setScores.map((set, i) => (
-                    <div
+                    <ShareSetScoreBadge
                       key={i}
-                      className="min-w-[1.75rem] h-7 px-1 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-[10px]"
-                    >
-                      {set ? set.s : "–"}
-                    </div>
+                      value={set ? set.s : "–"}
+                      superValue={
+                        i === 2 && superTiebreak != null ? superTiebreak.team1 : null
+                      }
+                    />
                   ))}
                 </div>
               </div>
@@ -402,14 +504,15 @@ export function ShareMatchResultDialog({
                 <span className="text-white font-bold text-xs uppercase tracking-wide truncate flex-1 min-w-0">
                   {team2Apellidos.toUpperCase()}
                 </span>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex flex-shrink-0 items-center gap-1 overflow-visible">
                   {setScores.map((set, i) => (
-                    <div
+                    <ShareSetScoreBadge
                       key={i}
-                      className="min-w-[1.75rem] h-7 px-1 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-[10px]"
-                    >
-                      {set ? set.t : "–"}
-                    </div>
+                      value={set ? set.t : "–"}
+                      superValue={
+                        i === 2 && superTiebreak != null ? superTiebreak.team2 : null
+                      }
+                    />
                   ))}
                 </div>
               </div>
