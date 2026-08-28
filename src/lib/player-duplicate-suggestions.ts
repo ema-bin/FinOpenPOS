@@ -19,8 +19,9 @@ export type PlayerDuplicateSuggestion = {
   reasons: string[];
 };
 
-const SUGGESTION_THRESHOLD = 0.72;
 const MAX_SUGGESTIONS = 5;
+const MIN_PHONE_DIGITS = 8;
+const MIN_NAME_PART_LENGTH = 2;
 
 export function normalizePlayerText(value: string): string {
   return value
@@ -31,8 +32,34 @@ export function normalizePlayerText(value: string): string {
     .replace(/\s+/g, " ");
 }
 
+/** Solo dígitos del teléfono ingresado o almacenado. */
 export function normalizePlayerPhone(value: string): string {
   return value.replace(/\D/g, "");
+}
+
+/**
+ * Formato comparable para teléfonos (p. ej. +54 9 11… vs 11…).
+ * Quita prefijo país, cero inicial y el 9 de móvil argentino cuando aplica.
+ */
+export function canonicalPlayerPhone(value: string): string {
+  let digits = normalizePlayerPhone(value);
+  if (!digits) return "";
+
+  digits = digits.replace(/^0+/, "");
+
+  if (digits.startsWith("54")) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.length >= 11 && digits.startsWith("9")) {
+    digits = digits.slice(1);
+  }
+
+  if (digits.length > 10) {
+    digits = digits.slice(-10);
+  }
+
+  return digits;
 }
 
 function levenshteinDistance(a: string, b: string): number {
@@ -57,105 +84,199 @@ function levenshteinDistance(a: string, b: string): number {
   return prev[b.length];
 }
 
-function textSimilarity(a: string, b: string): number {
+function jaroSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const len1 = a.length;
+  const len2 = b.length;
+  if (len1 === 0 || len2 === 0) return 0;
+
+  const matchDistance = Math.floor(Math.max(len1, len2) / 2) - 1;
+  const s1Matches = new Array<boolean>(len1).fill(false);
+  const s2Matches = new Array<boolean>(len2).fill(false);
+
+  let matches = 0;
+  for (let i = 0; i < len1; i++) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, len2);
+    for (let j = start; j < end; j++) {
+      if (s2Matches[j] || a[i] !== b[j]) continue;
+      s1Matches[i] = true;
+      s2Matches[j] = true;
+      matches++;
+      break;
+    }
+  }
+
+  if (matches === 0) return 0;
+
+  let transpositions = 0;
+  let k = 0;
+  for (let i = 0; i < len1; i++) {
+    if (!s1Matches[i]) continue;
+    while (!s2Matches[k]) k++;
+    if (a[i] !== b[k]) transpositions++;
+    k++;
+  }
+
+  return (
+    (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3
+  );
+}
+
+function jaroWinklerSimilarity(a: string, b: string): number {
+  const jaro = jaroSimilarity(a, b);
+  let prefix = 0;
+  for (let i = 0; i < Math.min(a.length, b.length, 4); i++) {
+    if (a[i] === b[i]) prefix++;
+    else break;
+  }
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+/** Typos de 1–2 letras en apellidos/nombres largos (Baglioni/Bagloni). */
+function isLikelyTypo(a: string, b: string): boolean {
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen < 5) return false;
+
+  const distance = levenshteinDistance(a, b);
+  const maxLen = Math.max(a.length, b.length);
+  const maxDistance = maxLen >= 8 ? 2 : 1;
+  return distance <= maxDistance && distance / maxLen <= 0.25;
+}
+
+function namePartSimilarity(a: string, b: string): number {
   const left = normalizePlayerText(a);
   const right = normalizePlayerText(b);
   if (!left || !right) return 0;
   if (left === right) return 1;
-  const maxLen = Math.max(left.length, right.length);
-  if (maxLen === 0) return 0;
-  const distance = levenshteinDistance(left, right);
-  return 1 - distance / maxLen;
+
+  const minLen = Math.min(left.length, right.length);
+  if (minLen <= 3) {
+    return left === right ? 1 : 0;
+  }
+
+  if (isLikelyTypo(left, right)) {
+    return 0.94;
+  }
+
+  return jaroWinklerSimilarity(left, right);
 }
 
-function tokenSetSimilarity(a: string, b: string): number {
-  const left = normalizePlayerText(a).split(" ").filter(Boolean).sort().join(" ");
-  const right = normalizePlayerText(b).split(" ").filter(Boolean).sort().join(" ");
-  if (!left || !right) return 0;
-  return textSimilarity(left, right);
+function tokenSetKey(value: string): string {
+  return normalizePlayerText(value).split(" ").filter(Boolean).sort().join(" ");
 }
 
-function scorePhone(inputPhone: string, candidatePhone: string | null): {
-  score: number;
-  reason: string | null;
-} {
-  const left = normalizePlayerPhone(inputPhone);
-  const right = normalizePlayerPhone(candidatePhone ?? "");
-  if (!left || !right) return { score: 0, reason: null };
-  if (left === right) return { score: 1, reason: "Mismo teléfono" };
+function phonesMatchExactly(inputPhone: string, candidatePhone: string | null): boolean {
+  const left = canonicalPlayerPhone(inputPhone);
+  const right = canonicalPlayerPhone(candidatePhone ?? "");
+  if (!left || !right) return false;
+  if (left.length < MIN_PHONE_DIGITS || right.length < MIN_PHONE_DIGITS) return false;
+  return left === right;
+}
 
-  const suffixLen = 8;
-  const leftSuffix = left.slice(-suffixLen);
-  const rightSuffix = right.slice(-suffixLen);
+function scoreNameMatch(
+  input: PlayerDuplicateInput,
+  candidate: PlayerDuplicateCandidate
+): PlayerDuplicateSuggestion | null {
+  const firstA = normalizePlayerText(input.first_name);
+  const lastA = normalizePlayerText(input.last_name);
+  const firstB = normalizePlayerText(candidate.first_name);
+  const lastB = normalizePlayerText(candidate.last_name);
+
   if (
-    leftSuffix.length >= suffixLen &&
-    rightSuffix.length >= suffixLen &&
-    leftSuffix === rightSuffix
+    firstA.length < MIN_NAME_PART_LENGTH ||
+    lastA.length < MIN_NAME_PART_LENGTH ||
+    !firstB ||
+    !lastB
   ) {
-    return { score: 0.92, reason: "Teléfono muy similar (últimos 8 dígitos)" };
+    return null;
   }
 
-  if (left.includes(right) || right.includes(left)) {
-    return { score: 0.84, reason: "Teléfono parecido" };
+  const reasons: string[] = [];
+
+  if (firstA === firstB && lastA === lastB) {
+    reasons.push("Mismo nombre y apellido");
+    return {
+      player: candidate,
+      score: 0.98,
+      reasons,
+    };
   }
 
-  const similarity = textSimilarity(left, right);
-  if (similarity >= 0.8) {
-    return { score: similarity, reason: "Teléfono parecido" };
+  const fullA = tokenSetKey(`${input.first_name} ${input.last_name}`);
+  const fullB = tokenSetKey(`${candidate.first_name} ${candidate.last_name}`);
+  if (fullA === fullB) {
+    reasons.push("Mismo nombre completo");
+    return {
+      player: candidate,
+      score: 0.96,
+      reasons,
+    };
   }
 
-  return { score: similarity, reason: null };
+  const firstSim = namePartSimilarity(firstA, firstB);
+  const lastSim = namePartSimilarity(lastA, lastB);
+  const minLastLen = Math.min(lastA.length, lastB.length);
+
+  if (firstA === firstB && firstA.length >= 3 && minLastLen >= 5) {
+    if (lastSim >= 0.88 || isLikelyTypo(lastA, lastB)) {
+      reasons.push("Nombre igual", "Apellido muy similar");
+      return {
+        player: candidate,
+        score: 0.9 + lastSim * 0.08,
+        reasons,
+      };
+    }
+  }
+
+  if (lastA === lastB && lastA.length >= 5 && firstSim >= 0.92) {
+    reasons.push("Apellido igual", "Nombre muy similar");
+    return {
+      player: candidate,
+      score: 0.9 + firstSim * 0.08,
+      reasons,
+    };
+  }
+
+  if (
+    minLastLen >= 5 &&
+    firstA.length >= 3 &&
+    firstB.length >= 3 &&
+    firstSim >= 0.9 &&
+    lastSim >= 0.88
+  ) {
+    reasons.push("Nombre muy similar", "Apellido muy similar");
+    return {
+      player: candidate,
+      score: firstSim * 0.35 + lastSim * 0.65,
+      reasons,
+    };
+  }
+
+  return null;
 }
 
 export function hasEnoughDuplicateCheckInput(input: PlayerDuplicateInput): boolean {
   const phoneDigits = normalizePlayerPhone(input.phone);
   const first = normalizePlayerText(input.first_name);
   const last = normalizePlayerText(input.last_name);
-  return phoneDigits.length >= 6 || (first.length >= 2 && last.length >= 2);
+  return phoneDigits.length >= MIN_PHONE_DIGITS || (first.length >= 2 && last.length >= 2);
 }
 
 export function scorePlayerDuplicate(
   input: PlayerDuplicateInput,
   candidate: PlayerDuplicateCandidate
 ): PlayerDuplicateSuggestion | null {
-  const reasons: string[] = [];
-  let score = 0;
-
-  const phone = scorePhone(input.phone, candidate.phone);
-  if (phone.reason) {
-    reasons.push(phone.reason);
-    score = Math.max(score, phone.score);
+  if (phonesMatchExactly(input.phone, candidate.phone)) {
+    return {
+      player: candidate,
+      score: 1,
+      reasons: ["Mismo teléfono"],
+    };
   }
 
-  const firstSim = textSimilarity(input.first_name, candidate.first_name);
-  const lastSim = textSimilarity(input.last_name, candidate.last_name);
-  const fullInput = `${input.first_name} ${input.last_name}`.trim();
-  const fullCandidate = `${candidate.first_name} ${candidate.last_name}`.trim();
-  const fullSim = Math.max(
-    textSimilarity(fullInput, fullCandidate),
-    tokenSetSimilarity(fullInput, fullCandidate)
-  );
-
-  const nameScore = firstSim * 0.35 + lastSim * 0.45 + fullSim * 0.2;
-  score = Math.max(score, nameScore);
-
-  if (firstSim >= 0.88) reasons.push("Nombre muy similar");
-  if (lastSim >= 0.88) reasons.push("Apellido muy similar");
-  if (fullSim >= 0.9 && firstSim < 0.88 && lastSim < 0.88) {
-    reasons.push("Nombre completo parecido");
-  }
-  if (firstSim >= 0.95 && lastSim >= 0.75) {
-    reasons.push("Nombre y apellido parecidos");
-  }
-
-  const uniqueReasons = Array.from(new Set(reasons));
-  if (score < SUGGESTION_THRESHOLD) return null;
-
-  return {
-    player: candidate,
-    score,
-    reasons: uniqueReasons.length > 0 ? uniqueReasons : ["Datos parecidos"],
-  };
+  return scoreNameMatch(input, candidate);
 }
 
 export function findPlayerDuplicateSuggestions(
