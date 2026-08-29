@@ -38,13 +38,14 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
-
+  // Use getSession (cookie/JWT, no remote Auth round-trip). Middleware runs on Edge
+  // near the user (e.g. gru1 from Argentina), not in vercel.json regions (pdx1).
+  // getUser() hits Supabase Auth over the network and triggers MIDDLEWARE_INVOCATION_TIMEOUT.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const user = session?.user
 
   if (
     !user &&
