@@ -183,18 +183,60 @@ function generateFirstRoundFromPredefined(
       source_team2: null,
     });
   }
-  const teamsWithByeList = matches
-    .filter((m) => m.team2_id == null && m.team1_id != null)
-    .map((m) => rankedTeams.find((t) => t.team_id === m.team1_id))
-    .filter((t): t is QualifiedTeam => t != null);
   const { nextRoundSize } = calculateFirstRound(rankedTeams.length);
   stageGenerateSubsequentRoundsFromFirst(
     matches,
     matches,
-    teamsWithByeList,
-    rankedTeams,
+    getRoundName(nextRoundSize),
     nextRoundSize
   );
+  return matches;
+}
+
+/**
+ * Siguiente ronda para brackets prefijados: cada partido de 1ra ronda con bracket_pos P
+ * ocupa el slot P del cuadro siguiente (bye directo o ganador del partido P).
+ * No re-seedea byes con seedByeTeams — respeta la posición del template.
+ */
+function generateNextRoundFromPredefinedFirstRound(
+  firstRoundMatches: PlayoffMatch[],
+  roundName: string,
+  nextRoundSize: number
+): PlayoffMatch[] {
+  const slotTeamId: (number | null)[] = new Array(nextRoundSize).fill(null);
+  const slotSource: (string | null)[] = new Array(nextRoundSize).fill(null);
+  const prevRoundLabel =
+    firstRoundMatches[0]?.round.charAt(0).toUpperCase() +
+      firstRoundMatches[0]?.round.slice(1) || "";
+
+  for (const m of firstRoundMatches) {
+    const slotIndex = m.bracket_pos - 1;
+    if (slotIndex < 0 || slotIndex >= nextRoundSize) continue;
+
+    if (m.team2_id == null && m.team1_id != null) {
+      slotTeamId[slotIndex] = m.team1_id;
+    } else if (m.team1_id != null && m.team2_id != null) {
+      slotSource[slotIndex] = `Ganador ${prevRoundLabel}${m.bracket_pos}`;
+    }
+  }
+
+  const numMatches = Math.floor(nextRoundSize / 2);
+  const matches: PlayoffMatch[] = [];
+
+  for (let i = 0; i < numMatches; i++) {
+    const pos1 = i * 2;
+    const pos2 = i * 2 + 1;
+
+    matches.push({
+      round: roundName,
+      bracket_pos: i + 1,
+      team1_id: slotTeamId[pos1],
+      team2_id: slotTeamId[pos2],
+      source_team1: slotTeamId[pos1] != null ? null : slotSource[pos1],
+      source_team2: slotTeamId[pos2] != null ? null : slotSource[pos2],
+    });
+  }
+
   return matches;
 }
 
@@ -202,19 +244,16 @@ function generateFirstRoundFromPredefined(
 function stageGenerateSubsequentRoundsFromFirst(
   allMatches: PlayoffMatch[],
   firstRoundMatches: PlayoffMatch[],
-  teamsWithByeList: QualifiedTeam[],
-  rankedTeams: QualifiedTeam[],
+  roundName: string,
   nextRoundSize: number
 ): void {
-  const nextRoundMatches = generateNextRoundWithByes(
-    teamsWithByeList,
-    firstRoundMatches.filter((m) => m.team1_id != null && m.team2_id != null),
-    rankedTeams,
-    getRoundName(nextRoundSize),
+  const nextRoundMatches = generateNextRoundFromPredefinedFirstRound(
+    firstRoundMatches,
+    roundName,
     nextRoundSize
   );
   allMatches.push(...nextRoundMatches);
-  stageAppendRemainingRoundsPlaceholders(allMatches, nextRoundMatches.length, getRoundName(nextRoundSize));
+  stageAppendRemainingRoundsPlaceholders(allMatches, nextRoundMatches.length, roundName);
 }
 
 /**

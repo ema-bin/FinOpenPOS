@@ -1,4 +1,4 @@
-/** Herramientas de testing para fase de grupos (simular / limpiar resultados). */
+/** Herramientas de testing dev (grupos: simular/limpiar; playoffs: simular/eliminar). */
 export function isGroupTestToolsEnabledClient(): boolean {
   return process.env.NEXT_PUBLIC_ENABLE_GROUP_TEST_TOOLS === "true";
 }

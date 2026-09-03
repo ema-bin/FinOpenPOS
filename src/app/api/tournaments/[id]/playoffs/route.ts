@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { isGroupTestToolsEnabledServer } from "@/lib/group-test-tools";
 
 type RouteParams = { params: { id: string } };
 
@@ -28,6 +29,10 @@ export async function GET(_req: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(_req: Request, { params }: RouteParams) {
+  if (!isGroupTestToolsEnabledServer()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);
