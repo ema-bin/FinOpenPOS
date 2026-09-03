@@ -6,6 +6,7 @@ import {
   buildTeamDisplayOrderMap,
   sortTeamIdsWithZoneHeadFirst,
 } from "@/lib/group-zone-team-order";
+import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
 
 type RouteParams = { params: { id: string } };
 
@@ -277,67 +278,14 @@ export async function POST(req: Request, { params }: RouteParams) {
         }
       }
     } else if (size === 4) {
-      // Formato especial para grupos de 4 equipos (4 partidos)
-      // Primera ronda (match_order 1-2):
-      // - Partido 1: 1 vs 4
-      // - Partido 2: 2 vs 3
-      matchesPayload.push({
-        tournament_id: tournamentId,
-        user_uid: user.id,
-        phase: "group",
-        tournament_group_id: g.id,
-        team1_id: idsForGroup[0], // 1
-        team2_id: idsForGroup[3], // 4
-        match_date: null,
-        start_time: null,
-        end_time: null,
-        match_order: 1,
-        court_id: null,
-      });
-      matchesPayload.push({
-        tournament_id: tournamentId,
-        user_uid: user.id,
-        phase: "group",
-        tournament_group_id: g.id,
-        team1_id: idsForGroup[1], // 2
-        team2_id: idsForGroup[2], // 3
-        match_date: null,
-        start_time: null,
-        end_time: null,
-        match_order: 2,
-        court_id: null,
-      });
-      
-      // Segunda ronda (match_order 3-4):
-      // - Partido 3: Ganador 1vs4 vs Ganador 2vs3 (ronda de ganadores) -> 1ro y 2do
-      // - Partido 4: Perdedor 1vs4 vs Perdedor 2vs3 (ronda de perdedores) -> 3ro
-      // Estos partidos se crearán sin equipos asignados (null) y se actualizarán cuando se jueguen los de primera ronda
-      matchesPayload.push({
-        tournament_id: tournamentId,
-        user_uid: user.id,
-        phase: "group",
-        tournament_group_id: g.id,
-        team1_id: null, // Se asignará cuando se juegue el partido 1
-        team2_id: null, // Se asignará cuando se juegue el partido 2
-        match_date: null,
-        start_time: null,
-        end_time: null,
-        match_order: 3,
-        court_id: null,
-      });
-      matchesPayload.push({
-        tournament_id: tournamentId,
-        user_uid: user.id,
-        phase: "group",
-        tournament_group_id: g.id,
-        team1_id: null, // Se asignará cuando se juegue el partido 1
-        team2_id: null, // Se asignará cuando se juegue el partido 2
-        match_date: null,
-        start_time: null,
-        end_time: null,
-        match_order: 4,
-        court_id: null,
-      });
+      matchesPayload.push(
+        ...buildDefaultGroupOfFourMatchPayloads(
+          tournamentId,
+          user.id,
+          g.id,
+          idsForGroup
+        )
+      );
     }
   });
 
