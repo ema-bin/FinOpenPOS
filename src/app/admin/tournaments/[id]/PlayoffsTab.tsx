@@ -36,6 +36,7 @@ import type { PlayoffRow, TournamentDTO } from "@/models/dto/tournament";
 import type { MatchStatus } from "@/models/db/tournament";
 import type { CourtDTO } from "@/models/dto/court";
 import { tournamentsService, tournamentMatchesService } from "@/services";
+import { isGroupTestToolsEnabledClient } from "@/lib/group-test-tools";
 
 // Using Pick from TournamentDTO and MatchDTO
 type Match = NonNullable<PlayoffRow["match"]>;
@@ -88,6 +89,7 @@ export default function PlayoffsTab({
   const [simulatingResults, setSimulatingResults] = useState(false);
   const [finishingTournament, setFinishingTournament] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
+  const groupTestToolsEnabled = isGroupTestToolsEnabledClient();
 
   // React Query para compartir cache con GroupsTab y PlayoffsViewTab
   const {
@@ -312,45 +314,46 @@ export default function PlayoffsTab({
           </div>
           {rows.length > 0 && (
             <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSimulateResults}
-                  disabled={true}
-                  hidden={true}
-                >
-                  {simulatingResults ? (
-                    <>
-                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                      Simulando...
-                    </>
-                  ) : (
-                    <>
-                      <PlayIcon className="h-4 w-4 mr-2" />
-                      Simular Resultados
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteDialog(true)}
-                  disabled={deleting}
-                >
-                  {deleting ? (
-                    <>
-                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                      Eliminando...
-                    </>
-                  ) : (
-                    <>
-                      <TrashIcon className="h-4 w-4 mr-2" />
-                      Eliminar Playoffs
-                    </>
-                  )}
-                </Button>
-              </div>
+              {groupTestToolsEnabled && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSimulateResults}
+                    disabled={simulatingResults}
+                  >
+                    {simulatingResults ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                        Simulando...
+                      </>
+                    ) : (
+                      <>
+                        <PlayIcon className="h-4 w-4 mr-2" />
+                        Simular Resultados
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={deleting}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <TrashIcon className="h-4 w-4 mr-2" />
+                        Eliminar Playoffs
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               {tournament.status === "in_progress" && (
                 <div className="flex flex-col items-end gap-1">
                   <Button
@@ -563,7 +566,7 @@ export default function PlayoffsTab({
         })}
       </CardContent>
 
-      {/* Diálogo de confirmación para eliminar playoffs */}
+      {groupTestToolsEnabled && (
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
@@ -601,6 +604,7 @@ export default function PlayoffsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </Card>
   );
 }

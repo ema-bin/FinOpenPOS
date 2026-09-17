@@ -14,6 +14,7 @@ import {
   buildTeamDisplayOrderMap,
   sortTeamIdsWithZoneHeadFirst,
 } from "@/lib/group-zone-team-order";
+import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
@@ -397,58 +398,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               }
             } else if (size === 4) {
               matchesPayload.push(
-                {
-                  tournament_id: tournamentId,
-                  user_uid: user.id,
-                  phase: "group",
-                  tournament_group_id: g.id,
-                  team1_id: idsForGroup[0],
-                  team2_id: idsForGroup[3],
-                  match_date: null,
-                  start_time: null,
-                  end_time: null,
-                  match_order: 1,
-                  court_id: null,
-                },
-                {
-                  tournament_id: tournamentId,
-                  user_uid: user.id,
-                  phase: "group",
-                  tournament_group_id: g.id,
-                  team1_id: idsForGroup[1],
-                  team2_id: idsForGroup[2],
-                  match_date: null,
-                  start_time: null,
-                  end_time: null,
-                  match_order: 2,
-                  court_id: null,
-                },
-                {
-                  tournament_id: tournamentId,
-                  user_uid: user.id,
-                  phase: "group",
-                  tournament_group_id: g.id,
-                  team1_id: null,
-                  team2_id: null,
-                  match_date: null,
-                  start_time: null,
-                  end_time: null,
-                  match_order: 3,
-                  court_id: null,
-                },
-                {
-                  tournament_id: tournamentId,
-                  user_uid: user.id,
-                  phase: "group",
-                  tournament_group_id: g.id,
-                  team1_id: null,
-                  team2_id: null,
-                  match_date: null,
-                  start_time: null,
-                  end_time: null,
-                  match_order: 4,
-                  court_id: null,
-                }
+                ...buildDefaultGroupOfFourMatchPayloads(
+                  tournamentId,
+                  user.id,
+                  g.id,
+                  idsForGroup
+                )
               );
             }
           });

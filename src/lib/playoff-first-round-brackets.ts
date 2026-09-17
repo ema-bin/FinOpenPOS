@@ -4,6 +4,10 @@
  * Bracket prefijado: cada partido es { team1: "1A", team2: "2B" | null }.
  * "1A" = 1ro grupo A, "2B" = 2do grupo B, "3A" = 3ro grupo A (letra = orden de zona).
  * Clave = cantidad inicial de parejas (`totalPairs`; no clasificados).
+ *
+ * IMPORTANTE: el índice en el array = `bracket_pos` = slot en la ronda siguiente.
+ * Un bye en la posición N avanza directo al slot N de octavos/cuartos; un partido real
+ * en la posición N alimenta ese mismo slot con "Ganador …N".
  */
 
 export type PredefinedFirstRoundMatch = { team1: string; team2: string | null };

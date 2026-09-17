@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import type { TournamentDTO, GroupsApiResponse, AvailableSchedule, GroupDTO, GroupTeamDTO, TeamDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
+import { GroupOfFourPairingEditor } from "@/components/group-of-four-pairing-editor";
 
 function teamLabelShort(team: TeamDTO | null): string {
   if (!team) return "—";
@@ -183,7 +184,7 @@ export default function ScheduleReviewTab({
         return { groupId: group.id, groupName: group.name, rows };
       })
       .filter((g) => g.rows.length > 0);
-  }, [data?.matches, data?.tournamentGroupSlots, groupsWithTeams]);
+  }, [data?.tournamentGroupSlots, groupsWithTeams]);
 
   const load = () => {
     queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournament.id] });
@@ -352,7 +353,7 @@ export default function ScheduleReviewTab({
                 <div>
                   <CardTitle className="text-base">Zonas y equipos</CardTitle>
                   <CardDescription className="text-xs">
-                    Si hay incompatibilidades para jugar, usá Optimizar zonas o intercambiá equipos manualmente antes de regenerar horarios.
+                    En zonas de 4, definí los cruces de 1ª ronda antes de regenerar horarios. Si hay incompatibilidades, usá Optimizar zonas o intercambiá equipos manualmente.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -410,11 +411,33 @@ export default function ScheduleReviewTab({
                 ))}
               </div>
 
+              {groupsWithTeams.some(({ teams }) => teams.length === 4) && data?.matches && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Emparejamientos 1ª ronda (zonas de 4)
+                  </p>
+                  {groupsWithTeams
+                    .filter(({ teams }) => teams.length === 4)
+                    .map(({ group, teams }) => (
+                      <GroupOfFourPairingEditor
+                        key={group.id}
+                        tournamentId={tournament.id}
+                        groupId={group.id}
+                        groupName={group.name}
+                        groupTeams={teams}
+                        matches={data.matches}
+                        onUpdated={load}
+                      />
+                    ))}
+                </div>
+              )}
+
               {scheduleCompatibilityByGroup.length > 0 && (
                 <div className="mt-4 space-y-3">
                   <div className="text-xs text-muted-foreground">
-                    Compatibilidad horaria por zona (segun slots disponibles de cada equipo).
-                    Se muestra el cruce de disponibilidad por pares; menor % implica mayor riesgo.
+                    Compatibilidad horaria por zona (según slots disponibles de cada equipo).
+                    Se muestran todos los pares posibles, porque aún no se sabe quién ganará ni quién perderá en semifinales y finales.
+                    Menor % implica mayor riesgo.
                   </div>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     {scheduleCompatibilityByGroup.map((groupComp) => (

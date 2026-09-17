@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { expandRangesToSlots } from "@/lib/expand-tournament-group-slots";
 
 type RouteParams = { params: { id: string } };
 
@@ -39,49 +40,6 @@ export async function GET(_req: Request, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
-
-function expandRangesToSlots(
-  groupSlots: Array<{ slot_date: string; start_time: string; end_time: string }>,
-  matchDurationMinutes: number
-): Array<{ slot_date: string; start_time: string; end_time: string }> {
-  const timeToMinutes = (timeStr: string, asEndOfDay = false): number => {
-    const s = String(timeStr).trim();
-    if (asEndOfDay && (s === "00:00" || s === "24:00" || s === "0:00")) return 24 * 60;
-    const parts = s.split(":");
-    const h = parseInt(parts[0], 10) || 0;
-    const m = parts[1] ? parseInt(parts[1], 10) || 0 : 0;
-    return h * 60 + m;
-  };
-  const minutesToTime = (total: number): string => {
-    if (total >= 24 * 60) return "00:00";
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  };
-  const duration = Math.max(15, matchDurationMinutes);
-  const expanded: Array<{ slot_date: string; start_time: string; end_time: string }> = [];
-  for (const block of groupSlots) {
-    if (
-      !block ||
-      typeof block.slot_date !== "string" ||
-      typeof block.start_time !== "string" ||
-      typeof block.end_time !== "string"
-    )
-      continue;
-    const slotDate = String(block.slot_date).trim();
-    if (!slotDate) continue;
-    const startM = timeToMinutes(block.start_time, false);
-    const endM = timeToMinutes(block.end_time, true);
-    for (let t = startM; t + duration <= endM; t += duration) {
-      expanded.push({
-        slot_date: slotDate,
-        start_time: minutesToTime(t),
-        end_time: minutesToTime(t + duration),
-      });
-    }
-  }
-  return expanded;
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
