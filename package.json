@@ -8,6 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "check-env": "node scripts/check-env.js",
     "check-env:local": "node scripts/check-env.js local",
     "check-env:prod": "node scripts/check-env.js production"
@@ -54,7 +57,15 @@
     "eslint": "^8.57.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
     "@types/dom-to-image": "^2.6.7",
-    "eslint-config-next": "14.2.5"
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint-config-next": "14.2.5",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
   }
 }
