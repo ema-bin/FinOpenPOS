@@ -70,7 +70,7 @@ export function PurchasesHistoryTab() {
     number | "all"
   >("all");
   const [statusFilter, setStatusFilter] = useState<"all" | PurchaseStatus>(
-    "all"
+    "pending"
   );
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
