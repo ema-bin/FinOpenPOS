@@ -18,6 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Loader2Icon, CheckIcon, RefreshCwIcon, TrashIcon, ArrowLeftRightIcon, SparklesIcon } from "lucide-react";
 import { toast } from "sonner";
 import { GroupScheduleViewer } from "@/components/group-schedule-viewer";
@@ -33,6 +35,7 @@ import {
 import type { TournamentDTO, GroupsApiResponse, AvailableSchedule, GroupDTO, GroupTeamDTO, TeamDTO } from "@/models/dto/tournament";
 import { tournamentsService } from "@/services";
 import { GroupOfFourPairingEditor } from "@/components/group-of-four-pairing-editor";
+import { teamHasViableSameDayCloseSlots } from "@/lib/team-same-day-match-constraint";
 
 function teamLabelShort(team: TeamDTO | null): string {
   if (!team) return "—";
@@ -73,6 +76,7 @@ export default function ScheduleReviewTab({
   const [swapFirst, setSwapFirst] = useState<SwapEntry | null>(null);
   const [swapSecond, setSwapSecond] = useState<SwapEntry | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [togglingSameDayTeamId, setTogglingSameDayTeamId] = useState<number | null>(null);
 
   const {
     data,
@@ -81,7 +85,7 @@ export default function ScheduleReviewTab({
   } = useQuery({
     queryKey: ["tournament-groups", tournament.id],
     queryFn: () => fetchTournamentGroups(tournament.id),
-    staleTime: 1000 * 30,
+    staleTime: 0,
   });
 
   // Los horarios disponibles ahora se generan en memoria durante la revisión de horarios
@@ -186,9 +190,93 @@ export default function ScheduleReviewTab({
       .filter((g) => g.rows.length > 0);
   }, [data?.tournamentGroupSlots, groupsWithTeams]);
 
-  const load = () => {
-    queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournament.id] });
-    queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
+  const matchDurationMinutes = Math.max(30, tournament.match_duration ?? 60);
+
+  const sameDayCloseByTeamId = useMemo(() => {
+    const allSlots = data?.tournamentGroupSlots ?? [];
+    if (!allSlots.length) return new Map<number, { flagged: boolean; viable: boolean }>();
+
+    const restrictedByTeamId = new Map<number, Set<number>>();
+    for (const match of data?.matches ?? []) {
+      for (const t of [match.team1, match.team2]) {
+        if (!t?.id) continue;
+        restrictedByTeamId.set(t.id, new Set(t.restricted_slot_ids ?? []));
+      }
+    }
+
+    const slotMeta = new Map(
+      allSlots.map((s) => [
+        s.id,
+        {
+          date: String(s.slot_date).trim().slice(0, 10),
+          startMinutes: (() => {
+            const parts = String(s.start_time).trim().substring(0, 5).split(":");
+            return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+          })(),
+        },
+      ])
+    );
+
+    const out = new Map<number, { flagged: boolean; viable: boolean }>();
+
+    for (const { teams } of groupsWithTeams) {
+      const groupSize = (teams.length === 4 ? 4 : 3) as 3 | 4;
+      for (const gt of teams) {
+        const team = gt.team;
+        if (!team?.id) continue;
+        const flagged = Boolean(team.needs_same_day_close_matches);
+        if (!flagged) {
+          out.set(team.id, { flagged: false, viable: true });
+          continue;
+        }
+
+        const restricted = restrictedByTeamId.get(team.id) ?? new Set<number>();
+        const availableSlots = allSlots
+          .filter((s) => !restricted.has(s.id))
+          .map((s) => slotMeta.get(s.id))
+          .filter((x): x is { date: string; startMinutes: number } => Boolean(x));
+
+        out.set(team.id, {
+          flagged: true,
+          viable: teamHasViableSameDayCloseSlots(
+            availableSlots,
+            groupSize,
+            matchDurationMinutes
+          ),
+        });
+      }
+    }
+
+    return out;
+  }, [data?.matches, data?.tournamentGroupSlots, groupsWithTeams, matchDurationMinutes]);
+
+  const sameDayCloseTeamsCount = useMemo(
+    () => Array.from(sameDayCloseByTeamId.values()).filter((x) => x.flagged).length,
+    [sameDayCloseByTeamId]
+  );
+
+  const sameDayCloseAtRiskCount = useMemo(
+    () => Array.from(sameDayCloseByTeamId.values()).filter((x) => x.flagged && !x.viable).length,
+    [sameDayCloseByTeamId]
+  );
+
+  const handleToggleSameDayClose = async (team: TeamDTO, next: boolean) => {
+    try {
+      setTogglingSameDayTeamId(team.id);
+      await tournamentsService.updateTeam(tournament.id, team.id, {
+        needs_same_day_close_matches: next,
+      });
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al actualizar la pareja");
+    } finally {
+      setTogglingSameDayTeamId(null);
+    }
+  };
+
+  const load = async () => {
+    await queryClient.refetchQueries({ queryKey: ["tournament-groups", tournament.id] });
+    await queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
   };
 
   const handleCloseReview = async () => {
@@ -235,17 +323,11 @@ export default function ScheduleReviewTab({
   };
 
   const handleConfirmRegenerateSchedule = async () => {
-    // Este handler se maneja directamente en TournamentScheduleDialog cuando showLogs es true
-    // Solo actualizar los datos sin cerrar el dialog ni recargar la página
     setRegenerating(false);
     setRegenerateError(null);
-    // No cerrar el dialog: setShowRegenerateDialog(false);
-    // Solo actualizar los datos en silencio (sin invalidar la query del torneo para evitar re-render)
-    queryClient.invalidateQueries({ queryKey: ["tournament-groups", tournament.id] });
-    // Invalidar la query del torneo solo después de un delay para evitar que se resetee el dialog
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
-    }, 1000);
+    setShowScheduleViewer(false);
+    await queryClient.refetchQueries({ queryKey: ["tournament-groups", tournament.id] });
+    await queryClient.invalidateQueries({ queryKey: ["tournament", tournament.id] });
   };
 
   const handleDeleteGroups = async () => {
@@ -353,7 +435,17 @@ export default function ScheduleReviewTab({
                 <div>
                   <CardTitle className="text-base">Zonas y equipos</CardTitle>
                   <CardDescription className="text-xs">
-                    En zonas de 4, definí los cruces de 1ª ronda antes de regenerar horarios. Si hay incompatibilidades, usá Optimizar zonas o intercambiá equipos manualmente.
+                    En zonas de 4, definí los cruces de 1ª ronda antes de regenerar horarios. Marcá las parejas que
+                    necesitan sus 2 partidos el mismo día y cercanos; el scheduler intentará respetarlo al regenerar.
+                    {sameDayCloseTeamsCount > 0 && (
+                      <>
+                        {" "}
+                        {sameDayCloseTeamsCount} pareja(s) con esa restricción
+                        {sameDayCloseAtRiskCount > 0
+                          ? ` (${sameDayCloseAtRiskCount} con poca flexibilidad horaria para cumplirla).`
+                          : "."}
+                      </>
+                    )}
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -395,17 +487,48 @@ export default function ScheduleReviewTab({
                     <div className="font-semibold text-sm text-muted-foreground mb-2">
                       {group.name}
                     </div>
-                    <ul className="space-y-1 text-sm">
-                      {teams.map((gt: GroupTeamDTO, idx) => (
-                        <li key={gt.id} className="flex items-center gap-2">
-                          <span>{gt.team ? teamLabelShort(gt.team) : `Equipo #${gt.id}`}</span>
-                          {idx === 0 && (
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                              cabeza
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                    <ul className="space-y-2 text-sm">
+                      {teams.map((gt: GroupTeamDTO, idx) => {
+                        const team = gt.team;
+                        const teamId = team?.id;
+                        const sameDayInfo = teamId ? sameDayCloseByTeamId.get(teamId) : undefined;
+                        const toggling = teamId != null && togglingSameDayTeamId === teamId;
+                        return (
+                          <li key={gt.id} className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{team ? teamLabelShort(team) : `Equipo #${gt.id}`}</span>
+                              {idx === 0 && (
+                                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                  cabeza
+                                </span>
+                              )}
+                              {sameDayInfo?.flagged && !sameDayInfo.viable && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                  poca flexibilidad
+                                </span>
+                              )}
+                            </div>
+                            {team && (
+                              <div className="flex items-start gap-2 pl-0.5">
+                                <Checkbox
+                                  id={`same-day-${team.id}`}
+                                  checked={Boolean(team.needs_same_day_close_matches)}
+                                  disabled={toggling}
+                                  onCheckedChange={(checked) =>
+                                    void handleToggleSameDayClose(team, checked === true)
+                                  }
+                                />
+                                <Label
+                                  htmlFor={`same-day-${team.id}`}
+                                  className="text-[11px] leading-snug text-muted-foreground cursor-pointer"
+                                >
+                                  Necesita ambos partidos el mismo día y cercanos
+                                </Label>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))}

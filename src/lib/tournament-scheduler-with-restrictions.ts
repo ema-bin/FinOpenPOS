@@ -5,6 +5,8 @@
 import type { ScheduleDay, AvailableSchedule } from "@/models/dto/tournament";
 import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot, TournamentSlotInput } from "./tournament-scheduler";
 import { calculateEndTime, generateTimeSlots, slotViolatesRestriction } from "./tournament-scheduler";
+import { assignmentSatisfiesSameDayCloseTeams } from "./team-same-day-match-constraint";
+import { assignmentSatisfiesTeamRest } from "./team-match-rest-constraint";
 
 type Group = {
   groupId: number;
@@ -70,6 +72,8 @@ type BeamSearchOptions = {
   teamDisplayNames?: Map<number, string>;
   /** Por grupo (tournament_group_id), nombre de la zona (ej. "Zona E" desde tournament_groups.name). */
   groupDisplayNames?: Map<number, string>;
+  /** Equipos que deben jugar sus 2 partidos de zona el mismo día y cercanos. */
+  teamsNeedSameDayCloseMatches?: Set<number>;
 };
 
 function groupLetter(groupIdx: number): string {
@@ -108,6 +112,36 @@ function getMinSlotsAvailableForGroup(
     min = Math.min(min, totalSlots - restricted);
   }
   return min;
+}
+
+function countSameDayCloseTeamsInGroup(
+  group: Group,
+  teamsNeedSameDayClose?: Set<number>
+): number {
+  if (!teamsNeedSameDayClose?.size) return 0;
+  return group.teams.filter((teamId) => teamsNeedSameDayClose.has(teamId)).length;
+}
+
+/**
+ * Prioridad de programación (mayor = antes en el orden).
+ * Pesa sobre todo la escasez de slots viables; el flag mismo día/cercanos suma pero no pisa
+ * una zona claramente más apretada en disponibilidad.
+ */
+function computeGroupSchedulingPriority(
+  group: Group,
+  totalSlots: number,
+  groupMatchRestrictions: Map<number, Map<number, Set<string>>>,
+  teamsNeedSameDayClose?: Set<number>
+): { priority: number; minAvailable: number; sameDayCount: number } {
+  const minAvailable = getMinSlotsAvailableForGroup(group, totalSlots, groupMatchRestrictions);
+  const sameDayCount = countSameDayCloseTeamsInGroup(group, teamsNeedSameDayClose);
+
+  const slotScarcity = totalSlots - minAvailable;
+  /** Cada pareja flagged ≈ urgencia de ~1.5 slots escasos (desempate, no override fuerte). */
+  const SAME_DAY_SLOT_EQUIVALENT = 1.5;
+  const priority = slotScarcity + sameDayCount * SAME_DAY_SLOT_EQUIVALENT;
+
+  return { priority, minAvailable, sameDayCount };
 }
 
 function toHHMM(time: string): string {
@@ -167,25 +201,17 @@ function buildSlotsFromTournamentSlots(
   return slots;
 }
 
-function isValidSlotGroup(
-  slots: Slot[],
-  matchDurationMs: number,
-  groupSize: 3 | 4
-): boolean {
-  if (slots.length !== groupSize) return false;
-  const sorted = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const currentEnd = sorted[i].datetime.getTime() + matchDurationMs;
-    const nextStart = sorted[i + 1].datetime.getTime();
-    if (nextStart < currentEnd + matchDurationMs) return false;
-  }
-  return true;
-}
-
 function scoreSlotGroup(slots: Slot[]): number {
   const sorted = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
   const spanMinutes = (sorted[sorted.length - 1].datetime.getTime() - sorted[0].datetime.getTime()) / (1000 * 60);
   return -spanMinutes;
+}
+
+function groupRequiresSameDayClose(
+  group: Group,
+  teamsNeedSameDayClose?: Set<number>
+): boolean {
+  return countSameDayCloseTeamsInGroup(group, teamsNeedSameDayClose) > 0;
 }
 
 /** Bonificación cuando los slots son del mismo horario (distintas canchas). Así dejamos otros horarios libres para grupos que se asignan después. */
@@ -230,8 +256,33 @@ function generateCandidates(
   usedSlotIds: Set<string>,
   matchDurationMs: number,
   maxCandidates: number,
-  matchRestrictions?: Map<number, Set<string>>
+  matchRestrictions?: Map<number, Set<string>>,
+  teamsNeedSameDayClose?: Set<number>
 ): Array<{ slots: Slot[]; score: number }> {
+  const enforceSameDayClose = groupRequiresSameDayClose(group, teamsNeedSameDayClose);
+
+  const pushCandidate = (slotsInMatchOrder: Slot[], sortedForScore: Slot[]): boolean => {
+    if (!assignmentSatisfiesTeamRest(slotsInMatchOrder, group, matchDurationMs)) return false;
+    if (
+      enforceSameDayClose &&
+      !assignmentSatisfiesSameDayCloseTeams(
+        slotsInMatchOrder,
+        group,
+        teamsNeedSameDayClose!,
+        matchDurationMs
+      )
+    ) {
+      return false;
+    }
+    candidates.push({
+      slots: slotsInMatchOrder,
+      score:
+        scoreSlotGroup(sortedForScore) +
+        sameTimeBonus(sortedForScore) +
+        spreadBonus(sortedForScore, matchDurationMs),
+    });
+    return true;
+  };
   const isAllowedForMatch = (slotId: string, matchIdx: number): boolean =>
     !matchRestrictions?.get(matchIdx)?.has(slotId);
 
@@ -250,7 +301,6 @@ function generateCandidates(
   const addValidCombinations = (arr: Slot[], size: number, start: number = 0, current: Slot[] = []): void => {
     if (current.length === size) {
       const sorted = [...current].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-      if (!isValidSlotGroup(sorted, matchDurationMs, group.size)) return;
       if (matchRestrictions) {
         // Solo zonas de 4: acotar variantes (2ª ronda nunca antes en tiempo que 1ª). Zona de 3: rama de abajo.
         if (group.size === 4) {
@@ -263,16 +313,7 @@ function generateCandidates(
                 break;
               }
             }
-            if (ok) {
-              candidates.push({
-                slots: slotsInMatchOrder,
-                score:
-                  scoreSlotGroup(sorted) +
-                  sameTimeBonus(sorted) +
-                  spreadBonus(sorted, matchDurationMs),
-              });
-              return;
-            }
+            if (ok && pushCandidate(slotsInMatchOrder, sorted)) return;
           }
           return;
         }
@@ -284,23 +325,22 @@ function generateCandidates(
               break;
             }
           }
-          if (ok) {
-            const slotsInMatchOrder: Slot[] = [];
-            for (let j = 0; j < size; j++) slotsInMatchOrder[j] = sorted[perm.indexOf(j)];
-            candidates.push({
-              slots: slotsInMatchOrder,
-              score: scoreSlotGroup(sorted) + sameTimeBonus(sorted) + spreadBonus(sorted, matchDurationMs),
-            });
-            return;
-          }
+          if (!ok) continue;
+          const slotsInMatchOrder: Slot[] = [];
+          for (let j = 0; j < size; j++) slotsInMatchOrder[j] = sorted[perm.indexOf(j)];
+          if (pushCandidate(slotsInMatchOrder, sorted)) return;
         }
         return;
       }
-      candidates.push({
-        slots: sorted,
-        score: scoreSlotGroup(sorted) + sameTimeBonus(sorted) + spreadBonus(sorted, matchDurationMs),
-      });
-      return;
+      if (group.size === 3) {
+        for (const perm of perms) {
+          const slotsInMatchOrder: Slot[] = [];
+          for (let j = 0; j < size; j++) slotsInMatchOrder[j] = sorted[perm.indexOf(j)];
+          if (pushCandidate(slotsInMatchOrder, sorted)) return;
+        }
+        return;
+      }
+      if (pushCandidate(sorted, sorted)) return;
     }
     for (let i = start; i < arr.length; i++) {
       current.push(arr[i]);
@@ -315,17 +355,36 @@ function generateCandidates(
 }
 
 /**
- * Fallback solo para la última zona: asigna N slots libres aunque no respeten descanso
+ * Fallback: asigna N slots libres aunque no respeten descanso ideal
  * (y opcionalmente restricciones horarias), para que el usuario pueda editar manualmente después.
  * @param allowAnyUnusedSlot si true, cuando no hay suficientes slots "permitidos" usa cualquier slot libre (segundo nivel de fallback).
  */
-function generateLastZoneFallback(
+function generateGroupScheduleFallback(
   group: Group,
   availableSlots: Slot[],
   usedSlotIds: Set<string>,
+  matchDurationMs: number,
   matchRestrictions?: Map<number, Set<string>>,
+  teamsNeedSameDayClose?: Set<number>,
   allowAnyUnusedSlot = true
 ): { slots: Slot[]; score: number; usedAnyUnusedSlot?: boolean } | null {
+  const enforceSameDayClose = groupRequiresSameDayClose(group, teamsNeedSameDayClose);
+
+  const acceptSlots = (slotsInMatchOrder: Slot[]): { slots: Slot[]; score: number; usedAnyUnusedSlot?: boolean } | null => {
+    if (!assignmentSatisfiesTeamRest(slotsInMatchOrder, group, matchDurationMs)) return null;
+    if (
+      enforceSameDayClose &&
+      !assignmentSatisfiesSameDayCloseTeams(
+        slotsInMatchOrder,
+        group,
+        teamsNeedSameDayClose!,
+        matchDurationMs
+      )
+    ) {
+      return null;
+    }
+    return { slots: slotsInMatchOrder, score: -1e6 };
+  };
   const isAllowedForMatch = (slotId: string, matchIdx: number): boolean =>
     !matchRestrictions?.get(matchIdx)?.has(slotId);
 
@@ -370,6 +429,25 @@ function generateLastZoneFallback(
     chosen.push(freeSlots[idx]);
   }
 
+  if (group.size === 3 && chosen.length === 3) {
+    const sorted = [...chosen].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+    for (const perm of permutations(3)) {
+      const reordered: Slot[] = [];
+      for (let j = 0; j < 3; j++) reordered[j] = sorted[perm.indexOf(j)];
+      let ok = true;
+      for (let j = 0; j < 3; j++) {
+        if (matchRestrictions && !isAllowedForMatch(reordered[j].slotId, j)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        const accepted = acceptSlots(reordered);
+        if (accepted) return { ...accepted, usedAnyUnusedSlot: useAnyUnused };
+      }
+    }
+  }
+
   // Solo zonas de 4: mismo criterio 1ª/2ª ronda que en generateCandidates.
   if (group.size === 4 && chosen.length === 4) {
     const sorted = [...chosen].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
@@ -383,13 +461,18 @@ function generateLastZoneFallback(
         }
       }
       if (ok) {
-        return { slots: reordered, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
+        const accepted = acceptSlots(reordered);
+        if (accepted) return { ...accepted, usedAnyUnusedSlot: useAnyUnused };
       }
     }
-    return { slots: sorted, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
+    const acceptedSorted = acceptSlots(sorted);
+    if (acceptedSorted) return { ...acceptedSorted, usedAnyUnusedSlot: useAnyUnused };
+    return null;
   }
 
-  return { slots: chosen, score: -1e6, usedAnyUnusedSlot: useAnyUnused };
+  const accepted = acceptSlots(chosen);
+  if (accepted) return { ...accepted, usedAnyUnusedSlot: useAnyUnused };
+  return null;
 }
 
 function runBeamSearch(
@@ -406,6 +489,7 @@ function runBeamSearch(
   const teamCannotPlaySlotIds = options?.teamCannotPlaySlotIds;
   const teamDisplayNames = options?.teamDisplayNames;
   const groupDisplayNames = options?.groupDisplayNames;
+  const teamsNeedSameDayCloseMatches = options?.teamsNeedSameDayCloseMatches;
   const totalSlots = slots.length;
   const groupLabel = (group: Group, groupIdx: number) =>
     groupDisplayNames?.get(group.groupId) ?? groupLetter(groupIdx);
@@ -417,8 +501,6 @@ function runBeamSearch(
     const matchRestrictions = groupMatchRestrictions.get(group.groupId);
     const groupName = groupLabel(group, groupIdx);
 
-    const isLastZone = groupIdx === groups.length - 1;
-
     for (const state of states) {
       let candidates = generateCandidates(
         group,
@@ -426,15 +508,29 @@ function runBeamSearch(
         state.usedSlots,
         matchDurationMs,
         maxCandidates,
-        matchRestrictions
+        matchRestrictions,
+        teamsNeedSameDayCloseMatches
       );
-      if (candidates.length === 0 && isLastZone) {
-        const fallback = generateLastZoneFallback(group, slots, state.usedSlots, matchRestrictions);
+      let usedFallback = false;
+      if (candidates.length === 0) {
+        const fallback = generateGroupScheduleFallback(
+          group,
+          slots,
+          state.usedSlots,
+          matchDurationMs,
+          matchRestrictions,
+          teamsNeedSameDayCloseMatches
+        );
         if (fallback) {
+          usedFallback = true;
           candidates = [{ slots: fallback.slots, score: fallback.score }];
           if (onLog) {
-            onLog(`⚠️ ${groupName} (última zona): sin combinación que respete descanso; se asignaron horarios para que puedas editar manualmente.`);
-            if (fallback.usedAnyUnusedSlot) onLog(`   (Se usaron slots libres aunque no cumplan restricciones horarias de algún equipo.)`);
+            onLog(
+              `⚠️ ${groupName}: sin combinación ideal; se asignaron horarios de respaldo para editar manualmente.`
+            );
+            if (fallback.usedAnyUnusedSlot) {
+              onLog(`   (Se usaron slots libres aunque no cumplan restricciones horarias de algún equipo.)`);
+            }
           }
         }
       }
@@ -478,7 +574,13 @@ function runBeamSearch(
         }
         onLog(`   Por partido (libres y permitidos para los 2 equipos): ${perMatch.join(", ")}`);
         if (freeCount > 0) {
-          onLog(`   → Con ${freeCount} slot(s) libre(s) puede no existir una combinación que respete el descanso entre partidos. Probá intercambiar equipos de zona o liberar más horarios.`);
+          onLog(`   → Con ${freeCount} slot(s) libre(s) puede no existir una combinación que respete el descanso por pareja (sin partidos seguidos). Probá intercambiar equipos de zona o liberar más horarios.`);
+        }
+        if (groupRequiresSameDayClose(group, teamsNeedSameDayCloseMatches)) {
+          const flaggedCount = countSameDayCloseTeamsInGroup(group, teamsNeedSameDayCloseMatches);
+          onLog(
+            `   → ${flaggedCount} pareja(s) en esta zona requieren sus 2 partidos el mismo día y cercanos (restricción obligatoria). Revisá disponibilidad o el orden de asignación de zonas.`
+          );
         }
         // Debug adicional: para entender mejor por qué no hay solución,
         // listar para cada equipo del grupo en qué slots del torneo SÍ puede jugar.
@@ -532,7 +634,8 @@ export async function scheduleGroupMatchesWithRestrictions(
   teamCannotPlaySlotIds?: Map<number, Set<number>>,
   blockedCourtIdsByTournamentSlotId?: Map<number, Set<number>>,
   teamDisplayNames?: Map<number, string>,
-  groupDisplayNames?: Map<number, string>
+  groupDisplayNames?: Map<number, string>,
+  teamsNeedSameDayCloseMatches?: Set<number>
 ): Promise<SchedulerResult> {
   const useTournamentSlots =
     tournamentSlots != null &&
@@ -674,15 +777,31 @@ export async function scheduleGroupMatchesWithRestrictions(
 
   const totalSlots = slots.length;
   groups.sort((a, b) => {
-    const minA = getMinSlotsAvailableForGroup(a, totalSlots, groupMatchRestrictions);
-    const minB = getMinSlotsAvailableForGroup(b, totalSlots, groupMatchRestrictions);
-    return minA - minB;
+    const prioA = computeGroupSchedulingPriority(
+      a,
+      totalSlots,
+      groupMatchRestrictions,
+      teamsNeedSameDayCloseMatches
+    );
+    const prioB = computeGroupSchedulingPriority(
+      b,
+      totalSlots,
+      groupMatchRestrictions,
+      teamsNeedSameDayCloseMatches
+    );
+    if (prioB.priority !== prioA.priority) return prioB.priority - prioA.priority;
+    return prioA.minAvailable - prioB.minAvailable;
   });
 
   if (onLog) {
     const orderDesc = groups
       .map((g, i) => {
-        const minAvailable = getMinSlotsAvailableForGroup(g, totalSlots, groupMatchRestrictions);
+        const { priority, minAvailable, sameDayCount } = computeGroupSchedulingPriority(
+          g,
+          totalSlots,
+          groupMatchRestrictions,
+          teamsNeedSameDayCloseMatches
+        );
         const perMatch = groupMatchRestrictions.get(g.groupId);
         const detail =
           perMatch && perMatch.size > 0
@@ -692,11 +811,15 @@ export async function scheduleGroupMatchesWithRestrictions(
               }).join("/")
             : null;
         const extra = detail != null ? ` [partidos: ${detail}]` : "";
+        const sameDayExtra =
+          sameDayCount > 0 ? `, ${sameDayCount}× mismo día` : "";
         const zoneName = groupDisplayNames?.get(g.groupId) ?? groupLetter(i);
-        return `${zoneName} (id ${g.groupId}, mín ${minAvailable}${extra})`;
+        return `${zoneName} (prio ${priority.toFixed(1)}, mín ${minAvailable}${sameDayExtra}${extra})`;
       })
       .join(", ");
-    onLog(`📌 Orden de asignación (menos slots por partido primero): ${orderDesc}`);
+    onLog(
+      `📌 Orden de asignación (ponderado: escasez de slots + bonus por parejas mismo día/cercanos): ${orderDesc}`
+    );
   }
 
   const matchDurationMs = matchDurationMinutes * 60 * 1000;
@@ -709,6 +832,7 @@ export async function scheduleGroupMatchesWithRestrictions(
     ...(useTournamentSlots && tournamentSlots && teamCannotPlaySlotIds
       ? { tournamentSlots, teamCannotPlaySlotIds, blockedCourtIdsByTournamentSlotId }
       : {}),
+    ...(teamsNeedSameDayCloseMatches?.size ? { teamsNeedSameDayCloseMatches } : {}),
   });
 
   if (!result.ok) {

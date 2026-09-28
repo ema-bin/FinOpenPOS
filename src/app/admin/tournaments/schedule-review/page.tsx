@@ -49,13 +49,18 @@ export default function GlobalScheduleReviewPage() {
     );
   }, [tournaments]);
 
-  const handleGlobalScheduleConfirm = () => {
-    void queryClient.invalidateQueries({
-      queryKey: ["tournaments", "global-schedule-review"],
-    });
-    void queryClient.invalidateQueries({ queryKey: ["tournament-groups"] });
-    void queryClient.invalidateQueries({ queryKey: ["tournament"] });
-    void queryClient.invalidateQueries({ queryKey: ["groups-schedule-preview"] });
+  const refreshGlobalScheduleData = async () => {
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["groups-schedule-preview"] }),
+      queryClient.refetchQueries({ queryKey: ["tournament-groups"] }),
+      queryClient.invalidateQueries({ queryKey: ["tournaments", "global-schedule-review"] }),
+      queryClient.invalidateQueries({ queryKey: ["tournament"] }),
+    ]);
+  };
+
+  const handleGlobalScheduleConfirm = async () => {
+    setGlobalViewerOpen(false);
+    await refreshGlobalScheduleData();
   };
 
   const tournamentIds = useMemo(
@@ -129,7 +134,7 @@ export default function GlobalScheduleReviewPage() {
         open={globalViewerOpen}
         onOpenChange={setGlobalViewerOpen}
         tournamentIds={tournamentIds}
-        onScheduleUpdated={handleGlobalScheduleConfirm}
+        onScheduleUpdated={refreshGlobalScheduleData}
       />
 
       {tournaments.length === 0 ? (

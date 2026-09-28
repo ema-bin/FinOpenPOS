@@ -215,6 +215,8 @@ export async function scheduleGroupMatches(
     teamDisplayNames?: Map<number, string>;
     /** Por grupo (tournament_group_id), nombre de la zona (tournament_groups.name, ej. "Zona E"). */
     groupDisplayNames?: Map<number, string>;
+    /** Equipos que deben jugar sus 2 partidos de zona el mismo día y cercanos. */
+    teamsNeedSameDayCloseMatches?: Set<number>;
   }
 ): Promise<SchedulerResult> {
   const algorithm = options?.algorithm ?? "default";
@@ -233,7 +235,8 @@ export async function scheduleGroupMatches(
       options?.teamCannotPlaySlotIds,
       options?.blockedCourtIdsByTournamentSlotId,
       options?.teamDisplayNames,
-      options?.groupDisplayNames
+      options?.groupDisplayNames,
+      options?.teamsNeedSameDayCloseMatches
     );
   }
 

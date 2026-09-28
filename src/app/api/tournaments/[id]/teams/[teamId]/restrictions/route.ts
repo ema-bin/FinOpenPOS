@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     const body = await req.json();
-    const { restricted_slot_ids, schedule_notes } = body; // Array de IDs de tournament_group_slots en los que NO puede jugar
+    const { restricted_slot_ids, schedule_notes, needs_same_day_close_matches } = body;
 
     // Validar que el equipo existe y pertenece al torneo
     const { data: team, error: teamError } = await supabase
@@ -124,11 +124,18 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     const repos = await createRepositories();
-    const teamUpdates: { schedule_notes?: string | null; schedule_restrictions_loaded: boolean } = {
+    const teamUpdates: {
+      schedule_notes?: string | null;
+      schedule_restrictions_loaded: boolean;
+      needs_same_day_close_matches?: boolean;
+    } = {
       schedule_restrictions_loaded: true,
     };
     if (schedule_notes !== undefined) {
       teamUpdates.schedule_notes = schedule_notes || null;
+    }
+    if (needs_same_day_close_matches !== undefined) {
+      teamUpdates.needs_same_day_close_matches = Boolean(needs_same_day_close_matches);
     }
     await repos.tournamentTeams.update(teamId, teamUpdates);
 

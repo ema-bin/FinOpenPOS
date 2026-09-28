@@ -79,7 +79,7 @@ export function GlobalGroupScheduleViewer({
         idsKey ? `?ids=${idsKey}` : ""
       ),
     enabled: open && tournamentIds.length > 0,
-    staleTime: 1000 * 15,
+    staleTime: 0,
   });
 
   const merged = useMemo(

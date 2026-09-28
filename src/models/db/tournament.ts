@@ -50,6 +50,7 @@ export interface TournamentTeam {
   is_substitute: boolean;
   schedule_notes: string | null;
   schedule_restrictions_loaded: boolean;
+  needs_same_day_close_matches: boolean;
 }
 
 export interface TournamentGroup {
@@ -166,6 +167,7 @@ export interface CreateTournamentTeamInput {
   is_substitute?: boolean;
   schedule_notes?: string | null;
   schedule_restrictions_loaded?: boolean;
+  needs_same_day_close_matches?: boolean;
 }
 
 export interface CreateTournamentGroupInput {

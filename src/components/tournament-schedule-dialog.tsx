@@ -41,7 +41,7 @@ type OverlapTournamentOption = { id: number; name: string; status: string };
 type TournamentScheduleDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (config: ScheduleConfig) => void;
+  onConfirm: (config: ScheduleConfig) => void | Promise<void>;
   matchCount: number; // cantidad de partidos a programar
   tournamentMatchDuration?: number; // duración del partido del torneo (en minutos)
   /** Duración de playoffs (todas las rondas); si está definido, la grilla de esta pantalla usa solo este valor */
@@ -794,7 +794,7 @@ export function TournamentScheduleDialog({
                         }, 100);
                         // No cerrar el dialog ni recargar la página
                         // Solo llamar a onConfirm para que el componente padre actualice los datos si es necesario
-                        onConfirm(scheduleConfig);
+                        void Promise.resolve(onConfirm(scheduleConfig));
                         return;
                       }
                     } catch (e) {
