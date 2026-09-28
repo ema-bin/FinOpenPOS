@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -250,11 +250,22 @@ export function GroupScheduleViewer({
         ? invalidateTournamentIds
         : [tournamentId];
     for (const id of ids) {
-      void queryClient.invalidateQueries({ queryKey: ["tournament-groups", id] });
+      void queryClient.refetchQueries({ queryKey: ["tournament-groups", id] });
     }
-    void queryClient.invalidateQueries({ queryKey: ["groups-schedule-preview"] });
+    void queryClient.refetchQueries({ queryKey: ["groups-schedule-preview"] });
   };
   const [localMatches, setLocalMatches] = useState(matches);
+  const matchesRevision = useMemo(
+    () =>
+      matches
+        .map(
+          (m) =>
+            `${m.id}:${m.match_date ?? ""}:${m.start_time ?? ""}:${m.end_time ?? ""}:${m.court_id ?? ""}`
+        )
+        .join("|"),
+    [matches]
+  );
+
   const [mode, setMode] = useState<"matches" | "groups" | "teams">("matches");
   const [selectedGroup1, setSelectedGroup1] = useState<number | null>(null);
   const [selectedGroup2, setSelectedGroup2] = useState<number | null>(null);
@@ -269,6 +280,17 @@ export function GroupScheduleViewer({
   } | null>(null);
   const [selectedRow1, setSelectedRow1] = useState<string | null>(null);
   const [selectedRow2, setSelectedRow2] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalMatches(matches);
+    setSelectedRow1(null);
+    setSelectedRow2(null);
+    setSelectedGroup1(null);
+    setSelectedGroup2(null);
+    setSelectedTeam1(null);
+    setSelectedTeam2(null);
+    setLastSwap(null);
+  }, [matchesRevision, matches]);
 
   // Obtener canchas para mostrar nombres
   const { data: courts = [] } = useQuery<CourtDTO[]>({

@@ -95,3 +95,59 @@ export function assignmentSatisfiesSameDayCloseTeams(
   }
   return true;
 }
+
+export type TeamSlotAvailability = {
+  date: string;
+  startMinutes: number;
+};
+
+function slotLikeFromAvailability(slot: TeamSlotAvailability): SlotLike {
+  const date = normalizeDate(slot.date);
+  const h = Math.floor(slot.startMinutes / 60);
+  const m = slot.startMinutes % 60;
+  const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  return { date, datetime: new Date(`${date}T${time}`) };
+}
+
+/** ¿Hay algún día con slots disponibles que permitan cumplir la restricción de mismo día y cercanos? */
+export function teamHasViableSameDayCloseSlots(
+  availableSlots: TeamSlotAvailability[],
+  groupSize: 3 | 4,
+  matchDurationMinutes: number
+): boolean {
+  if (availableSlots.length < (groupSize === 4 ? 3 : 2)) return false;
+
+  const matchDurationMs = matchDurationMinutes * 60 * 1000;
+  const byDate = new Map<string, TeamSlotAvailability[]>();
+
+  for (const slot of availableSlots) {
+    const date = normalizeDate(slot.date);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(slot);
+  }
+
+  for (const daySlots of Array.from(byDate.values())) {
+    const slotLikes = daySlots.map(slotLikeFromAvailability);
+
+    if (groupSize === 4) {
+      for (const first of slotLikes) {
+        let closeToFirst = 0;
+        for (const other of slotLikes) {
+          if (other === first) continue;
+          if (slotsAreSameDayClose(first, other, matchDurationMs)) closeToFirst++;
+        }
+        if (closeToFirst >= 2) return true;
+      }
+    } else {
+      for (let i = 0; i < slotLikes.length; i++) {
+        for (let j = i + 1; j < slotLikes.length; j++) {
+          if (slotsAreSameDayClose(slotLikes[i], slotLikes[j], matchDurationMs)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}

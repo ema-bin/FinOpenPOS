@@ -678,6 +678,18 @@ export default function TeamsTab({
     }
   };
 
+  const handleToggleSameDayCloseMatches = async (team: TeamDTO) => {
+    try {
+      await tournamentsService.updateTeam(tournament.id, team.id, {
+        needs_same_day_close_matches: !team.needs_same_day_close_matches,
+      });
+      queryClient.invalidateQueries({ queryKey: ["tournament-teams", tournament.id] });
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Error al actualizar la pareja");
+    }
+  };
+
   // Calcular cantidad exacta de partidos según el formato
   const calculateMatchCount = () => {
     if (activeTeams.length < 3) return 0;
@@ -1372,20 +1384,36 @@ export default function TeamsTab({
                     </Button>
                   )}
                   {groupSlots.length > 0 && canEditAvailability && (
-                    <div className="flex items-center gap-1 px-1">
-                      <Checkbox
-                        id={`schedule-loaded-${team.id}`}
-                        checked={Boolean(team.schedule_restrictions_loaded)}
-                        onCheckedChange={() => handleToggleScheduleRestrictionsLoaded(team)}
-                      />
-                      <Label
-                        htmlFor={`schedule-loaded-${team.id}`}
-                        className="text-xs cursor-pointer whitespace-nowrap"
-                        title="Marcar si ya se consultó y cargó la disponibilidad horaria de esta pareja"
-                      >
-                        Consultado
-                      </Label>
-                    </div>
+                    <>
+                      <div className="flex items-center gap-1 px-1">
+                        <Checkbox
+                          id={`same-day-close-${team.id}`}
+                          checked={Boolean(team.needs_same_day_close_matches)}
+                          onCheckedChange={() => handleToggleSameDayCloseMatches(team)}
+                        />
+                        <Label
+                          htmlFor={`same-day-close-${team.id}`}
+                          className="text-xs cursor-pointer whitespace-nowrap"
+                          title="Esta pareja debe jugar sus dos partidos de zona el mismo día y en horarios cercanos"
+                        >
+                          Mismo día
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-1 px-1">
+                        <Checkbox
+                          id={`schedule-loaded-${team.id}`}
+                          checked={Boolean(team.schedule_restrictions_loaded)}
+                          onCheckedChange={() => handleToggleScheduleRestrictionsLoaded(team)}
+                        />
+                        <Label
+                          htmlFor={`schedule-loaded-${team.id}`}
+                          className="text-xs cursor-pointer whitespace-nowrap"
+                          title="Marcar si ya se consultó y cargó la disponibilidad horaria de esta pareja"
+                        >
+                          Consultado
+                        </Label>
+                      </div>
+                    </>
                   )}
                   {tournament.status === "draft" && hasGroups && groupSlots.length === 0 && (
                     <Button

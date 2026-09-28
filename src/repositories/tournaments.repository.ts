@@ -581,6 +581,7 @@ export class TournamentGroupsRepository extends BaseRepository {
             display_name,
             seed_number,
             display_order,
+            needs_same_day_close_matches,
             player1:player1_id ( first_name, last_name ),
             player2:player2_id ( first_name, last_name )
           )
