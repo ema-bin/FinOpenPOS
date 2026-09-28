@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PaymentMethodDTO } from "@/models/dto/payment-method";
+import type { PaymentMethodNestedDTO } from "@/models/dto/payment-method";
 
 interface PaymentMethodSelectorProps {
-  paymentMethods: PaymentMethodDTO[];
+  paymentMethods: PaymentMethodNestedDTO[];
   selectedPaymentMethodId: number | "none";
   onSelect: (paymentMethodId: number | "none") => void;
   disabled?: boolean;

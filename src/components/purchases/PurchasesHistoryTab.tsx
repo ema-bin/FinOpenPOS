@@ -44,7 +44,9 @@ import {
   FilterIcon,
   CalendarIcon,
   PlusIcon,
+  ZapIcon,
 } from "lucide-react";
+import { QuickPurchaseDialog } from "@/components/purchases/QuickPurchaseDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PurchaseDTO, PurchaseStatus } from "@/models/dto/purchase";
 import type { SupplierNestedDTO } from "@/models/dto/supplier";
@@ -72,6 +74,12 @@ export function PurchasesHistoryTab() {
   );
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
+  const [quickPurchaseOpen, setQuickPurchaseOpen] = useState(false);
+
+  const reloadPurchases = async () => {
+    const purchasesData = await purchasesService.getAll();
+    setPurchases(purchasesData);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -187,12 +195,25 @@ export function PurchasesHistoryTab() {
               métodos de pago.
             </CardDescription>
           </div>
-          <Button onClick={() => router.push("/admin/purchases/new")}>
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Nueva compra
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setQuickPurchaseOpen(true)}>
+              <ZapIcon className="w-4 h-4 mr-2" />
+              Compra rápida
+            </Button>
+            <Button onClick={() => router.push("/admin/purchases/new")}>
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Nueva compra
+            </Button>
+          </div>
         </div>
       </CardHeader>
+
+      <QuickPurchaseDialog
+        open={quickPurchaseOpen}
+        onOpenChange={setQuickPurchaseOpen}
+        paymentMethods={paymentMethods}
+        onCreated={reloadPurchases}
+      />
 
       <CardContent className="space-y-4 p-0">
         {/* Filtros */}
