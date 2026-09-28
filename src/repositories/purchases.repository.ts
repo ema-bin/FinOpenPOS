@@ -261,23 +261,42 @@ export class PurchasesRepository extends BaseRepository {
         return data;
       });
 
-    // Create stock movements
-    const stockMovementsPayload = input.items.map((item) => ({
-      product_id: item.productId,
-      movement_type: "purchase",
-      quantity: item.quantity,
-      unit_cost: item.unitCost,
-      notes: `Purchase #${purchase.id} from supplier: ${supplier.name}`,
-      purchase_id: purchase.id,
-      user_uid: this.userId,
-    }));
+    const productIds = Array.from(
+      new Set(input.items.map((item) => item.productId))
+    );
+    const { data: productsForStock, error: productsError } = await this.supabase
+      .from("products")
+      .select("id, uses_stock")
+      .in("id", productIds);
 
-    const { error: smError } = await this.supabase
-      .from("stock_movements")
-      .insert(stockMovementsPayload);
+    if (productsError) {
+      throw new Error(`Failed to fetch products for stock: ${productsError.message}`);
+    }
 
-    if (smError) {
-      throw new Error(`Failed to create stock movements: ${smError.message}`);
+    const usesStockByProductId = new Map(
+      (productsForStock ?? []).map((p) => [p.id as number, p.uses_stock !== false])
+    );
+
+    const stockMovementsPayload = input.items
+      .filter((item) => usesStockByProductId.get(item.productId) === true)
+      .map((item) => ({
+        product_id: item.productId,
+        movement_type: "purchase",
+        quantity: item.quantity,
+        unit_cost: item.unitCost,
+        notes: `Purchase #${purchase.id} from supplier: ${supplier.name}`,
+        purchase_id: purchase.id,
+        user_uid: this.userId,
+      }));
+
+    if (stockMovementsPayload.length > 0) {
+      const { error: smError } = await this.supabase
+        .from("stock_movements")
+        .insert(stockMovementsPayload);
+
+      if (smError) {
+        throw new Error(`Failed to create stock movements: ${smError.message}`);
+      }
     }
 
     // Create transaction if payment method provided

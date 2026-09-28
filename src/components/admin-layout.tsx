@@ -16,6 +16,7 @@ import {
 import {
   LayoutDashboardIcon,
   ShoppingCartIcon,
+  PackageIcon,
   CalendarIcon,
   TrophyIcon,
 } from "lucide-react";
@@ -151,6 +152,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           >
             <ShoppingCartIcon className="h-4 w-4" />
             Ventas
+          </Link>
+          <Link
+            href="/admin/purchases"
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              mounted && pathname?.startsWith("/admin/purchases")
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+            }`}
+          >
+            <PackageIcon className="h-4 w-4" />
+            Compras
           </Link>
           <Link
             href="/admin/court-slots"

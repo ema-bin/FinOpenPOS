@@ -48,6 +48,23 @@ class PurchasesService {
     return response.json();
   }
 
+  async quickPurchase(input: {
+    paymentMethodId: number;
+    amount: number;
+    notes?: string | null;
+  }): Promise<PurchaseDTO> {
+    const response = await fetch(`${this.baseUrl}/quick-purchase`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Error al registrar compra rápida");
+    }
+    return response.json();
+  }
+
   async update(id: number, input: { payment_method_id?: number | null; notes?: string | null; status?: PurchaseStatus }): Promise<PurchaseDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`, {
       method: "PUT",
