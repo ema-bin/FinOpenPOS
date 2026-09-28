@@ -261,7 +261,9 @@ export class PurchasesRepository extends BaseRepository {
         return data;
       });
 
-    const productIds = [...new Set(input.items.map((item) => item.productId))];
+    const productIds = Array.from(
+      new Set(input.items.map((item) => item.productId))
+    );
     const { data: productsForStock, error: productsError } = await this.supabase
       .from("products")
       .select("id, uses_stock")
