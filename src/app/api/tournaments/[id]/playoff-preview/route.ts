@@ -6,6 +6,7 @@ import {
   computeGroupSizes,
 } from "@/lib/tournament-group-sizes";
 import { generatePlayoffs, type PlayoffMatch } from "@/lib/tournament-playoffs";
+import { computeQualifiedTeamsFromStandings } from "@/lib/tournament-group-standings";
 import type { ScheduleConfig, ScheduleDay } from "@/models/dto/tournament";
 import type { TournamentMatch } from "@/models/db/tournament";
 
@@ -22,6 +23,7 @@ type MatchRow = Pick<
   | "team1_games_total"
   | "team2_games_total"
   | "status"
+  | "match_order"
 >;
 
 type PlayoffPreviewMatch = PlayoffMatch & {
@@ -76,144 +78,6 @@ function generateTimeSlots(
   });
 
   return slots;
-}
-
-function buildStandings(matches: MatchRow[]): Map<number, Map<number, any>> {
-  type Stand = {
-    team_id: number;
-    matches_played: number;
-    wins: number;
-    losses: number;
-    sets_won: number;
-    sets_lost: number;
-    games_won: number;
-    games_lost: number;
-  };
-
-  const standingsMap = new Map<number, Map<number, Stand>>();
-  const initStand = (teamId: number): Stand => ({
-    team_id: teamId,
-    matches_played: 0,
-    wins: 0,
-    losses: 0,
-    sets_won: 0,
-    sets_lost: 0,
-    games_won: 0,
-    games_lost: 0,
-  });
-
-  matches.forEach((m) => {
-    if (m.status !== "finished") return;
-    const gid = m.tournament_group_id;
-    if (!gid) return;
-    if (!standingsMap.has(gid)) {
-      standingsMap.set(gid, new Map());
-    }
-    const map = standingsMap.get(gid)!;
-
-    if (m.team1_id && !map.has(m.team1_id)) {
-      map.set(m.team1_id, initStand(m.team1_id));
-    }
-    if (m.team2_id && !map.has(m.team2_id)) {
-      map.set(m.team2_id, initStand(m.team2_id));
-    }
-
-    if (!m.team1_id || !m.team2_id) return;
-    const s1 = map.get(m.team1_id)!;
-    const s2 = map.get(m.team2_id)!;
-
-    s1.matches_played += 1;
-    s2.matches_played += 1;
-
-    const t1sets = m.team1_sets ?? 0;
-    const t2sets = m.team2_sets ?? 0;
-    const t1games = m.team1_games_total ?? 0;
-    const t2games = m.team2_games_total ?? 0;
-
-    s1.sets_won += t1sets;
-    s1.sets_lost += t2sets;
-    s2.sets_won += t2sets;
-    s2.sets_lost += t1sets;
-
-    s1.games_won += t1games;
-    s1.games_lost += t2games;
-    s2.games_won += t2games;
-    s2.games_lost += t1games;
-
-    if (t1sets > t2sets) {
-      s1.wins += 1;
-      s2.losses += 1;
-    } else if (t2sets > t1sets) {
-      s2.wins += 1;
-      s1.losses += 1;
-    }
-  });
-
-  return standingsMap;
-}
-
-function computeQualifiedTeams(
-  groups: Array<{ id: number; group_order: number | null }>,
-  groupTeams: Array<{ tournament_group_id: number; team_id: number }>,
-  standingsMap: Map<number, Map<number, any>>
-) {
-  type QualifiedTeam = { team_id: number; from_group_id: number; pos: number };
-  const qualified: QualifiedTeam[] = [];
-  const letterMap = new Map<number, string>();
-
-  groups.forEach((group, index) => {
-    const letter = group.group_order
-      ? String.fromCharCode(64 + group.group_order)
-      : String.fromCharCode(65 + index);
-    letterMap.set(group.id, letter);
-
-    const groupTeamIds = groupTeams
-      .filter((gt) => gt.tournament_group_id === group.id)
-      .map((gt) => gt.team_id);
-
-    const stats = groupTeamIds.map((tid) => {
-      const map = standingsMap.get(group.id);
-      return map?.get(tid) ?? {
-        team_id: tid,
-        matches_played: 0,
-        wins: 0,
-        losses: 0,
-        sets_won: 0,
-        sets_lost: 0,
-        games_won: 0,
-        games_lost: 0,
-      };
-    });
-
-    stats.sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      const aSetDiff = a.sets_won - a.sets_lost;
-      const bSetDiff = b.sets_won - b.sets_lost;
-      if (bSetDiff !== aSetDiff) return bSetDiff - aSetDiff;
-      const aGameDiff = a.games_won - a.games_lost;
-      const bGameDiff = b.games_won - b.games_lost;
-      return bGameDiff - aGameDiff;
-    });
-
-    const size = stats.length;
-    let qualifiersCount = size === 4 ? 3 : 2;
-
-    stats.slice(0, qualifiersCount).forEach((s, idx) => {
-      qualified.push({
-        team_id: s.team_id,
-        from_group_id: group.id,
-        pos: idx + 1,
-      });
-    });
-  });
-
-  const placeholderMap = new Map<number, string>();
-  qualified.forEach((qt) => {
-    const letter = letterMap.get(qt.from_group_id) ?? "A";
-    placeholderMap.set(qt.team_id, `${qt.pos}${letter}`);
-  });
-
-  return { qualified, placeholderMap };
 }
 
 function applyPlaceholders(
@@ -393,7 +257,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const { data: matches, error: matchesError } = await supabase
       .from("tournament_matches")
       .select(
-        "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status"
+        "id, tournament_group_id, team1_id, team2_id, team1_sets, team2_sets, team1_games_total, team2_games_total, status, match_order"
       )
       .eq("tournament_id", tournamentId)
       .eq("phase", "group");
@@ -403,8 +267,11 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
     }
 
-    const standingsMap = buildStandings(matches as MatchRow[]);
-    ({ qualified, placeholderMap } = computeQualifiedTeams(groups, groupTeams, standingsMap));
+    ({ qualified, placeholderMap } = computeQualifiedTeamsFromStandings({
+      groups,
+      groupTeams,
+      matches: matches as MatchRow[],
+    }));
 
     if (qualified.length < 2) {
       return NextResponse.json({ error: "Not enough qualified teams for playoffs" }, { status: 400 });
