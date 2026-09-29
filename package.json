@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:unit": "vitest run src/test/unit",
+    "test:integration": "vitest run src/test/integration",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check-env": "node scripts/check-env.js",
