@@ -36,6 +36,12 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "vitest.config.ts",
+    "vitest.setup.ts",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/__tests__/**",
+    "src/test/**"
   ]
 }
