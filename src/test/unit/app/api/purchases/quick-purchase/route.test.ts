@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "../route";
+import { POST } from "@/app/api/purchases/quick-purchase/route";
 
 vi.mock("@/lib/repository-factory", () => ({
   createRepositories: vi.fn(),
