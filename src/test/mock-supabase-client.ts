@@ -16,6 +16,7 @@ export function createMockQueryBuilder(result: MockSupabaseResult) {
     eq: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
     in: ReturnType<typeof vi.fn>;
+    limit: ReturnType<typeof vi.fn>;
     single: ReturnType<typeof vi.fn>;
     then: Promise<MockSupabaseResult>["then"];
     catch: Promise<MockSupabaseResult>["catch"];
@@ -31,6 +32,7 @@ export function createMockQueryBuilder(result: MockSupabaseResult) {
   builder.eq = vi.fn(chain);
   builder.order = vi.fn(() => builder);
   builder.in = vi.fn(() => promise);
+  builder.limit = vi.fn(() => promise);
   builder.single = vi.fn().mockResolvedValue(result);
   builder.then = promise.then.bind(promise);
   builder.catch = promise.catch.bind(promise);

@@ -215,6 +215,63 @@ export function computeQualifiedTeamsForGroup(
   }));
 }
 
+/** Stats ordenadas para persistir en `tournament_group_standings`. */
+export function recomputeGroupStandingsStats(
+  groupTeamIds: number[],
+  groupMatches: StandingsMatchInput[]
+): GroupStandingsStat[] {
+  const groupId = groupMatches[0]?.tournament_group_id ?? null;
+  const aggregated = aggregateGroupStandingsFromMatches(groupMatches);
+  const byTeam =
+    groupId != null
+      ? new Map(aggregated.get(groupId) ?? [])
+      : new Map<number, GroupStandingsStat>();
+
+  for (const teamId of groupTeamIds) {
+    if (!byTeam.has(teamId)) {
+      byTeam.set(teamId, emptyGroupStandingsStat(teamId));
+    }
+  }
+
+  return rankedStandingsForGroup(groupTeamIds, groupMatches, byTeam);
+}
+
+export type GroupStandingsInsertRow = {
+  tournament_group_id: number;
+  team_id: number;
+  user_uid: string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  sets_won: number;
+  sets_lost: number;
+  games_won: number;
+  games_lost: number;
+  position: number;
+};
+
+export function buildStandingsInsertRows(
+  tournamentGroupId: number,
+  userUid: string,
+  groupTeamIds: number[],
+  groupMatches: StandingsMatchInput[]
+): GroupStandingsInsertRow[] {
+  const sorted = recomputeGroupStandingsStats(groupTeamIds, groupMatches);
+  return sorted.map((s, index) => ({
+    tournament_group_id: tournamentGroupId,
+    team_id: s.team_id,
+    user_uid: userUid,
+    matches_played: s.matches_played,
+    wins: s.wins,
+    losses: s.losses,
+    sets_won: s.sets_won,
+    sets_lost: s.sets_lost,
+    games_won: s.games_won,
+    games_lost: s.games_lost,
+    position: index + 1,
+  }));
+}
+
 export function computeQualifiedTeamsFromStandings(input: {
   groups: Array<{ id: number; group_order?: number | null }>;
   groupTeams: Array<{ tournament_group_id: number; team_id: number }>;

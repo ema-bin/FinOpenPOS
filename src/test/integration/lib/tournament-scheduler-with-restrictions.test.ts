@@ -85,7 +85,11 @@ describe("scheduleGroupMatchesWithRestrictions (lib)", () => {
       undefined,
       undefined,
       [{ id: 1, slot_date: "2026-06-05", start_time: "10:00", end_time: "11:00" }],
-      new Map([[1, new Set()], [2, new Set()], [3, new Set()]])
+      new Map<number, Set<number>>([
+        [1, new Set<number>()],
+        [2, new Set<number>()],
+        [3, new Set<number>()],
+      ])
     );
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/suficientes slots/i);

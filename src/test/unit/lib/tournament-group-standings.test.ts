@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateGroupStandingsFromMatches,
+  buildStandingsInsertRows,
   computeQualifiedTeamsFromStandings,
   groupOfFourForcedPositions,
   rankedStandingsForGroup,
@@ -79,6 +80,22 @@ describe("tournament-group-standings (lib)", () => {
     const map = aggregateGroupStandingsFromMatches(matches);
     const ranked = rankedStandingsForGroup([1, 2, 3, 4], matches, map.get(G1)!);
     expect(ranked.map((s) => s.team_id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("buildStandingsInsertRows asigna position 1..n en orden de ranking", () => {
+    const rows = buildStandingsInsertRows(
+      G1,
+      "user-x",
+      [10, 20, 30],
+      [
+        finished(10, 20, 2, 0),
+        finished(10, 30, 2, 0),
+        finished(20, 30, 2, 1),
+      ]
+    );
+    expect(rows[0].team_id).toBe(10);
+    expect(rows[0].position).toBe(1);
+    expect(rows[2].position).toBe(3);
   });
 
   it("computeQualifiedTeamsFromStandings clasifica 2 en zona de 3 y 3 en zona de 4", () => {
