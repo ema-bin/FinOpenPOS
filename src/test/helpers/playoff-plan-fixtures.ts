@@ -228,6 +228,7 @@ export function wrapSupabaseForBulkPreview(
             ...t,
             match_duration: 60,
             match_duration_quarters_onwards: 60,
+            status: "playoffs_ready",
           })),
           error: null,
         });
@@ -236,3 +237,9 @@ export function wrapSupabaseForBulkPreview(
     },
   };
 }
+
+export const TINY_PLAYOFF_SCHEDULE_BODY = {
+  days: [{ date: "2026-08-15", startTime: "10:00", endTime: "11:00" }],
+  matchDuration: 60,
+  courtIds: [1],
+};

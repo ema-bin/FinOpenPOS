@@ -12,6 +12,7 @@ import {
   PLAYOFF_PLAN_TOURNAMENT_ID,
   supabaseSingleZoneOfFour,
   supabaseTwoZonesOfFourEightTeams,
+  TINY_PLAYOFF_SCHEDULE_BODY,
   VALID_PLAYOFF_SCHEDULE_BODY,
   wrapSupabaseForBulkPreview,
   wrapSupabaseForSinglePreview,
@@ -125,11 +126,11 @@ describe("plan-bulk-playoffs-preview (lib)", () => {
         PLAYOFF_PLAN_TOURNAMENT_ID
       );
       await expect(
-        planSinglePlayoffsPreview(supabase as never, PLAYOFF_PLAN_TOURNAMENT_ID, {
-          days: [{ date: "2026-08-15", startTime: "10:00", endTime: "11:00" }],
-          matchDuration: 60,
-          courtIds: [1],
-        })
+        planSinglePlayoffsPreview(
+          supabase as never,
+          PLAYOFF_PLAN_TOURNAMENT_ID,
+          TINY_PLAYOFF_SCHEDULE_BODY
+        )
       ).rejects.toMatchObject({
         status: 400,
         message: expect.stringMatching(/suficientes slots/i),
@@ -169,6 +170,39 @@ describe("plan-bulk-playoffs-preview (lib)", () => {
         (m) => m.court_id && m.start_time
       );
       expect(withSchedule.length).toBeGreaterThan(0);
+    });
+
+    it("planifica dos torneos en la misma grilla", async () => {
+      const plan = supabaseTwoZonesOfFourEightTeams();
+      const supabase = wrapSupabaseForBulkPreview(plan, [
+        { id: 1, name: "Torneo A" },
+        { id: 2, name: "Torneo B" },
+      ]);
+
+      const result = await planBulkPlayoffsPreview(
+        supabase as never,
+        VALID_PLAYOFF_SCHEDULE_BODY
+      );
+
+      expect(result.tournaments).toHaveLength(2);
+      expect(result.totalPlayoffMatches).toBeGreaterThan(
+        result.tournaments[0].matches.filter((m) => m.court_id).length
+      );
+    });
+
+    it("400 si dos torneos necesitan más slots que los disponibles", async () => {
+      const plan = supabaseTwoZonesOfFourEightTeams();
+      const supabase = wrapSupabaseForBulkPreview(plan, [
+        { id: 1, name: "Torneo A" },
+        { id: 2, name: "Torneo B" },
+      ]);
+
+      await expect(
+        planBulkPlayoffsPreview(supabase as never, TINY_PLAYOFF_SCHEDULE_BODY)
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringMatching(/suficientes slots/i),
+      });
     });
   });
 });
