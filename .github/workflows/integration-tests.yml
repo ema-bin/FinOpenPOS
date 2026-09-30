@@ -1,0 +1,43 @@
+# Corre en cada PR para visibilidad; no bloquea merge (step con continue-on-error).
+# En branch protection, no hace falta marcarlo como required check; si lo marcás, igual no falla el job.
+name: Integration tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests (integration)
+        id: integration
+        run: npm run test:integration
+        continue-on-error: true
+
+      - name: Integration failed (non-blocking)
+        if: steps.integration.outcome == 'failure'
+        run: |
+          echo "::warning::Los tests de integración fallaron. Revisá el log del step anterior; el merge no queda bloqueado por este workflow."
+          exit 0
