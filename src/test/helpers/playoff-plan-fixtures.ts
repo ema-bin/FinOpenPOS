@@ -1,5 +1,6 @@
 import {
   createMockQueryBuilder,
+  createMockQueryBuilderChainable,
   createMockSupabaseClient,
 } from "@/test/mock-supabase-client";
 
@@ -243,3 +244,59 @@ export const TINY_PLAYOFF_SCHEDULE_BODY = {
   matchDuration: 60,
   courtIds: [1],
 };
+
+export function wrapSupabaseForPlayoffPreviewRoute(
+  planClient: ReturnType<typeof createSupabaseForPlayoffPlan>,
+  options?: { projectedFromRegistration?: boolean; registeredTeams?: number }
+) {
+  const base = planClient.from as ReturnType<typeof import("vitest").vi.fn>;
+  const teamCount = options?.registeredTeams ?? 8;
+
+  return {
+    from: (table: string) => {
+      if (options?.projectedFromRegistration && table === "tournament_groups") {
+        return createMockQueryBuilderChainable({ data: [], error: null });
+      }
+      if (options?.projectedFromRegistration && table === "tournament_teams") {
+        return createMockQueryBuilderChainable({
+          data: Array.from({ length: teamCount }, (_, i) => ({ id: i + 1 })),
+          error: null,
+        });
+      }
+      return base(table);
+    },
+  };
+}
+
+export function wrapSupabaseForGroupSlotsRoute(
+  planClient: ReturnType<typeof createSupabaseForPlayoffPlan>,
+  input: {
+    tournaments: Array<{ id: number; name: string }>;
+    slots: Array<{
+      id: number;
+      tournament_id: number;
+      slot_date: string;
+      start_time: string;
+      end_time: string;
+    }>;
+  }
+) {
+  const base = planClient.from as ReturnType<typeof import("vitest").vi.fn>;
+  return {
+    from: (table: string) => {
+      if (table === "tournaments") {
+        return createMockQueryBuilderChainable({
+          data: input.tournaments,
+          error: null,
+        });
+      }
+      if (table === "tournament_group_slots") {
+        return createMockQueryBuilderChainable({
+          data: input.slots,
+          error: null,
+        });
+      }
+      return base(table);
+    },
+  };
+}
