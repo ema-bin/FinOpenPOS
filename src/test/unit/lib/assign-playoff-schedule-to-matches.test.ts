@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   assignPlayoffScheduleSlots,
   assignPlayoffScheduleSlotsAcrossTournamentsByRound,
+  buildExplicitSlotsFromPlannedTournament,
+  buildExplicitSlotsFromScheduledMatches,
+  getPlannedMatchesNeedingSchedule,
   validatePlannedTournamentSchedule,
 } from "@/lib/assign-playoff-schedule-to-matches";
+import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
 import type { PlayoffBracketMatch } from "@/lib/playoff-matches-plan";
 
 function playoffMatch(
@@ -81,6 +85,87 @@ describe("assign-playoff-schedule-to-matches (lib)", () => {
 
     expect(result.get(1)![0].start_time).toBe("09:00");
     expect(result.get(2)![0].start_time).toBe("10:00");
+  });
+
+  it("buildExplicitSlotsFromScheduledMatches respeta orden de ronda", () => {
+    const scheduled = assignPlayoffScheduleSlots(
+      [
+        playoffMatch("semifinal", 1, 1, 2),
+        playoffMatch("cuartos", 1, 3, 4),
+      ],
+      [
+        { date: "2026-07-01", startTime: "10:00", court_id: 1, endTime: "11:00" },
+        { date: "2026-07-01", startTime: "11:00", court_id: 2 },
+      ],
+      60
+    );
+    const explicit = buildExplicitSlotsFromScheduledMatches(scheduled);
+    expect(explicit[0]).toMatchObject({ startTime: "10:00", court_id: 1 });
+    expect(explicit[1].startTime).toBe("11:00");
+  });
+
+  it("getPlannedMatchesNeedingSchedule y buildExplicitSlotsFromPlannedTournament", () => {
+    const tournament: PlannedTournamentPreview = {
+      id: 1,
+      name: "Copa",
+      match_duration: 60,
+      match_duration_quarters_onwards: 60,
+      matches: [
+        {
+          round: "cuartos",
+          bracket_pos: 1,
+          team1Label: "1A",
+          team2Label: "2B",
+          match_date: "2026-07-01",
+          start_time: "10:00",
+          end_time: "11:00",
+          court_id: 1,
+        },
+        {
+          round: "semifinal",
+          bracket_pos: 1,
+          team1Label: "G1",
+          team2Label: "G2",
+          match_date: null,
+          start_time: null,
+          end_time: null,
+          court_id: null,
+        },
+      ],
+    };
+    const needing = getPlannedMatchesNeedingSchedule(tournament);
+    expect(needing).toHaveLength(1);
+    expect(buildExplicitSlotsFromPlannedTournament(tournament)).toEqual([
+      {
+        date: "2026-07-01",
+        startTime: "10:00",
+        court_id: 1,
+        endTime: "11:00",
+      },
+    ]);
+  });
+
+  it("validatePlannedTournamentSchedule ok cuando todo está completo", () => {
+    expect(
+      validatePlannedTournamentSchedule({
+        id: 1,
+        name: "Copa",
+        match_duration: 60,
+        match_duration_quarters_onwards: 60,
+        matches: [
+          {
+            round: "cuartos",
+            bracket_pos: 1,
+            team1Label: "1A",
+            team2Label: "2B",
+            match_date: "2026-07-01",
+            start_time: "10:00",
+            end_time: "11:00",
+            court_id: 1,
+          },
+        ],
+      })
+    ).toBeNull();
   });
 
   it("validatePlannedTournamentSchedule detecta campos faltantes", () => {
