@@ -14,6 +14,7 @@
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:unit": "vitest run --coverage src/test/unit",
     "check-env": "node scripts/check-env.js",
     "check-env:local": "node scripts/check-env.js local",
     "check-env:prod": "node scripts/check-env.js production"
