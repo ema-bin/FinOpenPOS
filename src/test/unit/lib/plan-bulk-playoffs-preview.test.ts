@@ -118,6 +118,23 @@ describe("plan-bulk-playoffs-preview (lib)", () => {
       expect(scheduled.length).toBe(result.totalPlayoffMatches);
       expect(scheduled[0].team1Label).toMatch(/Equipo|1/);
     });
+
+    it("400 si no hay slots suficientes para el cuadro", async () => {
+      const supabase = wrapSupabaseForSinglePreview(
+        supabaseTwoZonesOfFourEightTeams(),
+        PLAYOFF_PLAN_TOURNAMENT_ID
+      );
+      await expect(
+        planSinglePlayoffsPreview(supabase as never, PLAYOFF_PLAN_TOURNAMENT_ID, {
+          days: [{ date: "2026-08-15", startTime: "10:00", endTime: "11:00" }],
+          matchDuration: 60,
+          courtIds: [1],
+        })
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringMatching(/suficientes slots/i),
+      });
+    });
   });
 
   describe("planBulkPlayoffsPreview", () => {
