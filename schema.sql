@@ -2,6 +2,7 @@
 -- RESET (para desarrollo)
 -- =========================================================
 
+DROP TABLE IF EXISTS whatsapp_message_templates;
 DROP TABLE IF EXISTS tournament_team_schedule_restrictions;
 DROP TABLE IF EXISTS registration_pricing_settings;
 DROP TABLE IF EXISTS tournament_registration_payments;
@@ -996,3 +997,26 @@ CREATE TABLE registration_pricing_settings (
 );
 
 INSERT INTO registration_pricing_settings (id) VALUES (1);
+
+-- =========================================================
+-- WHATSAPP_MESSAGE_TEMPLATES (variantes de mensajes por tipo)
+-- =========================================================
+
+CREATE TABLE whatsapp_message_templates (
+    id          BIGSERIAL PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('tournament_invite', 'debt_reminder')),
+    name        TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    user_uid    UUID,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_whatsapp_message_templates_kind
+    ON whatsapp_message_templates(kind);
+
+INSERT INTO whatsapp_message_templates (kind, name, body) VALUES
+    ('tournament_invite', 'Corto', 'Hola {nombre}! Ya está abierta la inscripción al *torneo de {categoria}*. Cupos limitados. Te anotás?'),
+    ('tournament_invite', 'Directo', '{nombre}, se viene el *torneo de {categoria}* y todavía no te anotaste. Te sumás?'),
+    ('tournament_invite', 'Amistoso', 'Hola {nombre}! Abrimos la inscripción para el *torneo de {categoria}*. Si querés jugar, avisanos y te anotamos.'),
+    ('tournament_invite', 'Últimos cupos', 'Hola {nombre}! Quedan pocos lugares para el *torneo de {categoria}*. Te guardo uno?');

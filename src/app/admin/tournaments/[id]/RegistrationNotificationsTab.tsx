@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +31,8 @@ import {
   personalizeWhatsAppMessage,
 } from "@/lib/whatsapp";
 import { CopyImageError, copyPngBlobToClipboard } from "@/lib/copy-image-url";
+import { useWhatsAppMessageVariants } from "@/hooks/use-whatsapp-message-variants";
+import { MessageVariantsEditor } from "@/components/whatsapp/MessageVariantsEditor";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +89,6 @@ export default function RegistrationNotificationsTab({
   >;
 }) {
   const queryClient = useQueryClient();
-  const [messageTemplate, setMessageTemplate] = useState<string | null>(null);
   const [copyingFlyer, setCopyingFlyer] = useState(false);
   const [hideNotified, setHideNotified] = useState(false);
 
@@ -119,8 +119,10 @@ export default function RegistrationNotificationsTab({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const effectiveTemplate =
-    messageTemplate ?? data?.default_message ?? "";
+  const messageVariants = useWhatsAppMessageVariants(
+    "tournament_invite",
+    data?.default_message ?? ""
+  );
   const flyerUrl = data?.flyer_url ?? undefined;
   const hasFlyer = Boolean(flyerUrl);
   const {
@@ -131,19 +133,20 @@ export default function RegistrationNotificationsTab({
 
   const linkTarget = defaultWhatsAppLinkTarget();
 
+  const activeBody = messageVariants.activeTemplate.body;
   const playersWithLinks = useMemo(() => {
     if (!data?.players) return [];
     return data.players.map((p) => ({
       ...p,
       whatsapp_url: buildWhatsAppUrl(
         p.phone,
-        personalizeWhatsAppMessage(effectiveTemplate, p, {
+        personalizeWhatsAppMessage(activeBody, p, {
           categoryName: data.category_name,
         }),
         linkTarget
       ),
     }));
-  }, [data?.players, data?.category_name, effectiveTemplate, linkTarget]);
+  }, [data?.players, data?.category_name, activeBody, linkTarget]);
 
   const visiblePlayers = useMemo(
     () =>
@@ -295,18 +298,18 @@ export default function RegistrationNotificationsTab({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="wa-message">Mensaje (se abre en WhatsApp)</Label>
-            <Textarea
+            <MessageVariantsEditor
+              state={messageVariants}
               id="wa-message"
-              rows={5}
-              value={effectiveTemplate}
-              onChange={(e) => setMessageTemplate(e.target.value)}
+              label="Mensaje (se abre en WhatsApp)"
               placeholder="Mensaje de invitación..."
+              hint={
+                <>
+                  Placeholders: {"{nombre}"}, {"{categoria}"}. Enviar abre WhatsApp
+                  Desktop y marca al jugador como notificado.
+                </>
+              }
             />
-            <p className="text-xs text-muted-foreground">
-              Placeholders: {"{nombre}"}, {"{categoria}"}. Enviar abre WhatsApp
-              Desktop y marca al jugador como notificado.
-            </p>
             <Button
               type="button"
               variant="outline"
@@ -314,10 +317,10 @@ export default function RegistrationNotificationsTab({
               onClick={() => {
                 const sample = data.players[0];
                 const text = sample
-                  ? personalizeWhatsAppMessage(effectiveTemplate, sample, {
+                  ? personalizeWhatsAppMessage(activeBody, sample, {
                       categoryName: data.category_name,
                     })
-                  : effectiveTemplate;
+                  : activeBody;
                 navigator.clipboard.writeText(text);
                 toast.success("Mensaje de ejemplo copiado");
               }}
@@ -419,6 +422,7 @@ export default function RegistrationNotificationsTab({
                                     if (!p.is_notified) {
                                       toggleNotified(p.id, true);
                                     }
+                                    messageVariants.markSent();
                                   }}
                                 >
                                   <MessageCircleIcon className="h-4 w-4 mr-1" />

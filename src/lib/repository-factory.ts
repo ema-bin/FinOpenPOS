@@ -26,6 +26,7 @@ import { TournamentPaymentsRepository } from "@/repositories/tournament-payments
 import { CategoriesRepository } from "@/repositories/categories.repository";
 import { PlayerTournamentPointsRepository } from "@/repositories/player-tournament-points.repository";
 import { TournamentRegistrationNotifiedRepository } from "@/repositories/tournament-registration-notified.repository";
+import { WhatsAppMessageTemplatesRepository } from "@/repositories/whatsapp-message-templates.repository";
 
 /**
  * Factory function to create repositories with authenticated user context
@@ -103,6 +104,7 @@ export async function createRepositories() {
       supabase,
       user.id
     ),
+    whatsappMessageTemplates: new WhatsAppMessageTemplatesRepository(supabase, user.id),
   };
 }
 
