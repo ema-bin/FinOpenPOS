@@ -41,6 +41,13 @@ export function createMockQueryBuilder(result: MockSupabaseResult) {
   return builder;
 }
 
+/** Igual que createMockQueryBuilder pero `.in()` sigue encadenando (p. ej. `.in().order()`). */
+export function createMockQueryBuilderChainable(result: MockSupabaseResult) {
+  const builder = createMockQueryBuilder(result);
+  builder.in = vi.fn(() => builder);
+  return builder;
+}
+
 export function createMockSupabaseClient(
   tableHandlers: Record<string, () => ReturnType<typeof createMockQueryBuilder>>
 ) {
