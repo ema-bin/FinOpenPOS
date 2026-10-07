@@ -41,7 +41,8 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
-import { Loader2Icon, PlusIcon, SearchIcon, FilePenIcon, ShoppingCartIcon, ReceiptIcon, CalendarIcon, BarChart3Icon, ArrowUpDownIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon } from "lucide-react";
+import { Loader2Icon, PlusIcon, SearchIcon, FilePenIcon, ShoppingCartIcon, ReceiptIcon, CalendarIcon, BarChart3Icon, ArrowUpDownIcon, ArrowUpIcon, ArrowDownIcon, UsersIcon, MessageCircleIcon } from "lucide-react";
+import { DebtReminderDialog } from "@/components/orders/DebtReminderDialog";
 import { Label } from "@/components/ui/label";
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
 import { PlayerDuplicateSuggestions } from "@/components/player-duplicate-suggestions";
@@ -99,6 +100,7 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilterOpenAccounts, setStatusFilterOpenAccounts] = useState<"all" | OrderStatus>("open");
   const [statusFilterSales, setStatusFilterSales] = useState<"all" | OrderStatus>("all");
+  const [debtReminderOrder, setDebtReminderOrder] = useState<OrderDTO | null>(null);
   // Funciones para fechas con hora (para el tab de ventas)
   const getTodayDateStart = () => {
     const today = new Date();
@@ -828,6 +830,7 @@ export default function OrdersPage() {
                       <TableHead>Estado</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Recordatorio</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -848,11 +851,35 @@ export default function OrdersPage() {
                         <TableCell>
                           {formatDateTime(order.created_at)}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {order.status === "open" ? (
+                            <span
+                              className="inline-block"
+                              title={
+                                order.player?.phone?.trim()
+                                  ? "Enviar recordatorio de deuda por WhatsApp"
+                                  : "El cliente no tiene teléfono cargado"
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!order.player?.phone?.trim()}
+                                onClick={() => setDebtReminderOrder(order)}
+                              >
+                                <MessageCircleIcon className="w-4 h-4 mr-1" />
+                                Recordar
+                              </Button>
+                            </span>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {filteredOrders.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6">
+                        <TableCell colSpan={6} className="text-center py-6">
                           No hay cuentas para mostrar.
                         </TableCell>
                       </TableRow>
@@ -1402,6 +1429,13 @@ export default function OrdersPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <DebtReminderDialog
+        order={debtReminderOrder}
+        onOpenChange={(open) => {
+          if (!open) setDebtReminderOrder(null);
+        }}
+      />
 
       {/* Nueva cuenta */}
       <Dialog

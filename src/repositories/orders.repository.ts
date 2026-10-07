@@ -19,7 +19,8 @@ export class OrdersRepository extends BaseRepository {
         closed_at,
         player:player_id (
           first_name,
-          last_name
+          last_name,
+          phone
         )
       `;
 
@@ -68,7 +69,8 @@ export class OrdersRepository extends BaseRepository {
         closed_at,
         player:player_id (
           first_name,
-          last_name
+          last_name,
+          phone
         )
       `
       )

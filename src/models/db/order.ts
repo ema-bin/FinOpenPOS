@@ -45,6 +45,7 @@ export interface OrderWithPlayer extends OrderDB {
   player?: {
     first_name: string;
     last_name: string;
+    phone?: string | null;
   };
 }
 

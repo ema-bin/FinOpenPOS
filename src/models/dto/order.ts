@@ -18,7 +18,7 @@ export interface OrderPaymentDTO {
 
 // Order DTO with nested player and items
 export interface OrderDTO extends Omit<OrderDB, "user_uid" | "player_id"> {
-  player: PlayerNestedDTO | null;
+  player: (PlayerNestedDTO & { phone?: string | null }) | null;
   items?: OrderItemDTO[];
   /** Pagos en dinero registrados (cuenta abierta o cerrada). */
   payments?: OrderPaymentDTO[];
