@@ -291,6 +291,22 @@ export function resolveApiRequirement(pathname: string, method: string): RouteRe
   return API_RULES[pattern][method.toUpperCase() as HttpMethod] ?? null;
 }
 
+export type ApiAccess = "allow" | "unauthorized" | "forbidden";
+
+/** Decisión de acceso a una API. `public` pasa sin sesión; el resto exige sesión y el permiso del mapa. */
+export function decideApiAccess(
+  pathname: string,
+  method: string,
+  hasSession: boolean,
+  permissions: readonly Permission[]
+): ApiAccess {
+  const requirement = resolveApiRequirement(pathname, method);
+  if (requirement?.kind === "public") return "allow";
+  if (!hasSession) return "unauthorized";
+  if (!isAllowed(requirement, permissions)) return "forbidden";
+  return "allow";
+}
+
 export function isAllowed(
   requirement: RouteRequirement | null,
   permissions: readonly Permission[]

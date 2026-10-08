@@ -2,7 +2,9 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { closeOpenOrder } from "@/lib/order-close";
+import { requirePermission } from "@/lib/auth/require-permission";
 import {
+  bodySetsPositiveDiscount,
   computeDiscountAndTotal,
   fetchOrderIncomePayments,
   isMoneyPositive,
@@ -18,6 +20,10 @@ export async function POST(request: Request) {
   try {
     const repos = await createRepositories();
     const body = await request.json();
+    if (bodySetsPositiveDiscount(body)) {
+      const discountAuth = await requirePermission("sales.cancel_discount");
+      if (!discountAuth.ok) return discountAuth.response;
+    }
 
     const playerId = Number(body.playerId);
     const items = body.items || [];

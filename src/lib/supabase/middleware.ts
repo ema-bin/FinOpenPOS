@@ -4,6 +4,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
+import { decideApiAccess } from "@/lib/auth/route-permissions";
 import {
   decodeJwtPayload,
   permissionsFromClaims,
@@ -14,7 +15,7 @@ import {
  * Permisos de la sesión. Viajan en el JWT (hook de Supabase), así que normalmente
  * no hay consulta a la DB. No verificamos la firma acá: getClaims/getUser pegan al
  * Auth server y el middleware, corriendo en Edge lejos de esa región, se queda sin
- * tiempo. El bloqueo que sí verifica la sesión es el de las APIs.
+ * tiempo. Las rutas de API igual llaman a getUser(), que rechaza un token falso.
  * Si el token es anterior al hook, se leen de la DB; si esa lectura falla, se deja
  * pasar para no dejar a nadie afuera por un error de red.
  */
@@ -31,6 +32,13 @@ async function permissionsForSession(
     return [...ALL_PERMISSIONS];
   }
   return fromDb;
+}
+
+function withSessionCookies(response: NextResponse, sessionResponse: NextResponse) {
+  sessionResponse.cookies.getAll().forEach((cookie) => {
+    response.cookies.set(cookie);
+  });
+  return response;
 }
 
 export async function updateSession(request: NextRequest) {
@@ -77,11 +85,21 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getSession()
 
   const user = session?.user
+  const { pathname } = request.nextUrl
+
+  if (pathname.startsWith("/api")) {
+    const permissions = user && session ? await permissionsForSession(supabase, session) : []
+    const decision = decideApiAccess(pathname, request.method, Boolean(user), permissions)
+    if (decision === "allow") return supabaseResponse
+    const status = decision === "unauthorized" ? 401 : 403
+    const error = decision === "unauthorized" ? "Unauthorized" : "No tenés permiso para esto."
+    return withSessionCookies(NextResponse.json({ error }, { status }), supabaseResponse)
+  }
 
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
+    !pathname.startsWith('/login') &&
+    !pathname.startsWith('/auth')
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
@@ -91,7 +109,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && session) {
     const permissions = await permissionsForSession(supabase, session)
-    const dest = redirectForPermissions(request.nextUrl.pathname, permissions)
+    const dest = redirectForPermissions(pathname, permissions)
     if (dest) {
       const url = request.nextUrl.clone()
       url.pathname = dest

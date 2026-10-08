@@ -10,10 +10,12 @@ import {
   isFullyPaid,
   isMoneyGt,
   isOrderAlreadyPaidInFull,
+  bodySetsPositiveDiscount,
   resolveOrderDiscounts,
   roundMoney,
   sumPayments,
 } from "@/lib/order-payment-helpers";
+import { requirePermission } from "@/lib/auth/require-permission";
 
 type RouteParams = { params: { id: string } };
 
@@ -130,6 +132,10 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const body = await request.json();
+  if (bodySetsPositiveDiscount(body)) {
+    const discountAuth = await requirePermission("sales.cancel_discount");
+    if (!discountAuth.ok) return discountAuth.response;
+  }
   const paymentMethodId = Number(body.paymentMethodId || body.payment_method_id);
   const amountInput =
     body.amount !== undefined && body.amount !== null
