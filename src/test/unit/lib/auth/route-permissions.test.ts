@@ -5,6 +5,7 @@ import { resolveEffectivePermissions, type Permission } from "@/lib/auth/permiss
 import {
   API_RULES,
   firstAllowedPage,
+  decideApiAccess,
   isAllowed,
   matchApiPattern,
   resolveApiRequirement,
@@ -171,6 +172,30 @@ describe("páginas por rol", () => {
     expect(firstAllowedPage(CAJERO)).toBe("/admin");
     expect(firstAllowedPage(["tournaments.manage"])).toBe("/admin/tournaments");
     expect(firstAllowedPage([])).toBeNull();
+  });
+});
+
+describe("decideApiAccess", () => {
+  it("sin sesión: 401, salvo el cron", () => {
+    expect(decideApiAccess("/api/orders", "GET", false, [])).toBe("unauthorized");
+    expect(decideApiAccess("/api/cron/daily-sales-closure", "GET", false, [])).toBe("allow");
+  });
+
+  it("con sesión: el permiso de la ruta decide", () => {
+    expect(decideApiAccess("/api/orders", "GET", true, CAJERO)).toBe("allow");
+    expect(decideApiAccess("/api/orders", "GET", true, ADMIN_CANCHAS)).toBe("forbidden");
+    expect(decideApiAccess("/api/orders/1/cancel", "POST", true, CAJERO)).toBe("allow");
+    expect(decideApiAccess("/api/purchases", "GET", true, CAJERO)).toBe("forbidden");
+  });
+
+  it("una ruta o método que no está en el mapa se rechaza", () => {
+    expect(decideApiAccess("/api/no-existe", "GET", true, ADMIN)).toBe("forbidden");
+    expect(decideApiAccess("/api/orders/quick-sale", "GET", true, ADMIN)).toBe("forbidden");
+  });
+
+  it("cambiar la propia contraseña alcanza con estar logueado", () => {
+    expect(decideApiAccess("/api/account/password", "POST", true, [])).toBe("allow");
+    expect(decideApiAccess("/api/account/password", "POST", false, ADMIN)).toBe("unauthorized");
   });
 });
 

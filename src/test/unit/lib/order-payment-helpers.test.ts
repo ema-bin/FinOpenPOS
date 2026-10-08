@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeDiscountAndTotal,
   isMoneyPositive,
+  bodySetsPositiveDiscount,
   parseDiscountBodyField,
   resolveOrderDiscounts,
   roundMoney,
@@ -37,6 +38,15 @@ describe("order-payment-helpers (lib)", () => {
         discount_percentage: 15,
       })
     ).toEqual({ discountPercentage: 15, discountAmount: null });
+  });
+
+  it("bodySetsPositiveDiscount solo cuenta un descuento mayor a cero", () => {
+    expect(bodySetsPositiveDiscount({ discount_percentage: 10 })).toBe(true);
+    expect(bodySetsPositiveDiscount({ discount_amount: "50" })).toBe(true);
+    expect(bodySetsPositiveDiscount({ discount_percentage: null })).toBe(false);
+    expect(bodySetsPositiveDiscount({ discount_amount: 0 })).toBe(false);
+    expect(bodySetsPositiveDiscount({})).toBe(false);
+    expect(bodySetsPositiveDiscount(null)).toBe(false);
   });
 
   it("sumPayments e isMoneyPositive", () => {

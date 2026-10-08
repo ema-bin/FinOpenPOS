@@ -1,9 +1,18 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { supabaseStorageService } from "@/services/supabase-storage.service";
 
 export async function POST(request: Request) {
   try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     if (!file || !(file instanceof File)) {

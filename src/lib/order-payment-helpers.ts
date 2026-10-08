@@ -48,6 +48,15 @@ export function parseDiscountBodyField(
   return n;
 }
 
+/** El body pide aplicar un descuento mayor a cero (no cuenta limpiarlo). */
+export function bodySetsPositiveDiscount(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const record = body as Record<string, unknown>;
+  const pct = parseDiscountBodyField(record, "discount_percentage");
+  const amt = parseDiscountBodyField(record, "discount_amount");
+  return (typeof pct === "number" && pct > 0) || (typeof amt === "number" && amt > 0);
+}
+
 export function resolveOrderDiscounts(
   stored: {
     discount_percentage?: number | null;
