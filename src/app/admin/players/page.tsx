@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/useDebounce";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   Card,
   CardContent,
@@ -65,6 +66,8 @@ import { PlayerDuplicateSuggestions } from "@/components/player-duplicate-sugges
 type Player = PlayerDTO;
 
 export default function PlayersPage() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canManagePlayers = !permsLoading && can("players.manage");
   const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showNewPlayerDialog, setShowNewPlayerDialog] = useState(false);
@@ -400,7 +403,7 @@ export default function PlayersPage() {
                 <TableHead>Ciudad</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Acciones</TableHead>
+                {canManagePlayers && <TableHead>Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -416,6 +419,7 @@ export default function PlayersPage() {
                   <TableCell className="capitalize">
                     {player.status}
                   </TableCell>
+                  {canManagePlayers && (
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button
@@ -450,11 +454,12 @@ export default function PlayersPage() {
                       </Button>
                     </div>
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filteredPlayers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6">
+                  <TableCell colSpan={canManagePlayers ? 7 : 6} className="text-center py-6">
                     No se encontraron clientes.
                   </TableCell>
                 </TableRow>

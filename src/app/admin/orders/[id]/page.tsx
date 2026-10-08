@@ -31,6 +31,7 @@ import {
   isMoneyGte,
   roundMoney,
 } from "@/lib/order-payment-helpers";
+import { usePermissions } from "@/components/permissions-provider";
 
 async function fetchOrder(orderId: number): Promise<OrderDTO> {
   return ordersService.getById(orderId);
@@ -77,6 +78,8 @@ export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canDiscount = !permsLoading && can("sales.cancel_discount");
   const orderId = Number(params?.id);
 
   const [order, setOrder] = useState<OrderDTO | null>(null);
@@ -443,16 +446,21 @@ export default function OrderDetailPage() {
       amount: number;
       discountPercentage?: number | null;
       discountAmount?: number | null;
+      includeDiscount?: boolean;
     }) => {
-      // Llamar al endpoint directamente para pasar los descuentos
+      // Sin permiso de descuento no se mandan esas claves: el servidor conserva el descuento ya guardado.
       const res = await fetch(`/api/orders/${orderId}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paymentMethodId: params.paymentMethodId,
           amount: params.amount,
-          discount_percentage: params.discountPercentage,
-          discount_amount: params.discountAmount,
+          ...(params.includeDiscount
+            ? {
+                discount_percentage: params.discountPercentage,
+                discount_amount: params.discountAmount,
+              }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -822,6 +830,7 @@ export default function OrderDetailPage() {
       amount,
       discountPercentage: discountPercentage,
       discountAmount: discountAmount,
+      includeDiscount: canDiscount,
     });
   }, [
     displayOrder,
@@ -834,6 +843,7 @@ export default function OrderDetailPage() {
     amountPaid,
     finalTotal,
     payOrderMutation,
+    canDiscount,
   ]);
 
   if (!orderId || Number.isNaN(orderId)) {
@@ -1001,11 +1011,11 @@ export default function OrderDetailPage() {
                   allowPartialPayment ? setPaymentAmount : undefined
                 }
                 onProcess={handlePay}
-                onCancel={handleCancel}
+                onCancel={canDiscount ? handleCancel : undefined}
                 processing={paying}
                 cancelling={cancelling}
                 processButtonLabel="Cobrar y cerrar cuenta"
-                isDiscountSectionEnabled={isOrderOpen}
+                isDiscountSectionEnabled={isOrderOpen && canDiscount}
               />
             </div>
           </div>
