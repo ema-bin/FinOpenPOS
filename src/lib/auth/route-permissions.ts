@@ -5,6 +5,8 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type RouteRequirement =
   /** Sin sesión de usuario (la ruta se autentica sola, ej. cron con secreto). */
   | { kind: "public" }
+  /** Cualquier usuario logueado. La ruta igual verifica la sesión. */
+  | { kind: "authenticated" }
   /** Requiere tener al menos uno de los permisos. */
   | { kind: "anyOf"; permissions: readonly Permission[] };
 
@@ -246,6 +248,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/tournaments/schedule-review/group-slots": all(TOURNAMENTS),
   "/api/tournaments/schedule-review/groups-preview": all(TOURNAMENTS),
   "/api/tournaments/schedule-review/regenerate-stream": all(TOURNAMENTS),
+  "/api/account/password": { POST: { kind: "authenticated" } },
   "/api/users": { GET: anyOf("users.manage"), POST: anyOf("users.manage") },
   "/api/users/[id]": { PATCH: anyOf("users.manage") },
   "/api/users/[id]/password": { POST: anyOf("users.manage") },
@@ -293,6 +296,6 @@ export function isAllowed(
   permissions: readonly Permission[]
 ): boolean {
   if (!requirement) return false;
-  if (requirement.kind === "public") return true;
+  if (requirement.kind === "public" || requirement.kind === "authenticated") return true;
   return canAny(permissions, requirement.permissions);
 }

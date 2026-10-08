@@ -24,6 +24,7 @@ import {
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/components/permissions-provider";
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import type { Permission } from "@/lib/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -67,6 +68,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [pathname, setPathname] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
@@ -145,10 +147,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
+                Cambiar contraseña
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => logout()}>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
 
         {/* Barra de navegación principal */}
         <nav className="flex h-12 items-center gap-1 border-t bg-muted/40 px-4">

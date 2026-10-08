@@ -117,6 +117,13 @@ describe("matchApiPattern", () => {
     expect(canApi(ADMIN, "/api/orders/quick-sale", "GET")).toBe(false);
   });
 
+  it("cambiar la propia contraseña no exige un permiso de sección", () => {
+    expect(resolveApiRequirement("/api/account/password", "POST")).toEqual({
+      kind: "authenticated",
+    });
+    expect(canApi([], "/api/account/password", "POST")).toBe(true);
+  });
+
   it("el cron es público (se autentica con su secreto)", () => {
     expect(resolveApiRequirement("/api/cron/daily-sales-closure", "GET")).toEqual({
       kind: "public",
