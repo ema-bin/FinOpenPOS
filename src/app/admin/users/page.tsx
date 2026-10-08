@@ -47,6 +47,7 @@ type AccessUser = {
   email: string;
   name: string;
   role_id: number | null;
+  active: boolean;
 };
 
 type AccessResponse = {
@@ -131,6 +132,23 @@ export default function UsersPage() {
     onSuccess: () => {
       setResetUser(null);
       toast.success("Contraseña actualizada. La anterior ya no sirve.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const setActive = useMutation({
+    mutationFn: async ({ userId, active }: { userId: string; active: boolean }) => {
+      const response = await fetch(`/api/users/${userId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "No se pudo cambiar el estado");
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users-access"] });
+      toast.success(variables.active ? "Usuario activado" : "Usuario desactivado");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -251,7 +269,7 @@ export default function UsersPage() {
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead className="w-[240px]">Rol</TableHead>
-                <TableHead className="w-[180px] text-right">Contraseña</TableHead>
+                <TableHead className="w-[280px] text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -262,7 +280,12 @@ export default function UsersPage() {
                 return (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <div className="font-medium">{user.email || "Sin email"}</div>
+                      <div className="font-medium">
+                        {user.email || "Sin email"}
+                        {!user.active ? (
+                          <span className="ml-2 text-xs font-normal text-destructive">Desactivado</span>
+                        ) : null}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {[user.name, isSelf ? "Vos" : ""].filter(Boolean).join(" · ") || "—"}
                       </div>
@@ -288,14 +311,25 @@ export default function UsersPage() {
                       </Select>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openReset(user)}
-                      >
-                        Blanquear
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isSelf || (setActive.isPending && setActive.variables?.userId === user.id)}
+                          onClick={() => setActive.mutate({ userId: user.id, active: !user.active })}
+                        >
+                          {user.active ? "Desactivar" : "Activar"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openReset(user)}
+                        >
+                          Blanquear
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

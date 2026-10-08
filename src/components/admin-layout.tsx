@@ -20,6 +20,7 @@ import {
   CalendarIcon,
   TrophyIcon,
   ShieldIcon,
+  KeyRoundIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +42,7 @@ const NAV_ITEMS: {
   { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
   { href: "/admin/tournaments", label: "Torneos", icon: TrophyIcon, permission: "tournaments.manage" },
   { href: "/admin/users", label: "Usuarios", icon: ShieldIcon, permission: "users.manage" },
+  { href: "/admin/roles", label: "Roles", icon: KeyRoundIcon, permission: "users.manage" },
 ];
 
 const pageNames: { [key: string]: string } = {
@@ -62,6 +64,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/daily-sales-closure": "Cierre de caja",
   "/admin/monthly-sales-closure": "Cierre mensual",
   "/admin/users": "Usuarios",
+  "/admin/roles": "Roles",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

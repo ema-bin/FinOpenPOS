@@ -252,6 +252,9 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/users": { GET: anyOf("users.manage"), POST: anyOf("users.manage") },
   "/api/users/[id]": { PATCH: anyOf("users.manage") },
   "/api/users/[id]/password": { POST: anyOf("users.manage") },
+  "/api/users/[id]/status": { POST: anyOf("users.manage") },
+  "/api/roles": { GET: anyOf("users.manage"), POST: anyOf("users.manage") },
+  "/api/roles/[id]": { PATCH: anyOf("users.manage"), DELETE: anyOf("users.manage") },
 
   "/api/tournament-matches/[id]/photo/upload": all(TOURNAMENTS),
   "/api/tournament-matches/[id]/result": all(TOURNAMENTS),
