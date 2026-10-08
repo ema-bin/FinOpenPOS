@@ -2,6 +2,9 @@
 -- RESET (para desarrollo)
 -- =========================================================
 
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS whatsapp_message_templates;
 DROP TABLE IF EXISTS tournament_team_schedule_restrictions;
 DROP TABLE IF EXISTS registration_pricing_settings;
@@ -1020,3 +1023,8 @@ INSERT INTO whatsapp_message_templates (kind, name, body) VALUES
     ('tournament_invite', 'Directo', '{nombre}, se viene el *torneo de {categoria}* y todavía no te anotaste. Te sumás?'),
     ('tournament_invite', 'Amistoso', 'Hola {nombre}! Abrimos la inscripción para el *torneo de {categoria}*. Si querés jugar, avisanos y te anotamos.'),
     ('tournament_invite', 'Últimos cupos', 'Hola {nombre}! Quedan pocos lugares para el *torneo de {categoria}*. Te guardo uno?');
+
+-- =========================================================
+-- ROLES Y PERMISOS: correr scripts/add-roles-permissions.sql a continuación
+-- (tablas, roles iniciales, RLS y custom_access_token_hook; es idempotente).
+-- =========================================================
