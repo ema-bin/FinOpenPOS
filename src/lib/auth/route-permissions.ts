@@ -246,6 +246,10 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/tournaments/schedule-review/group-slots": all(TOURNAMENTS),
   "/api/tournaments/schedule-review/groups-preview": all(TOURNAMENTS),
   "/api/tournaments/schedule-review/regenerate-stream": all(TOURNAMENTS),
+  "/api/users": { GET: anyOf("users.manage"), POST: anyOf("users.manage") },
+  "/api/users/[id]": { PATCH: anyOf("users.manage") },
+  "/api/users/[id]/password": { POST: anyOf("users.manage") },
+
   "/api/tournament-matches/[id]/photo/upload": all(TOURNAMENTS),
   "/api/tournament-matches/[id]/result": all(TOURNAMENTS),
   "/api/tournament-matches/[id]/schedule": all(TOURNAMENTS),

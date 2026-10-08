@@ -1,6 +1,6 @@
 "use client";
 
-import { signupAction, loginAction } from "./actions";
+import { loginAction } from "./actions";
 /**
  * v0 by Vercel.
  * @see https://v0.dev/t/y71wwxpKfsO
@@ -16,9 +16,8 @@ import { useFormState } from "react-dom";
 
 export default function LoginPage() {
   const [loginState, loginFormAction] = useFormState(loginAction, null);
-  const [signupState, signupFormAction] = useFormState(signupAction, null);
 
-  const error = loginState?.error || signupState?.error;
+  const error = loginState?.error;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background">
@@ -53,12 +52,9 @@ export default function LoginPage() {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="flex justify-between">
+            <CardFooter>
               <Button formAction={loginFormAction} type="submit">
                 Iniciar sesión
-              </Button>
-              <Button formAction={signupFormAction} type="submit">
-                Registrarse
               </Button>
             </CardFooter>
           </form>

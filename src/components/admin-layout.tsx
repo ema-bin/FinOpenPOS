@@ -19,9 +19,28 @@ import {
   PackageIcon,
   CalendarIcon,
   TrophyIcon,
+  ShieldIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
+import { usePermissions } from "@/components/permissions-provider";
+import type { Permission } from "@/lib/auth/permissions";
+import type { LucideIcon } from "lucide-react";
+
+const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  permission: Permission;
+  exact?: boolean;
+}[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboardIcon, permission: "dashboard.view", exact: true },
+  { href: "/admin/orders", label: "Ventas", icon: ShoppingCartIcon, permission: "sales.operate" },
+  { href: "/admin/purchases", label: "Compras", icon: PackageIcon, permission: "purchases.manage" },
+  { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
+  { href: "/admin/tournaments", label: "Torneos", icon: TrophyIcon, permission: "tournaments.manage" },
+  { href: "/admin/users", label: "Usuarios", icon: ShieldIcon, permission: "users.manage" },
+];
 
 const pageNames: { [key: string]: string } = {
   "/admin": "Dashboard",
@@ -41,6 +60,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/balance": "Balance",
   "/admin/daily-sales-closure": "Cierre de caja",
   "/admin/monthly-sales-closure": "Cierre mensual",
+  "/admin/users": "Usuarios",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -50,6 +70,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
+  const { can, loading: permsLoading } = usePermissions();
 
   useEffect(() => {
     setMounted(true);
@@ -131,61 +152,26 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Barra de navegación principal */}
         <nav className="flex h-12 items-center gap-1 border-t bg-muted/40 px-4">
-          <Link
-            href="/admin"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname === "/admin"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <LayoutDashboardIcon className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <Link
-            href="/admin/orders"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname?.startsWith("/admin/orders")
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <ShoppingCartIcon className="h-4 w-4" />
-            Ventas
-          </Link>
-          <Link
-            href="/admin/purchases"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname?.startsWith("/admin/purchases")
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <PackageIcon className="h-4 w-4" />
-            Compras
-          </Link>
-          <Link
-            href="/admin/court-slots"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname?.startsWith("/admin/court-slots")
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <CalendarIcon className="h-4 w-4" />
-            Canchas
-          </Link>
-          <Link
-            href="/admin/tournaments"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              mounted && pathname?.startsWith("/admin/tournaments")
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            }`}
-          >
-            <TrophyIcon className="h-4 w-4" />
-            Torneos
-          </Link>
+          {NAV_ITEMS.filter((item) => permsLoading || can(item.permission)).map((item) => {
+            const active =
+              mounted &&
+              (item.exact ? pathname === item.href : pathname.startsWith(item.href));
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </header>
 
