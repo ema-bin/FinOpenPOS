@@ -14,6 +14,14 @@ type RoleRow = {
   role_permissions: { permission: string }[] | null;
 };
 
+/** GoTrue devuelve banned_until; esta versión de los tipos de Auth no lo declara. */
+function isAuthUserActive(user: object): boolean {
+  const bannedUntil = (user as { banned_until?: string | null }).banned_until;
+  if (!bannedUntil) return true;
+  const until = new Date(bannedUntil).getTime();
+  return Number.isNaN(until) || until <= Date.now();
+}
+
 export async function GET() {
   try {
     const auth = await requirePermission("users.manage");
@@ -52,6 +60,7 @@ export async function GET() {
           (user.user_metadata?.name as string | undefined) ||
           "",
         role_id: roleByUser.get(user.id) ?? null,
+        active: isAuthUserActive(user),
       }))
       .sort((a, b) => a.email.localeCompare(b.email, "es"));
 

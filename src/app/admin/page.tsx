@@ -23,6 +23,7 @@ import {
   ImageIcon,
   ClipboardListIcon,
   ShieldIcon,
+  KeyRoundIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { adminService } from "@/services";
@@ -395,7 +396,21 @@ export default function Page() {
             </CardHeader>
             <CardContent>
               <CardDescription className="text-xs">
-                Roles y permisos de cada usuario
+                Crear usuarios y asignarles un rol
+              </CardDescription>
+            </CardContent>
+          </Card>}
+
+          {can("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/roles")}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <KeyRoundIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Roles</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Crear roles y elegir sus permisos
               </CardDescription>
             </CardContent>
           </Card>}
