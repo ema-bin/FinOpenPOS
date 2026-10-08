@@ -53,6 +53,31 @@ export function parseTemporaryPassword(
   return { ok: true, password };
 }
 
+export type OwnPasswordChange = { currentPassword: string; newPassword: string };
+
+/** Cambio de la propia contraseña: hay que saber la actual y la nueva tiene que ser distinta. */
+export function parseOwnPasswordChange(
+  raw: unknown
+): { ok: true; value: OwnPasswordChange } | { ok: false; error: string } {
+  const body = (raw ?? {}) as { currentPassword?: unknown; newPassword?: unknown };
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+
+  if (!currentPassword) {
+    return { ok: false, error: "Ingresá tu contraseña actual" };
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`,
+    };
+  }
+  if (newPassword === currentPassword) {
+    return { ok: false, error: "La nueva contraseña tiene que ser distinta a la actual" };
+  }
+  return { ok: true, value: { currentPassword, newPassword } };
+}
+
 const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
 /** Contraseña legible para dictarla o copiarla. Omite caracteres ambiguos (0, O, 1, l). */

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { generateTemporaryPassword, parseCreateUserInput, parseTemporaryPassword } from "@/lib/auth/create-user-input";
+import {
+  generateTemporaryPassword,
+  parseCreateUserInput,
+  parseOwnPasswordChange,
+  parseTemporaryPassword,
+} from "@/lib/auth/create-user-input";
 
 describe("parseCreateUserInput", () => {
   it("normaliza email y nombre", () => {
@@ -31,5 +36,24 @@ describe("contraseña temporal", () => {
   it("rechaza menos de 6 caracteres", () => {
     expect(parseTemporaryPassword("12345").ok).toBe(false);
     expect(parseTemporaryPassword("123456")).toEqual({ ok: true, password: "123456" });
+  });
+});
+
+describe("parseOwnPasswordChange", () => {
+  it("acepta actual y nueva distintas", () => {
+    expect(parseOwnPasswordChange({ currentPassword: "actual1", newPassword: "nueva12" })).toEqual({
+      ok: true,
+      value: { currentPassword: "actual1", newPassword: "nueva12" },
+    });
+  });
+
+  it("rechaza repetir la misma o una nueva corta", () => {
+    expect(parseOwnPasswordChange({ currentPassword: "actual1", newPassword: "actual1" }).ok).toBe(
+      false
+    );
+    expect(parseOwnPasswordChange({ currentPassword: "", newPassword: "nueva12" }).ok).toBe(false);
+    expect(parseOwnPasswordChange({ currentPassword: "actual1", newPassword: "123" }).ok).toBe(
+      false
+    );
   });
 });
