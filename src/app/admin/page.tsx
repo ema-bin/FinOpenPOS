@@ -22,34 +22,42 @@ import {
   DollarSignIcon,
   ImageIcon,
   ClipboardListIcon,
+  ShieldIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { adminService } from "@/services";
 import { formatDate } from "@/lib/date-utils";
+import { usePermissions } from "@/components/permissions-provider";
 
 export default function Page() {
   const router = useRouter();
+  const { can, loading: permsLoading } = usePermissions();
+  const showSales = !permsLoading && can("sales.operate");
+  const showSalesReports = showSales && can("sales.reports");
+  const showCourts = !permsLoading && can("courts.operate");
+  const showTournaments = !permsLoading && can("tournaments.manage");
 
   // Queries para datos del dashboard
   const { data: salesData, isLoading: loadingSales } = useQuery({
     queryKey: ["dashboard-sales"],
     queryFn: () => adminService.getDashboardSales(),
     staleTime: 30 * 1000, // 30 segundos
+    enabled: showSales,
   });
 
   const { data: courtsData, isLoading: loadingCourts } = useQuery({
     queryKey: ["dashboard-courts"],
     queryFn: () => adminService.getDashboardCourts(),
     staleTime: 60 * 1000, // 1 minuto
+    enabled: showCourts,
   });
 
   const { data: tournamentsData, isLoading: loadingTournaments } = useQuery({
     queryKey: ["dashboard-tournaments"],
     queryFn: () => adminService.getDashboardTournaments(),
     staleTime: 60 * 1000, // 1 minuto
+    enabled: showTournaments,
   });
-
-  const loading = loadingSales || loadingCourts || loadingTournaments;
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,7 +69,7 @@ export default function Page() {
       {/* Sección Principal: Acciones Rápidas */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* Ventas - Más importante */}
-        <Card className="border-2 hover:border-primary/50 transition-colors">
+        {showSales && <Card className="border-2 hover:border-primary/50 transition-colors">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold">Ventas</CardTitle>
@@ -125,22 +133,24 @@ export default function Page() {
                     Abrir cuenta
                     <ArrowRightIcon className="ml-2 h-4 w-4" />
                   </Button>
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => router.push("/admin/orders?tab=sales")}
-                  >
-                    Ver ventas
-                    <ArrowRightIcon className="ml-2 h-4 w-4" />
-                  </Button>
+                  {showSalesReports && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => router.push("/admin/orders?tab=sales")}
+                    >
+                      Ver ventas
+                      <ArrowRightIcon className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </>
             ) : null}
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Canchas - Segundo */}
-        <Card className="border-2 hover:border-primary/50 transition-colors">
+        {showCourts && <Card className="border-2 hover:border-primary/50 transition-colors">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold">Canchas</CardTitle>
@@ -196,10 +206,10 @@ export default function Page() {
               </>
             ) : null}
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Torneos - Tercero */}
-        <Card className="border-2 hover:border-primary/50 transition-colors">
+        {showTournaments && <Card className="border-2 hover:border-primary/50 transition-colors">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold">Torneos</CardTitle>
@@ -267,13 +277,13 @@ export default function Page() {
               </>
             ) : null}
           </CardContent>
-        </Card>
+        </Card>}
       </div>
 
       {/* Sección Secundaria: Funciones Esporádicas */}
       <div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/players")}>
+          {can("players.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/players")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <UsersIcon className="h-4 w-4 text-muted-foreground" />
@@ -285,9 +295,9 @@ export default function Page() {
                 Gestionar clientes y jugadores
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
+          {can("products.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <PackageIcon className="h-4 w-4 text-muted-foreground" />
@@ -299,9 +309,9 @@ export default function Page() {
                 Gestionar productos y categorías
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
+          {can("purchases.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <TruckIcon className="h-4 w-4 text-muted-foreground" />
@@ -313,8 +323,8 @@ export default function Page() {
                 Registrar compras e historial
               </CardDescription>
             </CardContent>
-          </Card>
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/balance")}>
+          </Card>}
+          {can("balance.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/balance")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <DollarSignIcon className="h-4 w-4 text-muted-foreground" />
@@ -326,9 +336,9 @@ export default function Page() {
                 Ajustes de fondos y retiros de socios
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card
+          {can("closures.daily") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/daily-sales-closure")}
           >
@@ -343,9 +353,9 @@ export default function Page() {
                 Registro diario de ventas de cantina
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card
+          {can("closures.monthly") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/monthly-sales-closure")}
           >
@@ -360,9 +370,9 @@ export default function Page() {
                 Integra los cierres diarios del mes
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/advertisements")}>
+          {can("advertisements.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/advertisements")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-muted-foreground" />
@@ -374,7 +384,21 @@ export default function Page() {
                 Banners y publicidad en la app
               </CardDescription>
             </CardContent>
-          </Card>
+          </Card>}
+
+          {can("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/users")}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <ShieldIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Usuarios</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Roles y permisos de cada usuario
+              </CardDescription>
+            </CardContent>
+          </Card>}
         </div>
       </div>
     </div>

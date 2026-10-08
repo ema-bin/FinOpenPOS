@@ -1,11 +1,15 @@
 import { AdminLayout } from "@/components/admin-layout";
+import { PermissionsProvider } from "@/components/permissions-provider";
 
 export default function Layout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // La autenticación ya se maneja en el middleware del servidor
-  // No necesitamos validar el usuario aquí para evitar llamadas duplicadas
-  return <AdminLayout>{children}</AdminLayout>;
+  // La autenticación y los permisos de página los resuelve el middleware.
+  return (
+    <PermissionsProvider>
+      <AdminLayout>{children}</AdminLayout>
+    </PermissionsProvider>
+  );
 }

@@ -58,33 +58,8 @@ export async function login(prevState: any, formData: FormData) {
   redirect('/admin')
 }
 
-export async function signup(prevState: any, formData: FormData) {
-  const supabase = createClient()
-
-  // type-casting here for convenience
-  // in practice, you should validate your inputs
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
-
-  const { error } = await supabase.auth.signUp(data)
-
-  if (error) {
-    return { error: translateError(error.message) }
-  }
-
-  revalidatePath('/admin', 'layout')
-  redirect('/admin')
-}
-
-// Wrapper actions for useFormState compatibility
 export async function loginAction(prevState: any, formData: FormData) {
   return await login(prevState, formData)
-}
-
-export async function signupAction(prevState: any, formData: FormData) {
-  return await signup(prevState, formData)
 }
 
 export async function logout() {
