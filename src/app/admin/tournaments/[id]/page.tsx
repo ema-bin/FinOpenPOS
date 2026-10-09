@@ -109,6 +109,10 @@ export default function TournamentDetailPage() {
     );
   }
 
+  const canReviewSchedule = tournament.status === "schedule_review";
+  const canEditMatches =
+    tournament.status === "in_progress" || tournament.status === "playoffs_ready";
+
   return (
     <Card className="p-4 flex flex-col gap-4">
       <CardHeader className="p-0">
@@ -158,27 +162,21 @@ export default function TournamentDetailPage() {
                 <TabsTrigger value="payments">
                   Pagos
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="schedule-review" 
-                  disabled={tournament.status !== "schedule_review"}
+                <TabsTrigger
+                  value="schedule-review"
+                  disabled={!canReviewSchedule && activeTab !== "schedule-review"}
                 >
                   Revisión de horarios
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="groups" 
-                  disabled={
-                    tournament.status !== "in_progress" &&
-                    tournament.status !== "playoffs_ready"
-                  }
+                <TabsTrigger
+                  value="groups"
+                  disabled={!canEditMatches && activeTab !== "groups"}
                 >
                   Fase de grupos
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="playoffs" 
-                  disabled={
-                    tournament.status !== "in_progress" &&
-                    tournament.status !== "playoffs_ready"
-                  }
+                <TabsTrigger
+                  value="playoffs"
+                  disabled={!canEditMatches && activeTab !== "playoffs"}
                 >
                   Playoffs
                 </TabsTrigger>
