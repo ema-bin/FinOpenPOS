@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   Card,
   CardHeader,
@@ -76,6 +77,8 @@ interface CartItem {
 export default function QuickSalePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canDiscount = !permsLoading && can("sales.cancel_discount");
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [productFilter, setProductFilter] = useState("");
@@ -391,6 +394,7 @@ export default function QuickSalePage() {
                   discountAmount={discountAmount}
                   onDiscountPercentageChange={setDiscountPercentage}
                   onDiscountAmountChange={setDiscountAmount}
+                  isDiscountSectionEnabled={canDiscount}
                   isEditable={!isProcessing}
                   paymentMethods={paymentMethods}
                   selectedPaymentMethodId={selectedPaymentMethodId}

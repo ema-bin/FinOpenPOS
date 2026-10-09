@@ -62,6 +62,7 @@ import type { TransactionDTO } from "@/services/transactions.service";
 import type { ProductDTO } from "@/models/dto/product";
 import type { ProductCategoryDTO } from "@/models/dto/product-category";
 import { useMemo } from "react";
+import { usePermissions } from "@/components/permissions-provider";
 
 // ---- fetchers ----
 async function fetchPlayers(): Promise<PlayerDTO[]> {
@@ -80,6 +81,8 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { can, loading: permsLoading } = usePermissions();
+  const showReports = !permsLoading && can("sales.reports");
 
   // Leer el tab desde query params
   const tabFromQuery = searchParams.get("tab");
@@ -96,7 +99,8 @@ export default function OrdersPage() {
     return today.toISOString().split('T')[0];
   };
 
-  const [activeTab, setActiveTab] = useState<"open-accounts" | "sales" | "statistics" | "client-ranking">(initialTab);
+  const [requestedTab, setActiveTab] = useState<"open-accounts" | "sales" | "statistics" | "client-ranking">(initialTab);
+  const activeTab = showReports || requestedTab === "open-accounts" ? requestedTab : "open-accounts";
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilterOpenAccounts, setStatusFilterOpenAccounts] = useState<"all" | OrderStatus>("open");
   const [statusFilterSales, setStatusFilterSales] = useState<"all" | OrderStatus>("all");
@@ -753,18 +757,22 @@ export default function OrdersPage() {
             <FilePenIcon className="w-4 h-4 mr-2" />
             Cuentas abiertas
           </TabsTrigger>
-          <TabsTrigger value="sales">
-            <ReceiptIcon className="w-4 h-4 mr-2" />
-            Ver ventas
-          </TabsTrigger>
-          <TabsTrigger value="statistics">
-            <BarChart3Icon className="w-4 h-4 mr-2" />
-            Estadísticas de ventas
-          </TabsTrigger>
-          <TabsTrigger value="client-ranking">
-            <UsersIcon className="w-4 h-4 mr-2" />
-            Ranking de clientes
-          </TabsTrigger>
+          {showReports && (
+            <>
+              <TabsTrigger value="sales">
+                <ReceiptIcon className="w-4 h-4 mr-2" />
+                Ver ventas
+              </TabsTrigger>
+              <TabsTrigger value="statistics">
+                <BarChart3Icon className="w-4 h-4 mr-2" />
+                Estadísticas de ventas
+              </TabsTrigger>
+              <TabsTrigger value="client-ranking">
+                <UsersIcon className="w-4 h-4 mr-2" />
+                Ranking de clientes
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="open-accounts">
