@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GroupMatchPayload } from "@/lib/tournament-scheduler";
+import { mastersRoundRobinPairs } from "@/lib/masters-tournament";
+import { scheduleGroupMatchesBeamSearch } from "@/lib/tournament-scheduler-beam-search";
 import { scheduleGroupMatchesWithRestrictions } from "@/lib/tournament-scheduler-with-restrictions";
 import { assignmentSatisfiesTeamRest } from "@/lib/team-match-rest-constraint";
 
@@ -20,6 +22,40 @@ function groupOfThreeMatches(groupId: number, teams: [number, number, number]): 
     { ...BASE, tournament_group_id: groupId, team1_id: a, team2_id: c },
     { ...BASE, tournament_group_id: groupId, team1_id: b, team2_id: c },
   ];
+}
+
+function roundRobinZoneMatches(
+  groupId: number,
+  teams: [number, number, number, number]
+): GroupMatchPayload[] {
+  return mastersRoundRobinPairs(teams).map(([team1_id, team2_id], index) => ({
+    ...BASE,
+    tournament_group_id: groupId,
+    team1_id,
+    team2_id,
+    match_order: index + 1,
+  }));
+}
+
+function assertKnownOpponentsHaveRest(
+  matches: GroupMatchPayload[],
+  assignments: Array<{ matchIdx: number; date: string; startTime: string }>,
+  teamIds: number[],
+  durationMinutes = 60
+) {
+  const minGapMs = durationMinutes * 2 * 60 * 1000;
+  for (const teamId of teamIds) {
+    const starts = assignments
+      .filter((assignment) => {
+        const match = matches[assignment.matchIdx];
+        return match?.team1_id === teamId || match?.team2_id === teamId;
+      })
+      .map((assignment) => new Date(`${assignment.date}T${assignment.startTime.slice(0, 5)}:00`).getTime())
+      .sort((a, b) => a - b);
+    for (let i = 0; i < starts.length - 1; i++) {
+      expect(starts[i + 1] - starts[i]).toBeGreaterThanOrEqual(minGapMs);
+    }
+  }
 }
 
 function groupOfFourMatches(groupId: number, teams: [number, number, number, number]): GroupMatchPayload[] {
@@ -235,5 +271,121 @@ describe("scheduleGroupMatchesWithRestrictions (lib)", () => {
       expect(a.date).toBe("2026-06-05");
       expect(a.courtId).toBe(1);
     }
+  });
+
+  it("programa una zona todos contra todos con descanso y sin el horario bloqueado", async () => {
+    const matches = roundRobinZoneMatches(7, [1, 2, 3, 4]);
+    const result = await scheduleGroupMatchesWithRestrictions(
+      matches,
+      [],
+      60,
+      [1, 2],
+      undefined,
+      undefined,
+      undefined,
+      [
+        { id: 1, slot_date: "2026-06-05", start_time: "10:00", end_time: "11:00" },
+        { id: 2, slot_date: "2026-06-05", start_time: "12:00", end_time: "13:00" },
+        { id: 3, slot_date: "2026-06-05", start_time: "14:00", end_time: "15:00" },
+        { id: 4, slot_date: "2026-06-05", start_time: "16:00", end_time: "17:00" },
+      ],
+      new Map([[1, new Set([1])]])
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.assignments).toHaveLength(6);
+    const keys = result.assignments.map(
+      (assignment) => `${assignment.date}|${assignment.startTime}|${assignment.courtId}`
+    );
+    expect(new Set(keys).size).toBe(6);
+    assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4]);
+    for (const assignment of result.assignments) {
+      const match = matches[assignment.matchIdx];
+      if (match.team1_id === 1 || match.team2_id === 1) {
+        expect(assignment.startTime.slice(0, 5)).not.toBe("10:00");
+      }
+    }
+  });
+
+  it("comparte canchas entre una zona de 3 y una zona todos contra todos", async () => {
+    const matches = [
+      ...groupOfThreeMatches(1, [10, 20, 30]),
+      ...roundRobinZoneMatches(2, [1, 2, 3, 4]),
+    ];
+    const result = await scheduleGroupMatchesWithRestrictions(
+      matches,
+      [],
+      60,
+      [1, 2],
+      undefined,
+      undefined,
+      undefined,
+      ["10:00", "12:00", "14:00", "16:00", "18:00"].map((start, index) => ({
+        id: index + 1,
+        slot_date: "2026-06-05",
+        start_time: start,
+        end_time: `${String(Number(start.slice(0, 2)) + 1).padStart(2, "0")}:00`,
+      })),
+      new Map()
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.assignments).toHaveLength(9);
+    const keys = result.assignments.map(
+      (assignment) => `${assignment.date}|${assignment.startTime}|${assignment.courtId}`
+    );
+    expect(new Set(keys).size).toBe(9);
+    assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4, 10, 20, 30]);
+  });
+
+  it("mantiene en el mismo día a la pareja marcada en una zona todos contra todos", async () => {
+    const matches = roundRobinZoneMatches(9, [1, 2, 3, 4]);
+    const result = await scheduleGroupMatchesWithRestrictions(
+      matches,
+      [],
+      60,
+      [1, 2],
+      undefined,
+      undefined,
+      undefined,
+      [
+        { id: 1, slot_date: "2026-06-05", start_time: "10:00", end_time: "11:00" },
+        { id: 2, slot_date: "2026-06-05", start_time: "12:00", end_time: "13:00" },
+        { id: 3, slot_date: "2026-06-06", start_time: "10:00", end_time: "11:00" },
+        { id: 4, slot_date: "2026-06-06", start_time: "12:00", end_time: "13:00" },
+        { id: 5, slot_date: "2026-06-06", start_time: "14:00", end_time: "15:00" },
+      ],
+      new Map(),
+      undefined,
+      undefined,
+      undefined,
+      new Set([1])
+    );
+
+    expect(result.success).toBe(true);
+    const dates = result.assignments
+      .filter((assignment) => {
+        const match = matches[assignment.matchIdx];
+        return match.team1_id === 1 || match.team2_id === 1;
+      })
+      .map((assignment) => assignment.date);
+    expect(dates).toHaveLength(3);
+    expect(new Set(dates).size).toBe(1);
+    expect(dates[0]).toBe("2026-06-06");
+    assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4]);
+  });
+
+  it("el algoritmo sin restricciones también asigna la zona todos contra todos", async () => {
+    const matches = roundRobinZoneMatches(8, [1, 2, 3, 4]);
+    const result = await scheduleGroupMatchesBeamSearch(
+      matches,
+      [{ date: "2026-06-05", startTime: "10:00", endTime: "18:00" }],
+      60,
+      [1, 2]
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.assignments).toHaveLength(6);
+    assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4]);
   });
 });

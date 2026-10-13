@@ -7,13 +7,23 @@ import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot, Tourname
 import { calculateEndTime, generateTimeSlots, slotViolatesRestriction } from "./tournament-scheduler";
 import { assignmentSatisfiesSameDayCloseTeams } from "./team-same-day-match-constraint";
 import { assignmentSatisfiesTeamRest } from "./team-match-rest-constraint";
+import {
+  isRoundRobinZoneMatches,
+  searchRoundRobinSlotAssignments,
+} from "./round-robin-group-schedule";
 
 type Group = {
   groupId: number;
   matches: GroupMatchPayload[];
   teams: number[];
   size: 3 | 4;
+  /** 6 partidos con las dos parejas definidas. `size` queda en 3 para usar el descanso de todos los partidos, no el de zona de 4. */
+  roundRobin?: boolean;
 };
+
+function slotsNeeded(group: Group): number {
+  return group.roundRobin ? group.matches.length : group.size;
+}
 
 /**
  * Solo zonas de 4: en partidos de 2ª ronda (ganadores/perdedores) cualquiera de los cuatro equipos puede
@@ -259,6 +269,29 @@ function generateCandidates(
   matchRestrictions?: Map<number, Set<string>>,
   teamsNeedSameDayClose?: Set<number>
 ): Array<{ slots: Slot[]; score: number }> {
+  if (group.roundRobin) {
+    const found = searchRoundRobinSlotAssignments({
+      matches: group.matches,
+      teams: group.teams,
+      slots: availableSlots,
+      usedSlotIds,
+      matchDurationMs,
+      maxCandidates,
+      blockedSlotIdsByMatch: matchRestrictions,
+      teamsNeedSameDayClose,
+    });
+    return found
+      .map((slots) => ({
+        slots,
+        score:
+          scoreSlotGroup(slots) +
+          sameTimeBonus(slots) +
+          spreadBonus(slots, matchDurationMs),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxCandidates);
+  }
+
   const enforceSameDayClose = groupRequiresSameDayClose(group, teamsNeedSameDayClose);
 
   const pushCandidate = (slotsInMatchOrder: Slot[], sortedForScore: Slot[]): boolean => {
@@ -368,6 +401,26 @@ function generateGroupScheduleFallback(
   teamsNeedSameDayClose?: Set<number>,
   allowAnyUnusedSlot = true
 ): { slots: Slot[]; score: number; usedAnyUnusedSlot?: boolean } | null {
+  if (group.roundRobin) {
+    const found = searchRoundRobinSlotAssignments({
+      matches: group.matches,
+      teams: group.teams,
+      slots: availableSlots,
+      usedSlotIds,
+      matchDurationMs,
+      maxCandidates: 1,
+      teamsNeedSameDayClose,
+      ignoreBlocks: true,
+    });
+    if (found.length === 0) return null;
+    const hadBlocks = Array.from(matchRestrictions?.values() ?? []).some((set) => set.size > 0);
+    return {
+      slots: found[0],
+      score: -1e6,
+      usedAnyUnusedSlot: allowAnyUnusedSlot && hadBlocks,
+    };
+  }
+
   const enforceSameDayClose = groupRequiresSameDayClose(group, teamsNeedSameDayClose);
 
   const acceptSlots = (slotsInMatchOrder: Slot[]): { slots: Slot[]; score: number; usedAnyUnusedSlot?: boolean } | null => {
@@ -579,7 +632,9 @@ function runBeamSearch(
         if (groupRequiresSameDayClose(group, teamsNeedSameDayCloseMatches)) {
           const flaggedCount = countSameDayCloseTeamsInGroup(group, teamsNeedSameDayCloseMatches);
           onLog(
-            `   → ${flaggedCount} pareja(s) en esta zona requieren sus 2 partidos el mismo día y cercanos (restricción obligatoria). Revisá disponibilidad o el orden de asignación de zonas.`
+            group.roundRobin
+              ? `   → ${flaggedCount} pareja(s) en esta zona requieren sus 3 partidos el mismo día y cercanos (restricción obligatoria). Revisá disponibilidad o el orden de asignación de zonas.`
+              : `   → ${flaggedCount} pareja(s) en esta zona requieren sus 2 partidos el mismo día y cercanos (restricción obligatoria). Revisá disponibilidad o el orden de asignación de zonas.`
           );
         }
         // Debug adicional: para entender mejor por qué no hay solución,
@@ -673,6 +728,18 @@ export async function scheduleGroupMatchesWithRestrictions(
       if (match.team2_id !== null) teams.add(match.team2_id);
     }
 
+    if (isRoundRobinZoneMatches(matches)) {
+      const ordered = [...matches].sort((a, b) => (a.match_order ?? 0) - (b.match_order ?? 0));
+      groups.push({
+        groupId,
+        matches: ordered,
+        teams: Array.from(teams),
+        size: 3,
+        roundRobin: true,
+      });
+      continue;
+    }
+
     let groupSize: 3 | 4;
     if (matches.some((m: GroupMatchPayload) => m.match_order !== undefined)) {
       groupSize = 4;
@@ -705,9 +772,13 @@ export async function scheduleGroupMatchesWithRestrictions(
     return { success: false, error: "No se encontraron grupos válidos (de 3 o 4) para programar", assignments: [] };
   }
 
-  const groupsOf3 = groups.filter((g) => g.size === 3).length;
+  const roundRobinCount = groups.filter((g) => g.roundRobin).length;
+  const groupsOf3 = groups.filter((g) => g.size === 3 && !g.roundRobin).length;
   const groupsOf4 = groups.filter((g) => g.size === 4).length;
-  if (onLog) onLog(`📊 Encontrados ${groups.length} grupos: ${groupsOf3} de 3, ${groupsOf4} de 4`);
+  if (onLog) {
+    const extra = roundRobinCount > 0 ? `, ${roundRobinCount} todos contra todos` : "";
+    onLog(`📊 Encontrados ${groups.length} grupos: ${groupsOf3} de 3, ${groupsOf4} de 4${extra}`);
+  }
 
   let slots: Slot[];
   const groupMatchRestrictions = new Map<number, Map<number, Set<string>>>();
@@ -738,7 +809,7 @@ export async function scheduleGroupMatchesWithRestrictions(
   } else {
     const timeSlots = generateTimeSlots(days!, matchDurationMinutes, courtIds.length, availableSchedules);
     if (onLog) onLog(`📅 Total de slots generados: ${timeSlots.length}`);
-    const requiredSlots = groups.reduce((sum, g) => sum + g.size, 0);
+    const requiredSlots = groups.reduce((sum, g) => sum + slotsNeeded(g), 0);
     if (timeSlots.length < requiredSlots) {
       return {
         success: false,
@@ -766,7 +837,7 @@ export async function scheduleGroupMatchesWithRestrictions(
     }
   }
 
-  const requiredSlots = groups.reduce((sum, g) => sum + g.size, 0);
+  const requiredSlots = groups.reduce((sum, g) => sum + slotsNeeded(g), 0);
   if (slots.length < requiredSlots) {
     return {
       success: false,
@@ -847,19 +918,27 @@ export async function scheduleGroupMatchesWithRestrictions(
     const group = groups.find((g) => g.groupId === groupId);
     if (!group) continue;
     const groupMatches = matchesByGroup.get(groupId) || [];
-    if (groupMatches.length !== group.size || slotIds.length !== group.size) continue;
+    const needed = slotsNeeded(group);
+    if (groupMatches.length !== needed || slotIds.length !== needed) continue;
 
     const assignedSlots = slotIds
       .map((id) => slots.find((s) => s.slotId === id))
       .filter((s): s is Slot => s !== undefined);
     // No ordenar: assignedSlots[i] corresponde al partido group.matches[i]
 
-    for (let i = 0; i < group.size; i++) {
+    for (let i = 0; i < needed; i++) {
       const match = group.matches[i];
       const slot = assignedSlots[i];
       if (!slot) continue;
-      const matchIdx =
-        group.size === 3
+      const matchIdx = group.roundRobin
+        ? matchesPayload.findIndex(
+            (m) =>
+              m.tournament_group_id === match.tournament_group_id &&
+              m.team1_id === match.team1_id &&
+              m.team2_id === match.team2_id &&
+              (m.match_order ?? null) === (match.match_order ?? null)
+          )
+        : group.size === 3
           ? matchesPayload.findIndex(
               (m) =>
                 m.tournament_group_id === match.tournament_group_id &&
