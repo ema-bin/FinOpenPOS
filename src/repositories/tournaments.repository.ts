@@ -99,6 +99,7 @@ export class TournamentsRepository extends BaseRepository {
         is_grand_prix: input.is_grand_prix ?? false,
         is_category_specific: input.is_category_specific ?? false,
         is_suma_13_damas: input.is_suma_13_damas ?? false,
+        ...(input.format === "master" ? { format: "master" as const } : {}),
         start_date: input.start_date ?? null,
         end_date: input.end_date ?? null,
         has_super_tiebreak: input.has_super_tiebreak ?? false,

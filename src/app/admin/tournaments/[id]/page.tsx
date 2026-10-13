@@ -123,8 +123,11 @@ export default function TournamentDetailPage() {
               {tournament.is_category_specific && tournament.category
                 ? tournament.category
                 : tournament.category ?? "Sin categoría"}
-              {tournament.is_puntuable && " • Puntuable"}
-              {tournament.is_puntuable && tournament.is_grand_prix && " • Grand Prix"}
+              {tournament.format !== "master" && tournament.is_puntuable && " • Puntuable"}
+              {tournament.format !== "master" &&
+                tournament.is_puntuable &&
+                tournament.is_grand_prix &&
+                " • Grand Prix"}
               {" • "}
               {tournamentStatusLabel(tournament.status)}
             </span>

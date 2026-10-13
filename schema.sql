@@ -677,6 +677,9 @@ CREATE TABLE tournaments (
     is_grand_prix       BOOLEAN NOT NULL DEFAULT FALSE,  -- torneo Grand Prix: puntos ×2 en ranking (solo si puntuable)
     is_category_specific BOOLEAN NOT NULL DEFAULT FALSE,  -- si el torneo es de una categoría específica (libre)
     is_suma_13_damas    BOOLEAN NOT NULL DEFAULT FALSE,  -- torneo damas: ambas mujeres y categorías suman >= 13
+    -- standard = formato de siempre. master = 8 parejas, 2 zonas todos contra todos, semis cruzadas.
+    format      VARCHAR(20) NOT NULL DEFAULT 'standard'
+                 CHECK (format IN ('standard', 'master')),
     start_date  DATE,
     end_date    DATE,
     status      VARCHAR(20) NOT NULL DEFAULT 'draft'

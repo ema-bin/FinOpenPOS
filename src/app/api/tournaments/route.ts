@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       is_grand_prix,
       is_category_specific,
       is_suma_13_damas,
+      format,
       start_date,
       end_date,
       has_super_tiebreak,
@@ -76,14 +77,16 @@ export async function POST(request: Request) {
       return date;
     };
 
+    const isMaster = format === "master";
     const tournament = await repos.tournaments.create({
       name: name.trim(),
       description: description ?? null,
       category_id: category_id ?? null,
-      is_puntuable: is_puntuable ?? false,
-      is_grand_prix: (is_puntuable ?? false) && (is_grand_prix ?? false),
+      is_puntuable: isMaster ? false : (is_puntuable ?? false),
+      is_grand_prix: isMaster ? false : (is_puntuable ?? false) && (is_grand_prix ?? false),
       is_category_specific: is_category_specific ?? false,
       is_suma_13_damas: is_suma_13_damas ?? false,
+      ...(format === "master" ? { format: "master" as const } : {}),
       start_date: normalizeDate(start_date),
       end_date: normalizeDate(end_date),
       has_super_tiebreak: has_super_tiebreak ?? false,

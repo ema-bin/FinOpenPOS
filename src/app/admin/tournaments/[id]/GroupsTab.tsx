@@ -43,6 +43,8 @@ import type {
   TeamDTO,
   AvailableSchedule,
 } from "@/models/dto/tournament";
+import { MASTERS_PLAYOFF_MATCH_COUNT } from "@/lib/masters-tournament";
+import { isMastersFormat } from "@/lib/tournament-format";
 import type { PlannedTournamentPreview } from "@/lib/plan-bulk-playoffs-preview";
 import {
   buildExplicitSlotsFromPlannedTournament,
@@ -164,7 +166,13 @@ export default function GroupsTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "has_super_tiebreak" | "match_duration" | "match_duration_quarters_onwards" | "status"
+    | "id"
+    | "name"
+    | "has_super_tiebreak"
+    | "match_duration"
+    | "match_duration_quarters_onwards"
+    | "status"
+    | "format"
   >;
 }) {
   const queryClient = useQueryClient();
@@ -239,6 +247,7 @@ export default function GroupsTab({
 
   // Calcular estimado de matches de playoffs
   const calculatePlayoffMatchCount = (): number => {
+    if (isMastersFormat(tournament.format)) return MASTERS_PLAYOFF_MATCH_COUNT;
     if (!data) return 0;
     
     // Calcular cuántos equipos clasifican

@@ -133,7 +133,7 @@ export default function SharePlayoffsTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific" | "format"
   >;
 }) {
   const { data: rows = [], isLoading } = useQuery({
@@ -210,7 +210,7 @@ export default function SharePlayoffsTab({
           tournamentName={tournament.name}
           tournamentCategory={tournament.category}
           isCategorySpecific={tournament.is_category_specific}
-          isPuntuable={tournament.is_puntuable}
+          isPuntuable={tournament.format !== "master" && tournament.is_puntuable}
           shareVariant="playoffs"
           layout={exportLayout ? BRACKET_SHARE_LAYOUT_PLAYOFFS_CENTERED_EXPORT : undefined}
         />

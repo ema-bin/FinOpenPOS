@@ -3,7 +3,9 @@ export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
+import { scheduleMastersRoundRobin } from "@/lib/masters-schedule";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
+import { loadMastersTournamentIds } from "@/lib/tournament-format";
 import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 
 function normalizeTimeHHMM(value: string | null | undefined): string | null {
@@ -579,74 +581,130 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const schedulerResult = useRestrictions
-          ? await scheduleGroupMatches(
-              matchesPayload,
-              [],
-              maxDuration,
-              courtIds,
-              undefined,
-              undefined,
-              sendLog,
-              {
-                algorithm: "with-restrictions",
-                tournamentSlots: selectedSlots.map((slot) => ({
-                  id: slot.id,
-                  slot_date: slot.slot_date,
-                  start_time: slot.start_time,
-                  end_time: slot.end_time,
-                })),
-                teamCannotPlaySlotIds,
-                blockedCourtIdsByTournamentSlotId,
-                teamDisplayNames,
-                groupDisplayNames,
-                ...(teamsNeedSameDayCloseMatches
-                  ? { teamsNeedSameDayCloseMatches }
-                  : {}),
-              }
-            )
-          : await scheduleGroupMatches(
-              matchesPayload,
-              scheduleDaysFromSlots,
-              maxDuration,
-              courtIds,
-              undefined,
-              undefined,
-              sendLog,
-              {
-                algorithm: "default",
-                teamDisplayNames,
-                groupDisplayNames,
-              }
-            );
+        const mastersTournamentIds = await loadMastersTournamentIds(supabase, tournamentIds);
+        const standardIndexes: number[] = [];
+        const mastersIndexes: number[] = [];
+        pendingMatches.forEach((match, index) => {
+          if (mastersTournamentIds.has(match.tournament_id)) mastersIndexes.push(index);
+          else standardIndexes.push(index);
+        });
 
-        if (!schedulerResult.success || schedulerResult.assignments.length === 0) {
-          sendError(
-            schedulerResult.error ||
-              "No se pudieron asignar horarios para la corrida global."
+        const assignmentByPendingIndex = new Map<
+          number,
+          { date: string; startTime: string; endTime: string; courtId: number }
+        >();
+
+        if (standardIndexes.length > 0) {
+          const standardPayload = standardIndexes.map((index) => matchesPayload[index]);
+          const schedulerResult = useRestrictions
+            ? await scheduleGroupMatches(
+                standardPayload,
+                [],
+                maxDuration,
+                courtIds,
+                undefined,
+                undefined,
+                sendLog,
+                {
+                  algorithm: "with-restrictions",
+                  tournamentSlots: selectedSlots.map((slot) => ({
+                    id: slot.id,
+                    slot_date: slot.slot_date,
+                    start_time: slot.start_time,
+                    end_time: slot.end_time,
+                  })),
+                  teamCannotPlaySlotIds,
+                  blockedCourtIdsByTournamentSlotId,
+                  teamDisplayNames,
+                  groupDisplayNames,
+                  ...(teamsNeedSameDayCloseMatches
+                    ? { teamsNeedSameDayCloseMatches }
+                    : {}),
+                }
+              )
+            : await scheduleGroupMatches(
+                standardPayload,
+                scheduleDaysFromSlots,
+                maxDuration,
+                courtIds,
+                undefined,
+                undefined,
+                sendLog,
+                {
+                  algorithm: "default",
+                  teamDisplayNames,
+                  groupDisplayNames,
+                }
+              );
+
+          if (!schedulerResult.success || schedulerResult.assignments.length === 0) {
+            sendError(
+              schedulerResult.error ||
+                "No se pudieron asignar horarios para la corrida global."
+            );
+            return;
+          }
+
+          sendLog(
+            `Scheduler completado: ${schedulerResult.assignments.length}/${standardPayload.length} partidos asignados.`
           );
+          schedulerResult.assignments.forEach((assignment) => {
+            const pendingIndex = standardIndexes[assignment.matchIdx];
+            if (pendingIndex === undefined) return;
+            assignmentByPendingIndex.set(pendingIndex, assignment);
+          });
+        }
+
+        if (mastersIndexes.length > 0) {
+          sendLog("Master: todos contra todos. No se usa el armado de zona de 4.");
+          const occupied = new Set<string>();
+          Array.from(assignmentByPendingIndex.values()).forEach((assignment) => {
+            occupied.add(`${assignment.date}|${assignment.startTime}|${assignment.courtId}`);
+          });
+          const mastersResult = scheduleMastersRoundRobin({
+            matches: mastersIndexes.map((index) => matchesPayload[index]),
+            slots: selectedSlots.map((slot) => ({
+              id: slot.id,
+              slot_date: slot.slot_date,
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+            })),
+            courtIds,
+            matchDuration: maxDuration,
+            teamCannotPlaySlotIds,
+            blockedCourtIdsBySlotId: blockedCourtIdsByTournamentSlotId,
+            allowedCourtIdsBySlotId,
+            occupied,
+          });
+          if (!mastersResult.success || mastersResult.assignments.length === 0) {
+            sendError(
+              mastersResult.error || "No se pudieron asignar los partidos de Master."
+            );
+            return;
+          }
+          sendLog(
+            `Master: ${mastersResult.assignments.length}/${mastersIndexes.length} partidos asignados.`
+          );
+          mastersResult.assignments.forEach((assignment) => {
+            const pendingIndex = mastersIndexes[assignment.matchIdx];
+            if (pendingIndex === undefined) return;
+            assignmentByPendingIndex.set(pendingIndex, assignment);
+          });
+        }
+
+        if (assignmentByPendingIndex.size === 0) {
+          sendError("No se pudieron asignar horarios para la corrida global.");
           return;
         }
 
-        sendLog(
-          `Scheduler completado: ${schedulerResult.assignments.length}/${matchesPayload.length} partidos asignados.`
-        );
         sendProgress(85, "Guardando asignaciones...");
-
-        const assignmentsByMatchIdx = new Map<
-          number,
-          (typeof schedulerResult.assignments)[number]
-        >();
-        schedulerResult.assignments.forEach((assignment) => {
-          assignmentsByMatchIdx.set(assignment.matchIdx, assignment);
-        });
 
         let updatedCount = 0;
         let errorCount = 0;
 
         for (let idx = 0; idx < pendingMatches.length; idx++) {
           const match = pendingMatches[idx];
-          const assignment = assignmentsByMatchIdx.get(idx);
+          const assignment = assignmentByPendingIndex.get(idx);
           if (!assignment) continue;
 
           const { error: updateError } = await supabase

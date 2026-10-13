@@ -45,6 +45,7 @@ export default function TournamentsPage() {
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isPuntuable, setIsPuntuable] = useState(false);
+  const [format, setFormat] = useState<"standard" | "master">("standard");
   const [isGrandPrix, setIsGrandPrix] = useState(false);
   const [isSuma13Damas, setIsSuma13Damas] = useState(false);
 
@@ -138,8 +139,9 @@ export default function TournamentsPage() {
         category_id: isSuma13Damas ? (suma13Category?.id ?? null) : (isCategorySpecific ? categoryId ?? null : null),
         is_category_specific: isCategorySpecific && !isSuma13Damas,
         is_suma_13_damas: isSuma13Damas,
-        is_puntuable: isPuntuable,
-        is_grand_prix: isPuntuable && isGrandPrix,
+        is_puntuable: format === "master" ? false : isPuntuable,
+        is_grand_prix: format === "master" ? false : isPuntuable && isGrandPrix,
+        ...(format === "master" ? { format: "master" as const } : {}),
         has_super_tiebreak: hasSuperTiebreak,
         match_duration: matchDuration,
         match_duration_quarters_onwards: matchDurationQuarters,
@@ -163,6 +165,7 @@ export default function TournamentsPage() {
       setName("");
       setCategoryId(null);
       setIsPuntuable(false);
+      setFormat("standard");
       setIsGrandPrix(false);
       setIsCategorySpecific(false);
       setIsSuma13Damas(false);
@@ -186,6 +189,7 @@ export default function TournamentsPage() {
       setName(full.name);
       setCategoryId(full.category_id ?? null);
       setIsPuntuable(full.is_puntuable ?? false);
+      setFormat(full.format === "master" ? "master" : "standard");
       setIsGrandPrix(full.is_grand_prix ?? false);
       setIsCategorySpecific(full.is_category_specific ?? false);
       setIsSuma13Damas(full.is_suma_13_damas ?? false);
@@ -206,8 +210,12 @@ export default function TournamentsPage() {
       const updated = await tournamentsService.update(tournamentToEdit.id, {
         name: name.trim(),
         category_id: isSuma13Damas ? (suma13Category?.id ?? null) : (isCategorySpecific ? categoryId : null),
-        is_puntuable: isPuntuable,
-        is_grand_prix: isPuntuable && isGrandPrix,
+        is_puntuable: format === "master" ? false : isPuntuable,
+        is_grand_prix: format === "master" ? false : isPuntuable && isGrandPrix,
+        ...(tournamentToEdit.status === "draft" &&
+        (format === "master" || tournamentToEdit.format === "master")
+          ? { format }
+          : {}),
         is_category_specific: isCategorySpecific && !isSuma13Damas,
         is_suma_13_damas: isSuma13Damas,
         match_duration: matchDuration,
@@ -216,7 +224,7 @@ export default function TournamentsPage() {
         registration_fee: registrationFee,
       });
       setTournaments((prev) =>
-        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category_id: updated.category_id, category: updated.category, is_puntuable: updated.is_puntuable, is_grand_prix: updated.is_grand_prix, is_category_specific: updated.is_category_specific, is_suma_13_damas: updated.is_suma_13_damas } : t))
+        prev.map((t) => (t.id === updated.id ? { ...t, name: updated.name, category_id: updated.category_id, category: updated.category, is_puntuable: updated.is_puntuable, is_grand_prix: updated.is_grand_prix, is_category_specific: updated.is_category_specific, is_suma_13_damas: updated.is_suma_13_damas, format: updated.format } : t))
       );
       setEditDialogOpen(false);
       setTournamentToEdit(null);
@@ -312,6 +320,7 @@ export default function TournamentsPage() {
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-xs text-muted-foreground">
                     {t.category ?? "Sin categoría"} • {tournamentStatusLabel(t.status)}
+                    {t.format === "master" ? " • Master" : ""}
                   </div>
                 </button>
                 {t.status === "draft" && (
@@ -358,32 +367,63 @@ export default function TournamentsPage() {
                 placeholder="Ej: Torneo 7ma Mixto"
               />
             </div>
-            <div className="flex items-center justify-between space-x-2 py-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="create-puntuable">Puntuable</Label>
-                <p className="text-xs text-muted-foreground">Si suma para ranking o puntos</p>
-              </div>
-              <Switch
-                id="create-puntuable"
-                checked={isPuntuable}
-                onCheckedChange={(checked) => {
-                  setIsPuntuable(checked);
-                  if (!checked) setIsGrandPrix(false);
+            <div className="space-y-1">
+              <Label>Formato</Label>
+              <Select
+                value={format}
+                onValueChange={(value) => {
+                  const next = value === "master" ? "master" : "standard";
+                  setFormat(next);
+                  if (next === "master") {
+                    setIsPuntuable(false);
+                    setIsGrandPrix(false);
+                  }
                 }}
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Estándar</SelectItem>
+                  <SelectItem value="master">Master (8 parejas)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {format === "master"
+                  ? "2 zonas de 4, todos contra todos. Clasifican 2 y juegan semis cruzadas."
+                  : "El formato de siempre."}
+              </p>
             </div>
-            <div className="flex items-center justify-between space-x-2 py-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="create-grand-prix">Grand Prix</Label>
-                <p className="text-xs text-muted-foreground">Puntos de ranking ×2 (solo si es puntuable)</p>
-              </div>
-              <Switch
-                id="create-grand-prix"
-                checked={isGrandPrix}
-                onCheckedChange={setIsGrandPrix}
-                disabled={!isPuntuable}
-              />
-            </div>
+            {format !== "master" && (
+              <>
+                <div className="flex items-center justify-between space-x-2 py-2">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="create-puntuable">Puntuable</Label>
+                    <p className="text-xs text-muted-foreground">Si suma para ranking o puntos</p>
+                  </div>
+                  <Switch
+                    id="create-puntuable"
+                    checked={isPuntuable}
+                    onCheckedChange={(checked) => {
+                      setIsPuntuable(checked);
+                      if (!checked) setIsGrandPrix(false);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between space-x-2 py-2">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="create-grand-prix">Grand Prix</Label>
+                    <p className="text-xs text-muted-foreground">Puntos de ranking ×2 (solo si es puntuable)</p>
+                  </div>
+                  <Switch
+                    id="create-grand-prix"
+                    checked={isGrandPrix}
+                    onCheckedChange={setIsGrandPrix}
+                    disabled={!isPuntuable}
+                  />
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
                 <Label htmlFor="create-suma-13">Suma 13 damas</Label>
@@ -604,32 +644,64 @@ export default function TournamentsPage() {
                 placeholder="Ej: Torneo 7ma Mixto"
               />
             </div>
-            <div className="flex items-center justify-between space-x-2 py-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="edit-puntuable">Puntuable</Label>
-                <p className="text-xs text-muted-foreground">Si suma para ranking</p>
-              </div>
-              <Switch
-                id="edit-puntuable"
-                checked={isPuntuable}
-                onCheckedChange={(checked) => {
-                  setIsPuntuable(checked);
-                  if (!checked) setIsGrandPrix(false);
+            <div className="space-y-1">
+              <Label>Formato</Label>
+              <Select
+                value={format}
+                onValueChange={(value) => {
+                  const next = value === "master" ? "master" : "standard";
+                  setFormat(next);
+                  if (next === "master") {
+                    setIsPuntuable(false);
+                    setIsGrandPrix(false);
+                  }
                 }}
-              />
+                disabled={tournamentToEdit?.status !== "draft"}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Estándar</SelectItem>
+                  <SelectItem value="master">Master (8 parejas)</SelectItem>
+                </SelectContent>
+              </Select>
+              {tournamentToEdit?.status !== "draft" && (
+                <p className="text-xs text-muted-foreground">
+                  El formato se cambia solo mientras el torneo está en borrador.
+                </p>
+              )}
             </div>
-            <div className="flex items-center justify-between space-x-2 py-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="edit-grand-prix">Grand Prix</Label>
-                <p className="text-xs text-muted-foreground">Puntos de ranking ×2 (solo si es puntuable)</p>
-              </div>
-              <Switch
-                id="edit-grand-prix"
-                checked={isGrandPrix}
-                onCheckedChange={setIsGrandPrix}
-                disabled={!isPuntuable}
-              />
-            </div>
+            {format !== "master" && (
+              <>
+                <div className="flex items-center justify-between space-x-2 py-2">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="edit-puntuable">Puntuable</Label>
+                    <p className="text-xs text-muted-foreground">Si suma para ranking</p>
+                  </div>
+                  <Switch
+                    id="edit-puntuable"
+                    checked={isPuntuable}
+                    onCheckedChange={(checked) => {
+                      setIsPuntuable(checked);
+                      if (!checked) setIsGrandPrix(false);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between space-x-2 py-2">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="edit-grand-prix">Grand Prix</Label>
+                    <p className="text-xs text-muted-foreground">Puntos de ranking ×2 (solo si es puntuable)</p>
+                  </div>
+                  <Switch
+                    id="edit-grand-prix"
+                    checked={isGrandPrix}
+                    onCheckedChange={setIsGrandPrix}
+                    disabled={!isPuntuable}
+                  />
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between space-x-2 py-2">
               <div className="space-y-0.5">
                 <Label htmlFor="edit-suma-13">Suma 13 damas</Label>

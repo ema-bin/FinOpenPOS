@@ -21,6 +21,8 @@ export interface Tournament {
   is_grand_prix: boolean;
   is_category_specific: boolean;
   is_suma_13_damas: boolean;
+  /** standard = formato de siempre. master = 8 parejas y semis cruzadas. */
+  format?: "standard" | "master";
   start_date: string | null; // DATE
   end_date: string | null; // DATE
   status: TournamentStatus;
@@ -141,6 +143,7 @@ export interface CreateTournamentInput {
   is_grand_prix?: boolean;
   is_category_specific?: boolean;
   is_suma_13_damas?: boolean;
+  format?: "standard" | "master";
   start_date?: string | null;
   end_date?: string | null;
   has_super_tiebreak?: boolean;

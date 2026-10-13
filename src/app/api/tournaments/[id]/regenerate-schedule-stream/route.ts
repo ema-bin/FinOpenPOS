@@ -7,7 +7,9 @@ import {
   mergeBlockedCourtsByTournamentSlot,
   parseTournamentPhysicalSlotSelections,
 } from "@/lib/tournament-schedule-stream-payload";
+import { scheduleMastersRoundRobin } from "@/lib/masters-schedule";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
@@ -651,6 +653,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
               return;
             }
             
+            if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+              if (!tournamentSlots?.length) {
+                sendError(
+                  "Master necesita los horarios del torneo. Generálos en Equipos → Generar horarios."
+                );
+                return;
+              }
+              sendLog("Master: todos contra todos. No se usa el armado de zona de 4.");
+              schedulerResult = scheduleMastersRoundRobin({
+                matches: matchesPayload,
+                slots: tournamentSlots,
+                courtIds: scheduleConfig.courtIds,
+                matchDuration: matchDurationMinutes,
+                teamCannotPlaySlotIds,
+                blockedCourtIdsBySlotId: blockedCourtIdsByTournamentSlotId,
+              });
+            } else {
             schedulerResult = await scheduleGroupMatches(
               matchesPayload,
               scheduleConfig.days,
@@ -679,6 +698,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                   : {}),
               }
             );
+            }
 
             sendLog(`Algoritmo completado. Resultado: ${schedulerResult.success ? "éxito completo" : "parcial"}`);
             sendLog(`Matches asignados: ${schedulerResult.assignments.length}/${matchesPayload.length}`);
