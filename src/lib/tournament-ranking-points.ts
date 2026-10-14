@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import {
   applyPlayoffResultsToTeamPoints,
   buildPlayerTournamentPointRows,
@@ -39,6 +40,9 @@ export async function computeAndSaveTournamentRankingPoints(
     .single();
   if (tErr || !tournament) {
     throw new Error("Tournament not found");
+  }
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    return { saved: 0 };
   }
   if (!tournament.is_puntuable || tournament.category_id == null) {
     return { saved: 0 };

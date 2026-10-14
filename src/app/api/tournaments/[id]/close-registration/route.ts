@@ -7,6 +7,8 @@ import {
   sortTeamIdsWithZoneHeadFirst,
 } from "@/lib/group-zone-team-order";
 import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
+import { closeMastersRegistration } from "@/lib/masters-registration";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 
 type RouteParams = { params: { id: string } };
 
@@ -74,6 +76,14 @@ export async function POST(req: Request, { params }: RouteParams) {
       { error: "Groups already generated for this tournament" },
       { status: 400 }
     );
+  }
+
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    const masters = await closeMastersRegistration(supabase, user.id, tournamentId);
+    if (!masters.ok) {
+      return NextResponse.json({ error: masters.error }, { status: masters.status });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   // No se asignan horarios al cerrar la inscripción

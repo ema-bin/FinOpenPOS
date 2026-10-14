@@ -125,7 +125,13 @@ export default function SharePlayoffPreviewTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "category" | "is_puntuable" | "is_category_specific" | "status"
+    | "id"
+    | "name"
+    | "category"
+    | "is_puntuable"
+    | "is_category_specific"
+    | "status"
+    | "format"
   >;
 }) {
   const isDraft = tournament.status === "draft";
@@ -221,7 +227,7 @@ export default function SharePlayoffPreviewTab({
           tournamentName={tournament.name}
           tournamentCategory={tournament.category}
           isCategorySpecific={tournament.is_category_specific}
-          isPuntuable={tournament.is_puntuable}
+          isPuntuable={tournament.format !== "master" && tournament.is_puntuable}
           shareVariant="preview"
           layout={exportLayout ? BRACKET_SHARE_LAYOUT_CENTERED_EXPORT : undefined}
         />

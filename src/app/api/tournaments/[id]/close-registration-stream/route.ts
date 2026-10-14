@@ -15,6 +15,7 @@ import {
   sortTeamIdsWithZoneHeadFirst,
 } from "@/lib/group-zone-team-order";
 import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
 type RouteParams = { params: { id: string } };
@@ -38,6 +39,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (Number.isNaN(tournamentId)) {
       return new Response(
         JSON.stringify({ error: "Invalid id" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Un Master se cierra desde Equipos. Los horarios se generan en la revisión de horarios.",
+        }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }

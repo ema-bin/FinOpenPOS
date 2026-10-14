@@ -79,7 +79,7 @@ export default function ShareGroupScheduleTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific" | "format"
   >;
 }) {
   const scheduleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -298,7 +298,7 @@ export default function ShareGroupScheduleTab({
                         tournamentName={tournament.name}
                         tournamentCategory={tournament.category}
                         isCategorySpecific={tournament.is_category_specific}
-                        isPuntuable={tournament.is_puntuable}
+                        isPuntuable={tournament.format !== "master" && tournament.is_puntuable}
                       />
                       <p className="share-group-schedule-date">
                         {getDayShort(date)} — {formatDate(date)}

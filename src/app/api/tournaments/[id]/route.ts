@@ -55,8 +55,29 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       registration_deadline: body.registration_deadline !== undefined ? normalizeDate(body.registration_deadline) : undefined,
     };
 
-    if (body.is_grand_prix !== undefined || body.is_puntuable !== undefined) {
-      const existing = await repos.tournaments.findById(id);
+    if (body.format !== undefined) {
+      if (body.format !== "standard" && body.format !== "master") {
+        return NextResponse.json({ error: "Formato inválido" }, { status: 400 });
+      }
+      const existingForFormat = await repos.tournaments.findById(id);
+      if (!existingForFormat) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (existingForFormat.status !== "draft") {
+        delete normalizedBody.format;
+      }
+    }
+
+    const existing = await repos.tournaments.findById(id);
+    const nextFormat =
+      normalizedBody.format === "master" || normalizedBody.format === "standard"
+        ? normalizedBody.format
+        : existing?.format;
+
+    if (nextFormat === "master") {
+      normalizedBody.is_puntuable = false;
+      normalizedBody.is_grand_prix = false;
+    } else if (body.is_grand_prix !== undefined || body.is_puntuable !== undefined) {
       const puntuable =
         body.is_puntuable !== undefined ? Boolean(body.is_puntuable) : (existing?.is_puntuable ?? false);
       const grandPrix =

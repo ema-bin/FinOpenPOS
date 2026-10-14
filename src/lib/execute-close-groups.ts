@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CloseGroupsError } from "@/lib/close-groups-error";
+import { runMastersCloseGroups } from "@/lib/masters-playoffs";
 import { generatePlayoffs } from "@/lib/tournament-playoffs";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import {
   buildPlayoffScheduleSlots,
   parseExplicitPlayoffSlots,
@@ -8,15 +11,7 @@ import {
 
 import type { ScheduleConfig } from "@/models/dto/tournament";
 
-export class CloseGroupsError extends Error {
-  constructor(
-    message: string,
-    readonly status: number
-  ) {
-    super(message);
-    this.name = "CloseGroupsError";
-  }
-}
+export { CloseGroupsError };
 
 import type { TournamentMatch } from "@/models/db/tournament";
 import { assignPlayoffScheduleSlots } from "@/lib/assign-playoff-schedule-to-matches";
@@ -87,6 +82,11 @@ export async function runCloseGroups(
       "Playoffs already generated for this tournament",
       400
     );
+  }
+
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    await runMastersCloseGroups(supabase, userId, tournamentId, t, body);
+    return;
   }
 
   // 2) grupos

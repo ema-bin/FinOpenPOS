@@ -114,7 +114,7 @@ export default function ShareGroupStandingsTab({
 }: {
   tournament: Pick<
     TournamentDTO,
-    "id" | "name" | "category" | "is_puntuable" | "is_category_specific"
+    "id" | "name" | "category" | "is_puntuable" | "is_category_specific" | "format"
   >;
 }) {
   const groupRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -349,7 +349,7 @@ export default function ShareGroupStandingsTab({
                             tournamentName={tournament.name}
                             tournamentCategory={tournament.category}
                             isCategorySpecific={tournament.is_category_specific}
-                            isPuntuable={tournament.is_puntuable}
+                            isPuntuable={tournament.format !== "master" && tournament.is_puntuable}
                           />
                           <span
                             className={`share-group-schedule-zone ${getShareZoneBadgeClassName(zoneColorIndex)}`}

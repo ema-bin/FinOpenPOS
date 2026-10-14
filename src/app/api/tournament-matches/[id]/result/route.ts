@@ -1,11 +1,28 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validateMatchSets, validateSuperTiebreak } from "@/lib/match-validation";
+import { buildMastersStandingsInsertRows } from "@/lib/masters-tournament";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import {
   buildStandingsInsertRows,
   type StandingsMatchInput,
 } from "@/lib/tournament-group-standings";
+
+async function standingsRowsForGroup(
+  supabase: SupabaseClient,
+  tournamentId: number,
+  groupId: number,
+  userId: string,
+  teamIds: number[],
+  matches: StandingsMatchInput[]
+) {
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    return buildMastersStandingsInsertRows(groupId, userId, teamIds, matches);
+  }
+  return buildStandingsInsertRows(groupId, userId, teamIds, matches);
+}
 
 type RouteParams = { params: { id: string } };
 
@@ -485,7 +502,9 @@ export async function POST(req: Request, { params }: RouteParams) {
         .eq("tournament_group_id", match.tournament_group_id);
 
       if (!groupTeamsError && groupTeams) {
-        const standingsInsert = buildStandingsInsertRows(
+        const standingsInsert = await standingsRowsForGroup(
+          supabase,
+          match.tournament_id,
           match.tournament_group_id,
           user.id,
           groupTeams.map((gt) => gt.team_id),
@@ -865,7 +884,9 @@ export async function DELETE(req: Request, { params }: RouteParams) {
         .eq("tournament_group_id", match.tournament_group_id);
 
       if (!groupTeamsError && groupTeams) {
-        const standingsInsert = buildStandingsInsertRows(
+        const standingsInsert = await standingsRowsForGroup(
+          supabase,
+          match.tournament_id,
           match.tournament_group_id,
           user.id,
           groupTeams.map((gt) => gt.team_id),

@@ -52,6 +52,8 @@ import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restr
 
 import type { PlayerDTO } from "@/models/dto/player";
 import type { TeamDTO, TournamentDTO, GroupsApiResponse, TeamPlayer } from "@/models/dto/tournament";
+import { isMastersFormat } from "@/lib/tournament-format";
+import { MASTERS_TEAM_COUNT } from "@/lib/masters-tournament";
 import { tournamentsService, playersService } from "@/services";
 
 // Fetch functions para React Query
@@ -118,6 +120,7 @@ export default function TeamsTab({
     | "match_duration_quarters_onwards"
     | "is_puntuable"
     | "category_id"
+    | "format"
   >;
 }) {
   const queryClient = useQueryClient();
@@ -235,7 +238,9 @@ export default function TeamsTab({
 
   const currentYear = new Date().getFullYear();
   const canSeedByCategoryPoints =
-    Boolean(tournament.is_puntuable) && tournament.category_id != null;
+    !isMastersFormat(tournament.format) &&
+    Boolean(tournament.is_puntuable) &&
+    tournament.category_id != null;
   const { data: rankingForCategory } = useQuery<{
     rows: Array<{ player_id: number; total_points: number }>;
   }>({
@@ -733,6 +738,7 @@ export default function TeamsTab({
   };
 
   const matchCount = calculateMatchCount();
+  const isMasters = isMastersFormat(tournament.format);
 
   // Calcular información de grupos que se generarán
   const calculateGroupsInfo = useMemo(() => {
@@ -1006,7 +1012,11 @@ export default function TeamsTab({
                 <div>
                   <span className="text-muted-foreground">Zonas a generar:</span>{" "}
                   <span className="font-medium">
-                    {calculateGroupsInfo.totalGroups > 0 ? (
+                    {isMasters && tournament.status === "draft" && !hasGroups ? (
+                      activeTeams.length === MASTERS_TEAM_COUNT
+                        ? "2 zonas de 4, todos contra todos (12 partidos). Pasan los 2 primeros de cada zona."
+                        : `Master necesita 8 parejas (hay ${activeTeams.length}).`
+                    ) : calculateGroupsInfo.totalGroups > 0 ? (
                       <>
                         {calculateGroupsInfo.totalGroups} (
                         {calculateGroupsInfo.groupsOf3 > 0 && `${calculateGroupsInfo.groupsOf3} de 3`}

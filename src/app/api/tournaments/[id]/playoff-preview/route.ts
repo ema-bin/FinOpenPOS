@@ -6,7 +6,9 @@ import {
   computeGroupSizes,
 } from "@/lib/tournament-group-sizes";
 import { generatePlayoffs, type PlayoffMatch } from "@/lib/tournament-playoffs";
+import { loadMastersPlayoffBracket } from "@/lib/masters-playoffs";
 import { computeQualifiedTeamsFromStandings } from "@/lib/tournament-group-standings";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import type { ScheduleConfig, ScheduleDay } from "@/models/dto/tournament";
 import type { TournamentMatch } from "@/models/db/tournament";
 
@@ -185,6 +187,54 @@ export async function POST(req: Request, { params }: RouteParams) {
   const tournamentId = Number(params.id);
   if (Number.isNaN(tournamentId)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  }
+
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    const bodyForMasters = await req.json().catch(() => ({}));
+    const mastersSchedule: ScheduleConfig | undefined = bodyForMasters.days
+      ? {
+          days: bodyForMasters.days,
+          matchDuration: bodyForMasters.matchDuration || 60,
+          courtIds: bodyForMasters.courtIds || [],
+        }
+      : undefined;
+    const masters = await loadMastersPlayoffBracket(supabase, tournamentId);
+    if (!masters.ok) {
+      return NextResponse.json({ error: masters.error }, { status: masters.status });
+    }
+    const matches = masters.matches.map((match) => ({
+      ...match,
+      match_date: null,
+      start_time: null,
+      end_time: null,
+      court_id: null,
+      display_team1: match.team1_id
+        ? (masters.labels.get(match.team1_id) ?? null)
+        : match.source_team1,
+      display_team2: match.team2_id
+        ? (masters.labels.get(match.team2_id) ?? null)
+        : match.source_team2,
+    })) as PlayoffPreviewMatch[];
+    let slotsNeeded = 0;
+    let slotsAvailable = 0;
+    try {
+      const slotInfo = assignTimeSlots(matches, mastersSchedule);
+      slotsNeeded = slotInfo.slotsNeeded;
+      slotsAvailable = slotInfo.slotsAvailable;
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Error assigning slots" },
+        { status: 400 }
+      );
+    }
+    const response: PreviewResponse = {
+      matches,
+      slotsNeeded,
+      slotsAvailable,
+      placeholdersUsed: !masters.allGroupMatchesFinished,
+      projectedFromRegistration: masters.projectedFromRegistration,
+    };
+    return NextResponse.json(response);
   }
 
   const body = await req.json().catch(() => ({}));

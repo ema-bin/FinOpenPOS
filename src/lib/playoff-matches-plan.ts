@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadMastersPlayoffBracket } from "@/lib/masters-playoffs";
 import { generatePlayoffs } from "@/lib/tournament-playoffs";
+import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import {
   aggregateGroupStandingsFromMatches,
   computeQualifiedTeamsForGroup,
@@ -45,6 +47,16 @@ export async function buildPlayoffMatchesPlan(
   | { ok: true; matches: PlayoffBracketMatch[]; needingSchedule: number }
   | { ok: false; error: string }
 > {
+  if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
+    const masters = await loadMastersPlayoffBracket(supabase, tournamentId);
+    if (!masters.ok) return { ok: false, error: masters.error };
+    return {
+      ok: true,
+      matches: masters.matches,
+      needingSchedule: countPlayoffMatchesNeedingSchedule(masters.matches),
+    };
+  }
+
   const { data: groups, error: gError } = await supabase
     .from("tournament_groups")
     .select("id, name")

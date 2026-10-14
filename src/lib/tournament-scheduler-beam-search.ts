@@ -4,6 +4,10 @@
 import type { ScheduleDay, AvailableSchedule } from "@/models/dto/tournament";
 import type { GroupMatchPayload, Assignment, SchedulerResult, TimeSlot } from "./tournament-scheduler";
 import { calculateEndTime, generateTimeSlots } from "./tournament-scheduler";
+import {
+  isRoundRobinZoneMatches,
+  searchRoundRobinSlotAssignments,
+} from "./round-robin-group-schedule";
 
 // Patrones para grupos de 3 (ordenados por prioridad)
 const PATTERNS_3 = [
@@ -31,7 +35,13 @@ type Group = {
   matches: GroupMatchPayload[];
   teams: number[]; // IDs de los equipos
   size: 3 | 4; // Tamaño del grupo
+  /** 6 partidos con las dos parejas definidas. No usa los patrones de zona de 3 ni de 4. */
+  roundRobin?: boolean;
 };
+
+function slotsNeeded(group: Group): number {
+  return group.roundRobin ? group.matches.length : group.size;
+}
 
 // Estado de una solución parcial
 type State = {
@@ -141,6 +151,28 @@ function generateCandidates(
   maxCandidates: number,
   restrictedSlotIds?: Set<string>
 ): Array<{ slots: Slot[]; patternIndex: number; score: number }> {
+  if (group.roundRobin) {
+    const blocked = new Map<number, Set<string>>();
+    if (restrictedSlotIds && restrictedSlotIds.size > 0) {
+      for (let i = 0; i < group.matches.length; i++) blocked.set(i, restrictedSlotIds);
+    }
+    const found = searchRoundRobinSlotAssignments({
+      matches: group.matches,
+      teams: group.teams,
+      slots: availableSlots,
+      usedSlotIds,
+      matchDurationMs,
+      maxCandidates,
+      ...(blocked.size > 0 ? { blockedSlotIdsByMatch: blocked } : {}),
+    });
+    return found.map((slots) => {
+      const sorted = [...slots].sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+      const spanMinutes =
+        (sorted[sorted.length - 1].datetime.getTime() - sorted[0].datetime.getTime()) / 60000;
+      return { slots, patternIndex: 0, score: -spanMinutes };
+    });
+  }
+
   const candidates: Array<{ slots: Slot[]; patternIndex: number; score: number }> = [];
 
   // Filtrar slots disponibles (no usados y no restringidos para este grupo)
@@ -382,6 +414,18 @@ export async function scheduleGroupMatchesBeamSearch(
       if (match.team2_id !== null) teams.add(match.team2_id);
     }
 
+    if (isRoundRobinZoneMatches(matches)) {
+      const ordered = [...matches].sort((a, b) => (a.match_order ?? 0) - (b.match_order ?? 0));
+      groups.push({
+        groupId,
+        matches: ordered,
+        teams: Array.from(teams),
+        size: 3,
+        roundRobin: true,
+      });
+      continue;
+    }
+
     let groupSize: 3 | 4;
     if (matches.some(m => m.match_order !== undefined)) {
       groupSize = 4;
@@ -429,10 +473,12 @@ export async function scheduleGroupMatchesBeamSearch(
     };
   }
 
-  const groupsOf3 = groups.filter(g => g.size === 3).length;
-  const groupsOf4 = groups.filter(g => g.size === 4).length;
+  const roundRobinCount = groups.filter((g) => g.roundRobin).length;
+  const groupsOf3 = groups.filter((g) => g.size === 3 && !g.roundRobin).length;
+  const groupsOf4 = groups.filter((g) => g.size === 4).length;
   if (onLog) {
-    onLog(`📊 Encontrados ${groups.length} grupos para programar: ${groupsOf3} de 3, ${groupsOf4} de 4`);
+    const extra = roundRobinCount > 0 ? `, ${roundRobinCount} todos contra todos` : "";
+    onLog(`📊 Encontrados ${groups.length} grupos para programar: ${groupsOf3} de 3, ${groupsOf4} de 4${extra}`);
   }
 
   // 2. Generar slots
@@ -443,7 +489,7 @@ export async function scheduleGroupMatchesBeamSearch(
   }
 
   // Calcular slots necesarios
-  const requiredSlots = groups.reduce((sum, g) => sum + g.size, 0);
+  const requiredSlots = groups.reduce((sum, g) => sum + slotsNeeded(g), 0);
   if (timeSlots.length < requiredSlots) {
     return {
       success: false,
@@ -495,17 +541,50 @@ export async function scheduleGroupMatchesBeamSearch(
     if (!group) continue;
 
     const groupMatches = matchesByGroup.get(groupId) || [];
-    if (groupMatches.length !== group.size || slotIds.length !== group.size) continue;
+    const needed = slotsNeeded(group);
+    if (groupMatches.length !== needed || slotIds.length !== needed) continue;
 
-    // Ordenar slots por datetime para asignar en orden
+    // Ordenar slots por datetime para asignar en orden.
+    // Todos contra todos: el orden ya es el de group.matches, no se reordena.
     const assignedSlots = slotIds
       .map(id => slots.find(s => s.slotId === id))
-      .filter((s): s is Slot => s !== undefined)
-      .sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+      .filter((s): s is Slot => s !== undefined);
+    if (!group.roundRobin) {
+      assignedSlots.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
+    }
 
-    // Para grupos de 3: asignar en orden de matches
-    // Para grupos de 4: asignar según match_order (1,2,3,4)
-    if (group.size === 3) {
+    if (group.roundRobin) {
+      for (let i = 0; i < group.matches.length; i++) {
+        const match = group.matches[i];
+        const slot = assignedSlots[i];
+        if (!slot) continue;
+
+        const matchIdx = matchesPayload.findIndex(
+          (m) =>
+            m.tournament_group_id === match.tournament_group_id &&
+            m.team1_id === match.team1_id &&
+            m.team2_id === match.team2_id &&
+            (m.match_order ?? null) === (match.match_order ?? null)
+        );
+        if (matchIdx === -1) continue;
+
+        const originalSlotIndex = slot.index;
+        const courtId = courtIds[originalSlotIndex % courtIds.length];
+        const endTime = calculateEndTime(slot.startTime, matchDurationMinutes);
+        assignments.push({
+          matchIdx,
+          date: slot.date,
+          startTime: slot.startTime,
+          endTime,
+          slotIndex: originalSlotIndex,
+          courtId,
+        });
+        matchesPayload[matchIdx].match_date = slot.date;
+        matchesPayload[matchIdx].start_time = slot.startTime;
+        matchesPayload[matchIdx].end_time = endTime;
+        matchesPayload[matchIdx].court_id = courtId;
+      }
+    } else if (group.size === 3) {
       // Asignar cada match a un slot en orden
       for (let i = 0; i < 3; i++) {
         const match = groupMatches[i];

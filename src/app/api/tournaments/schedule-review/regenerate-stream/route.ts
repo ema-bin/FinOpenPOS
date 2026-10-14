@@ -631,22 +631,28 @@ export async function POST(req: NextRequest) {
         sendLog(
           `Scheduler completado: ${schedulerResult.assignments.length}/${matchesPayload.length} partidos asignados.`
         );
-        sendProgress(85, "Guardando asignaciones...");
 
-        const assignmentsByMatchIdx = new Map<
+        const assignmentByPendingIndex = new Map<
           number,
-          (typeof schedulerResult.assignments)[number]
+          { date: string; startTime: string; endTime: string; courtId: number }
         >();
         schedulerResult.assignments.forEach((assignment) => {
-          assignmentsByMatchIdx.set(assignment.matchIdx, assignment);
+          assignmentByPendingIndex.set(assignment.matchIdx, assignment);
         });
+
+        if (assignmentByPendingIndex.size === 0) {
+          sendError("No se pudieron asignar horarios para la corrida global.");
+          return;
+        }
+
+        sendProgress(85, "Guardando asignaciones...");
 
         let updatedCount = 0;
         let errorCount = 0;
 
         for (let idx = 0; idx < pendingMatches.length; idx++) {
           const match = pendingMatches[idx];
-          const assignment = assignmentsByMatchIdx.get(idx);
+          const assignment = assignmentByPendingIndex.get(idx);
           if (!assignment) continue;
 
           const { error: updateError } = await supabase

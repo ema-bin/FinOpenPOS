@@ -15,6 +15,7 @@ export interface TournamentDTO {
   is_grand_prix: boolean;
   is_category_specific: boolean;
   is_suma_13_damas: boolean;
+  format?: "standard" | "master";
   status: TournamentStatus;
   has_super_tiebreak: boolean;
   match_duration: number;
@@ -37,6 +38,7 @@ export interface TournamentListItem {
   is_grand_prix: boolean;
   is_category_specific: boolean;
   is_suma_13_damas: boolean;
+  format?: "standard" | "master";
   status: TournamentStatus;
 }
 
