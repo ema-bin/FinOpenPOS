@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -33,6 +33,9 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -44,7 +47,14 @@ import {
 } from "lucide-react";
 import type { Category } from "@/models/db/category";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
+import {
+  MASTER_FLYER_SUBSTITUTE_COUNT,
+  MASTER_QUALIFIER_COUNT,
+  splitMasterRanking,
+} from "@/lib/master-ranking-cutoff";
 import { toast } from "sonner";
+
+const MASTER_MIN_TOURNAMENTS_KEY = "pcp-ranking-master-min-tournaments";
 
 const ROUND_LABELS: Record<string, string> = {
   champion: "Campeón",
@@ -91,6 +101,7 @@ type PlayerBreakdownResponse = {
 
 export function RankingPuntuableSection() {
   const currentYear = new Date().getFullYear();
+  const [shareKind, setShareKind] = useState<"ranking" | "master">("ranking");
   const [sharing, setSharing] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -125,12 +136,33 @@ export function RankingPuntuableSection() {
   );
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [masterCutoffOn, setMasterCutoffOn] = useState(false);
+  const [minByCategory, setMinByCategory] = useState<Record<string, string>>({});
+  const [minsReady, setMinsReady] = useState(false);
 
   useEffect(() => {
     if (sortedCategories.length > 0 && selectedCategoryId == null) {
       setSelectedCategoryId(sortedCategories[0].id);
     }
   }, [sortedCategories, selectedCategoryId]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MASTER_MIN_TOURNAMENTS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        if (parsed && typeof parsed === "object") setMinByCategory(parsed);
+      }
+    } catch {
+      // Si el valor guardado no se puede leer, el mínimo queda vacío.
+    }
+    setMinsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!minsReady) return;
+    localStorage.setItem(MASTER_MIN_TOURNAMENTS_KEY, JSON.stringify(minByCategory));
+  }, [minByCategory, minsReady]);
 
   useEffect(() => {
     // Resetear preview cuando cambie la categoría
@@ -179,6 +211,15 @@ export function RankingPuntuableSection() {
   const effectiveCategoryId = selectedCategoryId ?? sortedCategories[0]?.id ?? null;
   const categoryName =
     sortedCategories.find((c) => c.id === effectiveCategoryId)?.name ?? "Categoría";
+  const minRaw =
+    effectiveCategoryId != null ? (minByCategory[String(effectiveCategoryId)] ?? "") : "";
+  const minTournaments = minRaw.trim() === "" ? null : Number(minRaw);
+  const minIsValid =
+    minTournaments != null && Number.isFinite(minTournaments) && minTournaments >= 0;
+  const masterSplit = useMemo(() => {
+    if (!masterCutoffOn || !minIsValid || !ranking?.rows) return null;
+    return splitMasterRanking(ranking.rows, minTournaments);
+  }, [masterCutoffOn, minIsValid, minTournaments, ranking?.rows]);
 
   const { data: breakdown, isLoading: loadingBreakdown } = useQuery<PlayerBreakdownResponse>(
     {
@@ -221,9 +262,13 @@ export function RankingPuntuableSection() {
     if (!previewDataUrl) setCanvasReady(false);
   }, [previewDataUrl]);
 
-  const handleShareRanking = async () => {
-    if (!ranking?.rows?.length) return;
+  const handleShareRanking = async (kind: "ranking" | "master" = "ranking") => {
+    const qualifiers = (masterSplit?.qualifiers ?? []).slice(0, MASTER_QUALIFIER_COUNT);
+    const flyerSubstitutes = (masterSplit?.substitutes ?? []).slice(0, MASTER_FLYER_SUBSTITUTE_COUNT);
+    const sourceRows = kind === "master" ? qualifiers : (ranking?.rows ?? []);
+    if (!sourceRows.length) return;
     try {
+      setShareKind(kind);
       setSharing(true);
       setShareMessage(null);
       setShareDialogOpen(true);
@@ -242,9 +287,9 @@ export function RankingPuntuableSection() {
       // Importante: dejar que el Dialog pinte el popup antes de empezar.
       await new Promise<void>((resolve) => setTimeout(resolve, 60));
 
-      const rows = ranking.rows;
+      const rows = sourceRows;
       const PAGE_SIZE = 20;
-      const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      const pages = kind === "master" ? 1 : Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
 
       setPageCount(pages);
       setPageIndex(0);
@@ -253,8 +298,9 @@ export function RankingPuntuableSection() {
       const perRowH = 60;
       const headerH = 360;
       const footerH = 140;
+      const masterCanvasH = 1350;
       // Fijamos altura por página para que todas las imágenes sean consistentes.
-      const outH = Math.max(2060, headerH + perRowH * PAGE_SIZE + footerH);
+      const outH = kind === "master" ? masterCanvasH : Math.max(2060, headerH + perRowH * PAGE_SIZE + footerH);
       const previewCssH = Math.round((outH / outW) * 320);
       setPreviewH(previewCssH);
 
@@ -304,7 +350,135 @@ export function RankingPuntuableSection() {
       const nextBlobs: Blob[] = [];
       const nextUrls: string[] = [];
 
-      for (let page = 0; page < pages; page++) {
+      const paintBackdrop = (
+        ctx: CanvasRenderingContext2D,
+        canvasW: number,
+        canvasH: number
+      ) => {
+        if (bgImg) {
+          const scale = Math.max(canvasW / bgImg.naturalWidth, canvasH / bgImg.naturalHeight);
+          const drawW = bgImg.naturalWidth * scale;
+          const drawH = bgImg.naturalHeight * scale;
+          const dx = (canvasW - drawW) / 2;
+          const dy = (canvasH - drawH) / 2;
+          ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+        } else {
+          const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+          grad.addColorStop(0, "#0b3a57");
+          grad.addColorStop(1, "#1a5f2e");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, canvasW, canvasH);
+        }
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(0, 0, canvasW, canvasH);
+      };
+
+      const posterName = (row: RankingRow) => {
+        const initial = (row.first_name ?? "").trim().charAt(0).toUpperCase();
+        const last = (row.last_name ?? "").trim();
+        if (last && initial) return `${last} ${initial}`;
+        return (last || row.first_name || "").trim();
+      };
+
+      if (kind === "master") {
+        const canvas = document.createElement("canvas");
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas no disponible");
+
+        paintBackdrop(ctx, outW, outH);
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 4;
+
+        const title = `MASTER ${categoryName}`.toUpperCase();
+        let titleSize = 108;
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${titleSize}px ${anton}`;
+        while (titleSize > 64 && ctx.measureText(title).width > outW - padX * 2) {
+          titleSize -= 4;
+          ctx.font = `bold ${titleSize}px ${anton}`;
+        }
+        ctx.fillText(title, outW / 2, 150);
+        ctx.font = `bold 42px ${anton}`;
+        ctx.fillText(String(currentYear), outW / 2, 210);
+
+        const paintHeading = (label: string, x: number, y: number, size: number) => {
+          ctx.font = `bold ${size}px ${anton}`;
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "left";
+          ctx.fillText(label, x, y);
+          const width = ctx.measureText(label).width;
+          ctx.shadowBlur = 0;
+          ctx.fillRect(x, y + 10, width, 5);
+          ctx.shadowBlur = 18;
+        };
+
+        const paintPosterLine = (
+          row: RankingRow,
+          order: number,
+          x: number,
+          y: number,
+          maxW: number,
+          size: number
+        ) => {
+          const name = posterName(row).toUpperCase();
+          const points = String(row.total_points);
+          ctx.font = `bold ${size}px ${montserrat}`;
+          const prefix = `${order}- `;
+          const suffix = ` ${points}`;
+          const budget = maxW - ctx.measureText(prefix).width - ctx.measureText(suffix).width;
+          const safeName = truncate(ctx, name, Math.max(40, budget), `bold ${size}px ${montserrat}`);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "left";
+          ctx.fillText(`${prefix}${safeName}${suffix}`, x, y);
+        };
+
+        const leftRows = qualifiers.slice(0, 8);
+        const rightRows = qualifiers.slice(8, 16);
+        const colGap = 40;
+        const colW = (outW - padX * 2 - colGap) / 2;
+        const leftX = padX;
+        const rightX = padX + colW + colGap;
+        const rowH = 52;
+        const listTop = 348;
+
+        paintHeading("CLASIFICADOS", padX, 278, 54);
+        leftRows.forEach((row, index) => {
+          paintPosterLine(row, index + 1, leftX, listTop + index * rowH, colW, 32);
+        });
+        rightRows.forEach((row, index) => {
+          paintPosterLine(row, index + 9, rightX, listTop + index * rowH, colW, 32);
+        });
+
+        if (flyerSubstitutes.length > 0) {
+          const substitutesY = listTop + 8 * rowH + 28;
+          paintHeading("SUPLENTES", padX, substitutesY, 46);
+          flyerSubstitutes.forEach((row, index) => {
+            paintPosterLine(
+              row,
+              index + 1,
+              padX,
+              substitutesY + 58 + index * 44,
+              outW - padX * 2,
+              28
+            );
+          });
+        }
+
+        const blob: Blob | null = await new Promise((resolve) =>
+          canvas.toBlob((b) => resolve(b), "image/png", 1.0)
+        );
+        if (!blob) throw new Error("Error generando la imagen");
+        const url = URL.createObjectURL(blob);
+        nextBlobs.push(blob);
+        nextUrls.push(url);
+        setPageBlobs([...nextBlobs]);
+        setPageImgUrls([...nextUrls]);
+        setCanvasReady(true);
+      } else for (let page = 0; page < pages; page++) {
         const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
         const canvas = document.createElement("canvas");
@@ -346,7 +520,7 @@ export function RankingPuntuableSection() {
         ctx.font = `bold 78px ${anton}`;
         ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
-        ctx.fillText(`RANKING PUNTUABLE`, outW / 2, 185);
+        ctx.fillText("RANKING PUNTUABLE", outW / 2, 185);
 
         ctx.font = `bold 62px ${anton}`;
         ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -500,22 +674,77 @@ export function RankingPuntuableSection() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center gap-2 pb-2">
+              <Switch
+                id="master-cutoff"
+                checked={masterCutoffOn}
+                onCheckedChange={setMasterCutoffOn}
+              />
+              <Label htmlFor="master-cutoff">Clasificados al Master</Label>
+            </div>
+            {masterCutoffOn && (
+              <div className="space-y-2">
+                <Label htmlFor="master-min-tournaments">Más de</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="master-min-tournaments"
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    className="w-20"
+                    value={minRaw}
+                    onChange={(event) => {
+                      if (effectiveCategoryId == null) return;
+                      const value = event.target.value;
+                      setMinByCategory((current) => ({
+                        ...current,
+                        [String(effectiveCategoryId)]: value,
+                      }));
+                    }}
+                  />
+                  <span className="text-sm text-muted-foreground">torneos</span>
+                </div>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">Año {currentYear}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-              onClick={handleShareRanking}
-              disabled={loadingRanking || sharing || !ranking?.rows?.length}
-            >
-              {sharing ? (
-                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Share2Icon className="h-4 w-4 mr-2" />
+            <div className="ml-auto flex flex-wrap gap-2">
+              {masterCutoffOn && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleShareRanking("master")}
+                  disabled={
+                    loadingRanking ||
+                    sharing ||
+                    !minIsValid ||
+                    !masterSplit?.qualifiers.length
+                  }
+                >
+                  {sharing && shareKind === "master" ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Share2Icon className="h-4 w-4 mr-2" />
+                  )}
+                  Compartir clasificados
+                </Button>
               )}
-              Compartir ranking
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleShareRanking("ranking")}
+                disabled={loadingRanking || sharing || !ranking?.rows?.length}
+              >
+                {sharing && shareKind === "ranking" ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Share2Icon className="h-4 w-4 mr-2" />
+                )}
+                Compartir ranking
+              </Button>
+            </div>
           </div>
           <Dialog
             open={shareDialogOpen}
@@ -539,9 +768,15 @@ export function RankingPuntuableSection() {
           >
             <DialogContent className="max-w-lg p-0 overflow-visible">
               <DialogHeader className="px-4 pt-4 pb-2">
-                <DialogTitle>Compartir ranking puntuable</DialogTitle>
+                <DialogTitle>
+                  {shareKind === "master"
+                    ? "Compartir clasificados"
+                    : "Compartir ranking puntuable"}
+                </DialogTitle>
                 <DialogDescription>
-                  Copiá la imagen para compartir en redes con el ranking de tu categoría.
+                  {shareKind === "ranking"
+                    ? "Copiá la imagen para compartir en redes con el ranking de tu categoría."
+                    : `Una sola hoja: clasificados en dos columnas y hasta ${MASTER_FLYER_SUBSTITUTE_COUNT} suplentes abajo.`}
                 </DialogDescription>
               </DialogHeader>
 
@@ -730,11 +965,25 @@ export function RankingPuntuableSection() {
             </DialogContent>
           </Dialog>
 
+          {masterCutoffOn && (
+            <p className="text-sm text-muted-foreground">
+              {minIsValid && masterSplit
+                ? `Entran ${masterSplit.qualifiers.length} de ${MASTER_QUALIFIER_COUNT} en ${categoryName}. Suplentes: ${masterSplit.substitutes.length}.`
+                : `Entran los primeros ${MASTER_QUALIFIER_COUNT} de ${categoryName} con más torneos que este mínimo. El resto que también llega queda como suplente.`}
+            </p>
+          )}
           {loadingRanking ? (
             <div className="flex items-center justify-center py-12">
               <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : ranking && ranking.rows.length > 0 ? (
+            masterSplit &&
+            masterSplit.qualifiers.length === 0 &&
+            masterSplit.substitutes.length === 0 ? (
+              <p className="py-8 text-center text-muted-foreground">
+                Nadie en {categoryName} supera {minTournaments} torneos en {currentYear}.
+              </p>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -744,33 +993,62 @@ export function RankingPuntuableSection() {
                   <TableHead className="text-right text-base w-28 pr-2 pl-0">
                     Torneos
                   </TableHead>
+                  {masterSplit && <TableHead className="w-28 text-base">Master</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {ranking.rows.map((row) => (
-                  <TableRow key={row.player_id}>
-                    <TableCell className="font-medium text-base">
-                      {row.position}
-                    </TableCell>
-                    <TableCell className="text-base min-w-[300px]">
-                      <button
-                        type="button"
-                        className="text-left cursor-pointer hover:underline underline-offset-2 text-foreground"
-                        onClick={() => setBreakdownPlayer(row)}
-                      >
-                        {row.first_name} {row.last_name}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right text-base w-24 pr-2">
-                      {row.total_points}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground text-base w-28 pr-2 pl-0">
-                      {row.tournaments_played}
-                    </TableCell>
-                  </TableRow>
+                {(masterSplit
+                  ? [
+                      ...masterSplit.qualifiers.map((row) => ({ row, role: "entra" as const })),
+                      ...masterSplit.substitutes.map((row) => ({ row, role: "suplente" as const })),
+                    ]
+                  : ranking.rows.map((row) => ({ row, role: null }))
+                ).map(({ row, role }, index, list) => (
+                  <Fragment key={row.player_id}>
+                    {role === "suplente" && list[index - 1]?.role === "entra" && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="bg-muted/50 py-2 text-sm font-medium text-muted-foreground"
+                        >
+                          Suplentes
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell className="font-medium text-base">
+                        {row.position}
+                      </TableCell>
+                      <TableCell className="text-base min-w-[300px]">
+                        <button
+                          type="button"
+                          className="text-left cursor-pointer hover:underline underline-offset-2 text-foreground"
+                          onClick={() => setBreakdownPlayer(row)}
+                        >
+                          {row.first_name} {row.last_name}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right text-base w-24 pr-2">
+                        {row.total_points}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground text-base w-28 pr-2 pl-0">
+                        {row.tournaments_played}
+                      </TableCell>
+                      {masterSplit && (
+                        <TableCell>
+                          {role === "entra" ? (
+                            <Badge>Entra</Badge>
+                          ) : (
+                            <Badge variant="secondary">Suplente</Badge>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
+            )
           ) : (
             <p className="py-8 text-center text-muted-foreground">
               No hay puntos registrados para {categoryName} en {currentYear}.
