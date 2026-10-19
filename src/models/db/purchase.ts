@@ -28,6 +28,8 @@ export interface CreatePurchaseInput {
   total_amount?: number;
   status?: PurchaseStatus;
   notes?: string | null;
+  /** Si viene, se guarda como fecha de la compra en lugar del momento del alta. */
+  created_at?: string;
 }
 
 export interface CreatePurchaseItemInput {

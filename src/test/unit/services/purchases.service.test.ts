@@ -17,6 +17,7 @@ describe("PurchasesService (services)", () => {
       paymentMethodId: 2,
       amount: 100,
       notes: "test",
+      purchaseDate: "2026-10-19",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -27,6 +28,7 @@ describe("PurchasesService (services)", () => {
           paymentMethodId: 2,
           amount: 100,
           notes: "test",
+          purchaseDate: "2026-10-19",
         }),
       })
     );
