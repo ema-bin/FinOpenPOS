@@ -52,6 +52,7 @@ class PurchasesService {
     paymentMethodId: number;
     amount: number;
     notes?: string | null;
+    purchaseDate?: string;
   }): Promise<PurchaseDTO> {
     const response = await fetch(`${this.baseUrl}/quick-purchase`, {
       method: "POST",

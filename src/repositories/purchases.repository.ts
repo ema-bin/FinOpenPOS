@@ -130,6 +130,7 @@ export class PurchasesRepository extends BaseRepository {
         status: input.status ?? "pending",
         notes: input.notes ?? null,
         user_uid: this.userId,
+        ...(input.created_at ? { created_at: input.created_at } : {}),
       })
       .select(
         `
@@ -321,6 +322,7 @@ export class PurchasesRepository extends BaseRepository {
           status: "completed",
           payment_method_id: input.payment_method_id,
           description: `Purchase #${purchase.id} from ${supplier.name} (${paymentMethod.name})`,
+          ...(input.created_at ? { created_at: input.created_at } : {}),
         })
         .select("id")
         .single();

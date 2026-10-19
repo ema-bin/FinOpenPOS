@@ -19,6 +19,13 @@ import type { PaymentMethodNestedDTO } from "@/models/dto/payment-method";
 import { purchasesService } from "@/services";
 import { PaymentMethodSelector } from "@/components/payment-method-selector/PaymentMethodSelector";
 
+function todayInputValue(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 type QuickPurchaseDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,11 +45,13 @@ export function QuickPurchaseDialog({
   >("none");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(todayInputValue);
 
   const resetForm = () => {
     setSelectedPaymentMethodId("none");
     setAmount("");
     setNotes("");
+    setPurchaseDate(todayInputValue());
   };
 
   const mutation = useMutation({
@@ -58,6 +67,7 @@ export function QuickPurchaseDialog({
         paymentMethodId: selectedPaymentMethodId,
         amount: parsed,
         notes: notes.trim() || undefined,
+        purchaseDate,
       });
     },
     onSuccess: async (purchase) => {
@@ -92,6 +102,17 @@ export function QuickPurchaseDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="quick-purchase-date">Fecha</Label>
+            <Input
+              id="quick-purchase-date"
+              type="date"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              disabled={mutation.isPending}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="quick-purchase-amount">Monto</Label>
             <Input
@@ -141,7 +162,8 @@ export function QuickPurchaseDialog({
             disabled={
               mutation.isPending ||
               selectedPaymentMethodId === "none" ||
-              !amount.trim()
+              !amount.trim() ||
+              !purchaseDate
             }
           >
             {mutation.isPending ? (

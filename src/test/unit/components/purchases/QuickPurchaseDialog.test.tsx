@@ -29,6 +29,7 @@ describe("QuickPurchaseDialog (components)", () => {
     expect(screen.getByText("Compra rápida")).toBeInTheDocument();
     expect(screen.getByText("Efectivo")).toBeInTheDocument();
     expect(screen.getByLabelText(/Monto/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Fecha/i)).toBeInTheDocument();
   });
 
   it("deshabilita registrar sin monto", () => {

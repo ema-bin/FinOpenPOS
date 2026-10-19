@@ -7,6 +7,7 @@ import {
   resolveQuickPurchaseSupplier,
 } from "@/lib/quick-purchase-entities";
 import { roundMoney } from "@/lib/order-payment-helpers";
+import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
 
 /** Compra rápida: solo monto + método de pago → proveedor/producto "Varios". */
 export async function POST(request: Request) {
@@ -18,6 +19,10 @@ export async function POST(request: Request) {
     const rawAmount = body.amount ?? body.total_amount;
     const amount = roundMoney(Number(rawAmount));
     const notesInput = typeof body.notes === "string" ? body.notes.trim() : "";
+    const purchaseDate = quickPurchaseCreatedAt(body.purchaseDate ?? body.purchase_date);
+    if (!purchaseDate.ok) {
+      return NextResponse.json({ error: purchaseDate.error }, { status: 400 });
+    }
 
     if (!paymentMethodId || Number.isNaN(paymentMethodId)) {
       return NextResponse.json(
@@ -63,6 +68,7 @@ export async function POST(request: Request) {
       supplier_id: supplier.id,
       payment_method_id: paymentMethodId,
       notes,
+      ...(purchaseDate.createdAt ? { created_at: purchaseDate.createdAt } : {}),
       items: [
         {
           productId: product.id,
