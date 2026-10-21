@@ -61,7 +61,8 @@ class CourtSlotsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
-      throw new Error("Error updating court slot");
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Error updating court slot");
     }
     return response.json();
   }

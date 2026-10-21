@@ -1,5 +1,5 @@
 // src/models/db/payment-method.ts
-export type PaymentScope = "BAR" | "COURT" | "BOTH";
+export type PaymentScope = "BAR" | "COURT" | "BOTH" | "CLASSES";
 
 export interface PaymentMethodDB {
   id: number;

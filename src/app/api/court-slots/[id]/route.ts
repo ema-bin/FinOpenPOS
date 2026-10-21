@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
+import { classBlockForSlot } from '@/lib/class-occupancy';
 
 type Params = { params: { id: string } };
 
@@ -71,8 +72,37 @@ export async function PATCH(request: Request, { params }: Params) {
       );
     }
 
+    const current = await repos.courtSlots.findById(slotId);
+    if (!current) {
+      return NextResponse.json({ error: "Court slot not found" }, { status: 404 });
+    }
+
+    const paymentKeys = [
+      "player1_payment_method_id",
+      "player2_payment_method_id",
+      "player3_payment_method_id",
+      "player4_payment_method_id",
+    ];
+    const chargesTurno =
+      updatePayload.was_played === true ||
+      paymentKeys.some((key) => key in updatePayload && updatePayload[key] != null);
+    if (chargesTurno) {
+      const occupancy = await repos.classes.listOccupancy(current.slot_date);
+      const block = classBlockForSlot(current, occupancy);
+      if (block) {
+        return NextResponse.json(
+          { error: `Esa cancha está ocupada por una clase (${block.label})` },
+          { status: 409 }
+        );
+      }
+    }
+
     const slot = await repos.courtSlots.update(slotId, updatePayload);
-    return NextResponse.json(slot);
+    const occupancy = await repos.classes.listOccupancy(slot.slot_date);
+    return NextResponse.json({
+      ...slot,
+      class_block: classBlockForSlot(slot, occupancy),
+    });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

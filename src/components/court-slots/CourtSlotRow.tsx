@@ -45,14 +45,22 @@ export function CourtSlotRow({
   hasChanges,
   isSaving,
 }: CourtSlotRowProps) {
+  const classBlock = slot.class_block;
   return (
     <TableRow 
       key={slot.id}
-      className={hasChanges ? "bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-l-yellow-500" : ""}
+      className={
+        classBlock
+          ? "bg-sky-50 dark:bg-sky-950/30"
+          : hasChanges
+            ? "bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-l-yellow-500"
+            : ""
+      }
     >
       <TableCell className="text-center">
         <Checkbox
           checked={slot.was_played}
+          disabled={Boolean(classBlock)}
           onCheckedChange={(checked) =>
             onUpdate(slot.id, {
               was_played: Boolean(checked),
@@ -78,6 +86,12 @@ export function CourtSlotRow({
         {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
       </TableCell>
 
+      {classBlock ? (
+        <TableCell colSpan={4} className="text-sm font-medium text-sky-950 dark:text-sky-100">
+          Clase · {classBlock.label}
+        </TableCell>
+      ) : (
+      <>
       <TableCell className="min-w-[160px]">
         <PlayerPaymentSelect
           value={slot.was_played ? slot.player1_payment_method?.id : null}
@@ -129,6 +143,8 @@ export function CourtSlotRow({
           disabled={!slot.was_played}
         />
       </TableCell>
+      </>
+      )}
 
       <TableCell>
         {hasChanges && (

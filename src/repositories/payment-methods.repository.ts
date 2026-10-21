@@ -11,7 +11,9 @@ export class PaymentMethodsRepository extends BaseRepository {
       .from("payment_methods")
       .select("id, name, scope, is_active, created_at");
 
-    if (options.scope) {
+    if (options.scope === "CLASSES") {
+      query = query.eq("scope", "CLASSES");
+    } else if (options.scope) {
       query = query.or(`scope.eq.${options.scope},scope.eq.BOTH`);
     }
 
@@ -25,7 +27,9 @@ export class PaymentMethodsRepository extends BaseRepository {
       throw new Error(`Failed to fetch payment methods: ${error.message}`);
     }
 
-    return (data ?? []) as PaymentMethodDB[];
+    const rows = (data ?? []) as PaymentMethodDB[];
+    if (!options.scope) return rows.filter((row) => row.scope !== "CLASSES");
+    return rows;
   }
 
   /**
