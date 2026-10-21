@@ -127,19 +127,34 @@ export class ClassesRepository extends BaseRepository {
       }
     }
 
-    const methodsQuery = this.supabase
+    if (hasAccount) {
+      const { data: methods, error: listError } = await this.supabase
+        .from("payment_methods")
+        .select("id, name, account")
+        .eq("user_uid", this.userId)
+        .eq("scope", "CLASSES")
+        .eq("is_active", true)
+        .order("name");
+      if (listError) throw this.fail(listError);
+      return (methods ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        account: row.account,
+      }));
+    }
+
+    const { data: methods, error: listError } = await this.supabase
       .from("payment_methods")
-      .select(hasAccount ? "id, name, account" : "id, name")
+      .select("id, name")
       .eq("user_uid", this.userId)
       .eq("scope", "CLASSES")
       .eq("is_active", true)
       .order("name");
-    const { data: methods, error: listError } = await methodsQuery;
     if (listError) throw this.fail(listError);
     return (methods ?? []).map((row) => ({
-      id: row.id as number,
-      name: row.name as string,
-      account: "account" in row ? ((row.account as string | null) ?? null) : null,
+      id: row.id,
+      name: row.name,
+      account: null,
     }));
   }
 
