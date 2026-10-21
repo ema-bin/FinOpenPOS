@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   "products.manage": { label: "Productos, categorías y stock", group: "Compras" },
   "courts.operate": { label: "Turnos de canchas", group: "Canchas" },
   "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas" },
+  "classes.manage": { label: "Clases", group: "Clases" },
   "tournaments.manage": { label: "Torneos", group: "Torneos" },
   "players.manage": { label: "Pantalla de clientes (editar y borrar)", group: "Clientes" },
   "advertisements.manage": { label: "Publicidades", group: "Publicidades" },

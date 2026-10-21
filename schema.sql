@@ -2,6 +2,15 @@
 -- RESET (para desarrollo)
 -- =========================================================
 
+DROP TABLE IF EXISTS class_month_closures;
+DROP TABLE IF EXISTS class_charges;
+DROP TABLE IF EXISTS class_session_players;
+DROP TABLE IF EXISTS class_sessions;
+DROP TABLE IF EXISTS class_enrollments;
+DROP TABLE IF EXISTS class_schedules;
+DROP TABLE IF EXISTS class_professor_rates;
+DROP TABLE IF EXISTS class_professors;
+
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS role_permissions;
 DROP TABLE IF EXISTS roles;
@@ -54,13 +63,14 @@ DROP TYPE IF EXISTS payment_scope;
 -- PAYMENT METHODS (Efectivo / Transferencia / QR por usuario)
 -- =========================================================
 
-CREATE TYPE payment_scope AS ENUM ('BAR', 'COURT', 'BOTH');
+CREATE TYPE payment_scope AS ENUM ('BAR', 'COURT', 'BOTH', 'CLASSES');
 
 CREATE TABLE payment_methods (
     id         BIGSERIAL PRIMARY KEY,
     user_uid   UUID NOT NULL,
     name       VARCHAR(50) NOT NULL,
     scope      payment_scope NOT NULL DEFAULT 'BAR', -- dónde se usa
+    account    TEXT, -- alias o cuenta para mostrar en recordatorios
     is_active  BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pm_unique_per_user UNIQUE (user_uid, name)
@@ -1031,3 +1041,110 @@ INSERT INTO whatsapp_message_templates (kind, name, body) VALUES
 -- ROLES Y PERMISOS: correr scripts/add-roles-permissions.sql a continuación
 -- (tablas, roles iniciales, RLS y custom_access_token_hook; es idempotente).
 -- =========================================================
+
+-- =========================================================
+-- CLASES (profesor, horario fijo, sesión del día y cobro mensual)
+-- =========================================================
+
+CREATE TABLE class_professors (
+    id                BIGSERIAL PRIMARY KEY,
+    user_uid          UUID NOT NULL,
+    name              VARCHAR(100) NOT NULL,
+    phone             VARCHAR(30),
+    payment_method_id BIGINT REFERENCES payment_methods(id),
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE class_professor_rates (
+    id              BIGSERIAL PRIMARY KEY,
+    user_uid        UUID NOT NULL,
+    professor_id    BIGINT NOT NULL REFERENCES class_professors(id) ON DELETE CASCADE,
+    weekly_count    SMALLINT NOT NULL CHECK (weekly_count >= 1),
+    monthly_amount  NUMERIC(10, 2) NOT NULL CHECK (monthly_amount >= 0),
+    UNIQUE (professor_id, weekly_count)
+);
+
+CREATE TABLE class_schedules (
+    id                BIGSERIAL PRIMARY KEY,
+    user_uid          UUID NOT NULL,
+    professor_id      BIGINT NOT NULL REFERENCES class_professors(id),
+    court_id          BIGINT NOT NULL REFERENCES courts(id),
+    weekday           SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    start_time        TIME NOT NULL,
+    duration_minutes  SMALLINT NOT NULL DEFAULT 60 CHECK (duration_minutes > 0),
+    name              VARCHAR(100),
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE class_enrollments (
+    id           BIGSERIAL PRIMARY KEY,
+    user_uid     UUID NOT NULL,
+    schedule_id  BIGINT NOT NULL REFERENCES class_schedules(id) ON DELETE CASCADE,
+    player_id    BIGINT NOT NULL REFERENCES players(id),
+    started_on   DATE NOT NULL DEFAULT CURRENT_DATE,
+    ended_on     DATE,
+    CHECK (ended_on IS NULL OR ended_on >= started_on)
+);
+
+CREATE UNIQUE INDEX class_enrollments_one_open
+    ON class_enrollments (schedule_id, player_id)
+    WHERE ended_on IS NULL;
+
+CREATE TABLE class_sessions (
+    id                 BIGSERIAL PRIMARY KEY,
+    user_uid           UUID NOT NULL,
+    schedule_id        BIGINT NOT NULL REFERENCES class_schedules(id) ON DELETE CASCADE,
+    session_date       DATE NOT NULL,
+    court_id           BIGINT NOT NULL REFERENCES courts(id),
+    start_time         TIME NOT NULL,
+    end_time           TIME NOT NULL,
+    professor_id       BIGINT NOT NULL REFERENCES class_professors(id),
+    status             VARCHAR(20) NOT NULL DEFAULT 'scheduled'
+                         CHECK (status IN ('scheduled', 'cancelled')),
+    roster_customized  BOOLEAN NOT NULL DEFAULT FALSE,
+    detached           BOOLEAN NOT NULL DEFAULT FALSE,
+    UNIQUE (schedule_id, session_date)
+);
+
+CREATE INDEX idx_class_sessions_date ON class_sessions (session_date);
+CREATE INDEX idx_class_sessions_court_date ON class_sessions (court_id, session_date);
+
+CREATE TABLE class_session_players (
+    id         BIGSERIAL PRIMARY KEY,
+    user_uid   UUID NOT NULL,
+    session_id BIGINT NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+    player_id  BIGINT NOT NULL REFERENCES players(id),
+    UNIQUE (session_id, player_id)
+);
+
+CREATE TABLE class_charges (
+    id                 BIGSERIAL PRIMARY KEY,
+    user_uid           UUID NOT NULL,
+    player_id          BIGINT NOT NULL REFERENCES players(id),
+    professor_id       BIGINT NOT NULL REFERENCES class_professors(id),
+    year_month         CHAR(7) NOT NULL,
+    weekly_count       SMALLINT NOT NULL CHECK (weekly_count >= 1),
+    amount             NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+    professor_share    NUMERIC(10, 2),
+    partners_share     NUMERIC(10, 2),
+    emanuel_share      NUMERIC(10, 2),
+    payment_method_id  BIGINT REFERENCES payment_methods(id),
+    status             VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending', 'paid')),
+    paid_at            TIMESTAMP,
+    transaction_id     BIGINT REFERENCES transactions(id),
+    UNIQUE (user_uid, player_id, professor_id, year_month)
+);
+
+CREATE INDEX idx_class_charges_month ON class_charges (year_month);
+
+CREATE TABLE class_month_closures (
+    id            BIGSERIAL PRIMARY KEY,
+    user_uid      UUID NOT NULL,
+    professor_id  BIGINT NOT NULL REFERENCES class_professors(id),
+    year_month    CHAR(7) NOT NULL,
+    closed_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_uid, professor_id, year_month)
+);

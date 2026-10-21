@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { classBlockForSlot } from "@/lib/class-occupancy";
 
 export async function GET(request: Request) {
   try {
@@ -22,7 +23,13 @@ export async function GET(request: Request) {
     }
 
     const slots = await repos.courtSlots.findByDate(slotDate);
-    return NextResponse.json(slots);
+    const occupancy = await repos.classes.listOccupancy(slotDate);
+    return NextResponse.json(
+      slots.map((slot) => ({
+        ...slot,
+        class_block: classBlockForSlot(slot, occupancy),
+      }))
+    );
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -34,6 +34,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/suppliers", requirement: anyOf("purchases.manage") },
   { prefix: "/admin/products", requirement: anyOf("products.manage") },
   { prefix: "/admin/court-slots", requirement: anyOf("courts.operate") },
+  { prefix: "/admin/classes", requirement: anyOf("classes.manage") },
   { prefix: "/admin/tournaments", requirement: anyOf("tournaments.manage") },
   { prefix: "/admin/players", requirement: anyOf("players.manage") },
   { prefix: "/admin/advertisements", requirement: anyOf("advertisements.manage") },
@@ -45,6 +46,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
 export const LANDING_PAGES: ReadonlyArray<{ path: string; permission: Permission }> = [
   { path: "/admin", permission: "dashboard.view" },
   { path: "/admin/court-slots", permission: "courts.operate" },
+  { path: "/admin/classes", permission: "classes.manage" },
   { path: "/admin/orders", permission: "sales.operate" },
   { path: "/admin/tournaments", permission: "tournaments.manage" },
   { path: "/admin/players", permission: "players.manage" },
@@ -81,7 +83,7 @@ export function firstAllowedPage(permissions: readonly Permission[]): string | n
 // APIs (/api/...). Las claves usan la misma forma que las carpetas de src/app/api.
 // ---------------------------------------------------------------------------
 
-const PLAYERS_READ = anyOf("players.manage", "sales.operate", "tournaments.manage");
+const PLAYERS_READ = anyOf("players.manage", "sales.operate", "tournaments.manage", "classes.manage");
 const PAYMENT_METHODS_READ = anyOf(
   "sales.operate",
   "balance.manage",
@@ -89,7 +91,8 @@ const PAYMENT_METHODS_READ = anyOf(
   "courts.operate",
   "tournaments.manage"
 );
-const COURTS_READ = anyOf("courts.operate", "courts.pricing", "tournaments.manage");
+const COURTS_READ = anyOf("courts.operate", "courts.pricing", "tournaments.manage", "classes.manage");
+const CLASSES = anyOf("classes.manage");
 const PRODUCTS_READ = anyOf("sales.operate", "purchases.manage", "products.manage");
 const CATEGORIES_READ = anyOf("sales.operate", "products.manage");
 const ADS_READ = anyOf("advertisements.manage", "tournaments.manage");
@@ -161,6 +164,23 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   },
   "/api/stock-movements": all(anyOf("products.manage")),
   "/api/stock-movements/statistics": all(anyOf("products.manage")),
+
+  // Clases
+  "/api/classes/professors": all(CLASSES),
+  "/api/classes/professors/[id]": all(CLASSES),
+  "/api/classes/professors/[id]/rates": all(CLASSES),
+  "/api/classes/rates/[id]": all(CLASSES),
+  "/api/classes/schedules": all(CLASSES),
+  "/api/classes/schedules/[id]": all(CLASSES),
+  "/api/classes/schedules/[id]/enrollments": all(CLASSES),
+  "/api/classes/enrollments/[id]": all(CLASSES),
+  "/api/classes/sessions": all(CLASSES),
+  "/api/classes/sessions/[id]": all(CLASSES),
+  "/api/classes/sessions/[id]/players": all(CLASSES),
+  "/api/classes/charges": all(CLASSES),
+  "/api/classes/charges/[id]": all(CLASSES),
+  "/api/classes/charges/[id]/pay": all(CLASSES),
+  "/api/classes/charges/close": all(CLASSES),
 
   // Canchas
   "/api/court-slots": all(anyOf("courts.operate")),
