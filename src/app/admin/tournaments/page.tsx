@@ -252,7 +252,7 @@ export default function TournamentsPage() {
             Gestioná torneos, equipos, grupos y playoffs.
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-md:flex-wrap">
           <Button size="sm" variant="outline" onClick={() => router.push("/admin/tournaments/schedule-review")}>
             Revisión global
           </Button>

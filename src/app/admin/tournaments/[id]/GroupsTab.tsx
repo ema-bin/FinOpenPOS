@@ -627,7 +627,7 @@ export default function GroupsTab({
               : "Cargá resultados set por set. Cuando todos los partidos de zona tengan resultado, marcá el torneo como listo para playoffs."}
           </CardDescription>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {tournament.status === "in_progress" && !hasResults && (
             <Button
               variant="outline"
@@ -996,7 +996,7 @@ export default function GroupsTab({
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-4 text-xs">
+                        <div className="flex items-center gap-4 text-xs max-md:flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-semibold ${groupColor.badgeBg} ${groupColor.badgeText}`}
                           >
