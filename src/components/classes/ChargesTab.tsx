@@ -319,6 +319,64 @@ export function ChargesTab() {
             {group.charges.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sin deudas este mes.</p>
             ) : (
+            <>
+            <div className="space-y-2 md:hidden">
+              {group.charges.map((charge) => {
+                const pending = charge.status === "pending";
+                return (
+                  <div
+                    key={charge.id}
+                    className={`space-y-2 rounded-md border p-3 ${pending ? "border-red-200 bg-red-50" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className={`font-medium ${pending ? "text-red-900" : ""}`}>{personName(charge.player)}</p>
+                        <p className="text-sm text-muted-foreground">{charge.weekly_count} clases/sem</p>
+                      </div>
+                      <Badge variant={pending ? "expense" : "income"}>{pending ? "Pendiente" : "Paga"}</Badge>
+                    </div>
+                    <div className={pending ? "text-red-700" : undefined}>
+                      {pending && !group.closed ? (
+                        <AmountField
+                          amount={charge.amount}
+                          disabled={amountMutation.isPending}
+                          onSave={(amount) => amountMutation.mutate({ id: charge.id, amount })}
+                        />
+                      ) : (
+                        <span className={pending ? "font-semibold" : undefined}>{formatPesos(charge.amount)}</span>
+                      )}
+                    </div>
+                    {charge.status === "paid" && (
+                      <p className="text-sm">{classPaymentMethodLabel(charge.payment_method?.name)}</p>
+                    )}
+                    <ChargeActions
+                      charge={charge}
+                      closed={group.closed}
+                      professors={professors}
+                      cintia={cintia}
+                      cash={cash}
+                      payPending={payMutation.isPending}
+                      editPending={editPaymentMutation.isPending}
+                      onRemind={openReminder}
+                      onPay={(next) => {
+                        const options = payChoices(next, professors, cintia, cash);
+                        setEditingPayment(false);
+                        setPayAmount(String(next.amount));
+                        setPaying(next);
+                        setMethodId(options[0] ? String(options[0].id) : "");
+                      }}
+                      onEdit={(next, methodId) => {
+                        setEditingPayment(true);
+                        setPayAmount(String(next.amount));
+                        setPaying(next);
+                        setMethodId(methodId);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -417,6 +475,8 @@ export function ChargesTab() {
                 })}
               </TableBody>
             </Table>
+            </div>
+            </>
             )}
           </section>
         );
@@ -551,6 +611,71 @@ function MoneyChip({
     <div className={`min-w-[8.5rem] rounded-xl border px-3 py-2 ${toneClass}`}>
       <p className="text-[11px] font-medium uppercase tracking-wide opacity-75">{label}</p>
       <p className="text-base font-semibold">{formatPesos(amount)}</p>
+    </div>
+  );
+}
+
+function ChargeActions({
+  charge,
+  closed,
+  professors,
+  cintia,
+  cash,
+  payPending,
+  editPending,
+  onRemind,
+  onPay,
+  onEdit,
+}: {
+  charge: ClassCharge;
+  closed: boolean;
+  professors: Array<{ id: number; payment_method: ClassPaymentMethodRef | null }>;
+  cintia: ClassPaymentMethodRef | null;
+  cash: ClassPaymentMethodRef | null;
+  payPending: boolean;
+  editPending: boolean;
+  onRemind: (charge: ClassCharge) => void;
+  onPay: (charge: ClassCharge) => void;
+  onEdit: (charge: ClassCharge, methodId: string) => void;
+}) {
+  const pending = charge.status === "pending";
+  const hasPhone = Boolean(charge.player?.phone?.trim());
+  return (
+    <div className="flex flex-wrap gap-2">
+      {pending && (
+        <span title={hasPhone ? "Enviar recordatorio de pago por WhatsApp" : "El jugador no tiene teléfono cargado"}>
+          <Button size="sm" variant="outline" disabled={!hasPhone} onClick={() => onRemind(charge)}>
+            <MessageCircleIcon className="mr-1 h-4 w-4" />
+            Recordar
+          </Button>
+        </span>
+      )}
+      {pending && !closed && (
+        <Button size="sm" onClick={() => onPay(charge)} disabled={payPending}>
+          Cobrar
+        </Button>
+      )}
+      {charge.status === "paid" && !closed && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={editPending}
+          onClick={() => {
+            const options = payChoices(charge, professors, cintia, cash);
+            const current = charge.payment_method?.id;
+            onEdit(
+              charge,
+              current && options.some((option) => option.id === current)
+                ? String(current)
+                : options[0]
+                  ? String(options[0].id)
+                  : ""
+            );
+          }}
+        >
+          Editar
+        </Button>
+      )}
     </div>
   );
 }

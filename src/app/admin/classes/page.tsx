@@ -15,10 +15,10 @@ export default function ClassesPage() {
         </p>
       </div>
       <Tabs defaultValue="calendar">
-        <TabsList>
-          <TabsTrigger value="calendar">Calendario</TabsTrigger>
-          <TabsTrigger value="professors">Profesores</TabsTrigger>
-          <TabsTrigger value="charges">Cobros</TabsTrigger>
+        <TabsList className="max-md:grid max-md:h-auto max-md:w-full max-md:grid-cols-3">
+          <TabsTrigger className="max-md:px-2" value="calendar">Calendario</TabsTrigger>
+          <TabsTrigger className="max-md:px-2" value="professors">Profesores</TabsTrigger>
+          <TabsTrigger className="max-md:px-2" value="charges">Cobros</TabsTrigger>
         </TabsList>
         <TabsContent value="calendar" className="mt-4">
           <CalendarTab />

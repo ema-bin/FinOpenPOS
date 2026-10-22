@@ -138,7 +138,7 @@ export function ProfessorsTab() {
 
       {professors.map((professor) => (
         <Card key={professor.id}>
-          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 max-md:flex-col max-md:items-stretch">
             {editingId === professor.id ? (
               <div className="grid flex-1 gap-2 md:grid-cols-[1fr_1fr_180px_1fr_auto_auto]">
                 <Input value={editName} onChange={(event) => setEditName(event.target.value)} placeholder="Nombre" />
@@ -188,7 +188,7 @@ export function ProfessorsTab() {
                     {!professor.is_active ? " · inactivo" : ""}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2">
                   <Button
                     variant="outline"
                     onClick={() => {

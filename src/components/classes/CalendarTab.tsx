@@ -39,6 +39,7 @@ import { PlayerSearch, type PlayerHit } from "./PlayerSearch";
 type CourtOption = { id: number; name: string };
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0];
+const WEEKDAY_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const HOUR_PX = 56;
 const GRID_HOURS = Array.from({ length: 18 }, (_, index) => 6 + index);
 const GRID_HEIGHT = GRID_HOURS.length * HOUR_PX;
@@ -83,6 +84,7 @@ export function CalendarTab() {
   const [courtFilter, setCourtFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState<DraftSlot | null>(null);
+  const [mobileDay, setMobileDay] = useState(() => new Date().getDay());
 
   const schedulesQuery = useQuery({
     queryKey: ["classes", "schedules"],
@@ -177,7 +179,7 @@ export function CalendarTab() {
           Semana fija, de lunes a domingo. El mes se usa solo para el cobro.
         </p>
         <Select value={courtFilter} onValueChange={setCourtFilter}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full md:w-[160px]">
             <SelectValue placeholder="Cancha" />
           </SelectTrigger>
           <SelectContent>
@@ -199,8 +201,45 @@ export function CalendarTab() {
       {schedulesQuery.isLoading && <p className="text-sm text-muted-foreground">Armando la semana...</p>}
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="max-h-[calc(100vh-220px)] overflow-auto rounded-md border">
-          <div className="grid min-w-[880px]" style={{ gridTemplateColumns: "64px repeat(7, minmax(0, 1fr))" }}>
+        <div className="max-h-[50vh] overflow-auto rounded-md border md:max-h-[calc(100vh-220px)]">
+          <div className="md:hidden">
+            <div className="sticky top-0 z-20 flex gap-1 overflow-x-auto border-b bg-background p-2">
+              {WEEKDAYS.map((weekday) => (
+                <button
+                  key={weekday}
+                  type="button"
+                  onClick={() => setMobileDay(weekday)}
+                  className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${
+                    mobileDay === weekday ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {WEEKDAY_SHORT[weekday]}
+                </button>
+              ))}
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: "52px minmax(0, 1fr)" }}>
+              <div className="relative border-t" style={{ height: GRID_HEIGHT }}>
+                {GRID_HOURS.map((hour) => (
+                  <div
+                    key={hour}
+                    className="absolute right-1 text-[11px] text-muted-foreground"
+                    style={{ top: (hour - 6) * HOUR_PX + 2 }}
+                  >
+                    {pad2(hour)}:00
+                  </div>
+                ))}
+                <div className="absolute bottom-0 right-1 text-[11px] text-muted-foreground">00:00</div>
+              </div>
+              <DayColumn
+                weekday={mobileDay}
+                schedules={visible.filter((schedule) => schedule.weekday === mobileDay)}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onCreate={(startTime) => setDraft({ weekday: mobileDay, startTime })}
+              />
+            </div>
+          </div>
+          <div className="hidden min-w-[880px] md:grid" style={{ gridTemplateColumns: "64px repeat(7, minmax(0, 1fr))" }}>
             <div className="sticky top-0 z-20 border-b bg-background" />
             {WEEKDAYS.map((weekday) => (
               <div key={weekday} className="sticky top-0 z-20 border-b border-l bg-background px-1 py-2 text-center text-sm font-medium">
