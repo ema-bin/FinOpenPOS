@@ -47,6 +47,27 @@ function personName(person: { first_name: string; last_name: string } | null): s
   return `${person.last_name}, ${person.first_name}`;
 }
 
+function foldName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function matchesPlayerSearch(charge: ClassCharge, query: string): boolean {
+  const needle = foldName(query.trim());
+  if (!needle) return true;
+  const first = foldName(charge.player?.first_name ?? "");
+  const last = foldName(charge.player?.last_name ?? "");
+  return first.includes(needle) || last.includes(needle) || `${last} ${first}`.includes(needle);
+}
+
+function compareCharges(a: ClassCharge, b: ClassCharge): number {
+  const pendingFirst = Number(a.status !== "pending") - Number(b.status !== "pending");
+  if (pendingFirst !== 0) return pendingFirst;
+  return personName(a.player).localeCompare(personName(b.player), "es");
+}
+
 function payChoices(
   charge: ClassCharge,
   professors: Array<{ id: number; payment_method: ClassPaymentMethodRef | null }>,
@@ -75,6 +96,7 @@ export function ChargesTab() {
   const [methodId, setMethodId] = useState("");
   const [reminding, setReminding] = useState<ClassCharge | null>(null);
   const [reminderMessage, setReminderMessage] = useState("");
+  const [playerSearch, setPlayerSearch] = useState("");
 
   const chargesQuery = useQuery({
     queryKey: ["classes", "charges", month],
@@ -160,6 +182,9 @@ export function ChargesTab() {
       list.push(charge);
       byProfessor.set(charge.professor_id, list);
     }
+    for (const rows of byProfessor.values()) {
+      rows.sort(compareCharges);
+    }
     return Array.from(byProfessor.entries())
       .map(([professorId, rows]) => ({
         professorId,
@@ -200,6 +225,14 @@ export function ChargesTab() {
               setMonth(event.target.value);
               setMissing([]);
             }}
+          />
+        </label>
+        <label className="min-w-[12rem] flex-1 space-y-1 text-sm">
+          <span className="block text-muted-foreground">Jugador</span>
+          <Input
+            value={playerSearch}
+            onChange={(event) => setPlayerSearch(event.target.value)}
+            placeholder="Nombre o apellido"
           />
         </label>
         <Button onClick={() => generateMutation.mutate()} disabled={!month || generateMutation.isPending}>
@@ -254,6 +287,7 @@ export function ChargesTab() {
           .filter((charge) => charge.status === "pending")
           .reduce((total, charge) => total + charge.amount, 0);
         const professorShare = due.byProfessor[0]?.amount ?? 0;
+        const visibleCharges = group.charges.filter((charge) => matchesPlayerSearch(charge, playerSearch));
         return (
           <section key={group.professorId} className="space-y-4 rounded-lg border p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -318,10 +352,12 @@ export function ChargesTab() {
             )}
             {group.charges.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sin deudas este mes.</p>
+            ) : visibleCharges.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Ningún jugador coincide con la búsqueda.</p>
             ) : (
             <>
             <div className="space-y-2 md:hidden">
-              {group.charges.map((charge) => {
+              {visibleCharges.map((charge) => {
                 const pending = charge.status === "pending";
                 return (
                   <div
@@ -389,7 +425,7 @@ export function ChargesTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {group.charges.map((charge) => {
+                {visibleCharges.map((charge) => {
                   const pending = charge.status === "pending";
                   const hasPhone = Boolean(charge.player?.phone?.trim());
                   return (
