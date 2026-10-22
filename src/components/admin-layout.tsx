@@ -22,6 +22,8 @@ import {
   ShieldIcon,
   KeyRoundIcon,
   GraduationCapIcon,
+  MenuIcon,
+  XIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -75,6 +77,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [pathname, setPathname] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
@@ -83,6 +86,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     setPathname(currentPathname);
+    setMenuOpen(false);
     
     // Obtener el usuario logueado
     const supabase = createClient();
@@ -128,10 +132,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </div>
             <span className="sr-only">Admin Panel</span>
           </Link>
-          <h1 className="text-xl font-bold">{title}</h1>
+          <h1 className="text-xl font-bold max-md:min-w-0 max-md:truncate">{title}</h1>
 
           <div className="ml-auto flex items-center">
-            <span className="text-sm font-medium text-muted-foreground">
+            <span className="hidden text-sm font-medium text-muted-foreground md:inline">
               {mounted && userName ? userName : 'Cargando...'}
             </span>
           </div>
@@ -163,8 +167,43 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
 
+        <div className="flex h-12 items-center border-t bg-muted/40 px-4 md:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <XIcon className="h-4 w-4" /> : <MenuIcon className="h-4 w-4" />}
+            Menú
+          </Button>
+        </div>
+        {menuOpen && (
+          <nav className="flex flex-col gap-1 border-t bg-background px-2 py-2 md:hidden">
+            {NAV_ITEMS.filter((item) => permsLoading || can(item.permission)).map((item) => {
+              const active =
+                mounted &&
+                (item.exact ? pathname === item.href : pathname.startsWith(item.href));
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-md px-3 py-3 text-base font-medium ${
+                    active ? "bg-muted text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
         {/* Barra de navegación principal */}
-        <nav className="flex h-12 items-center gap-1 border-t bg-muted/40 px-4">
+        <nav className="hidden h-12 items-center gap-1 border-t bg-muted/40 px-4 md:flex">
           {NAV_ITEMS.filter((item) => permsLoading || can(item.permission)).map((item) => {
             const active =
               mounted &&
