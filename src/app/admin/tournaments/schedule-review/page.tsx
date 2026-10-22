@@ -148,7 +148,7 @@ export default function GlobalScheduleReviewPage() {
           {tournaments.map((tournament) => (
             <Card key={tournament.id}>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
                   <div>
                     <CardTitle className="text-lg">{tournament.name}</CardTitle>
                     <CardDescription>Torneo #{tournament.id}</CardDescription>

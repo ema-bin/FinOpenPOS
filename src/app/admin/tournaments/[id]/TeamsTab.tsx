@@ -1233,7 +1233,7 @@ export default function TeamsTab({
                   key={team.id}
                   title={availTitle}
                   className={cn(
-                    "flex items-center justify-between border rounded-md px-3 py-2 transition-colors",
+                    "flex items-center justify-between border rounded-md px-3 py-2 transition-colors max-md:flex-col max-md:items-stretch max-md:gap-2",
                     team.is_substitute && "opacity-80",
                     needsScheduleConsultation
                       ? scheduleConsultationPendingRowClassName()
@@ -1242,7 +1242,7 @@ export default function TeamsTab({
                         : availRow || (team.is_substitute ? "bg-muted/30" : "bg-background")
                   )}
                 >
-                  <div className="flex items-center gap-3 flex-1">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     {tournament.status === "draft" && !hasGroups && (
                       <div className="flex items-center gap-1">
                         <GripVerticalIcon className="h-4 w-4 text-muted-foreground" />
@@ -1270,8 +1270,8 @@ export default function TeamsTab({
                         </div>
                       </div>
                     )}
-                    <div className="flex flex-col text-sm flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-col text-sm flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">
                           {team.display_name ??
                             `${fullName(team.player1)} / ${fullName(team.player2)}`}
@@ -1334,6 +1334,7 @@ export default function TeamsTab({
                       ) : null}
                     </div>
                   </div>
+                  <div className="contents max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:gap-y-2">
                   {canEditTeamPlayers && (
                     <div className="flex items-center gap-1">
                       <Button
@@ -1436,6 +1437,7 @@ export default function TeamsTab({
                       <LockIcon className="w-4 h-4" />
                     </Button>
                   )}
+                  </div>
                 </div>
               );
             })}

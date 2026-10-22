@@ -431,7 +431,7 @@ export default function ScheduleReviewTab({
         {hasGroups && (
           <Card className="border bg-muted/30">
             <CardHeader className="py-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
                 <div>
                   <CardTitle className="text-base">Zonas y equipos</CardTitle>
                   <CardDescription className="text-xs">
@@ -655,11 +655,11 @@ export default function ScheduleReviewTab({
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
               <div className="text-sm text-muted-foreground">
                 {data.matches.filter(m => m.match_date && m.start_time).length} partidos con horarios asignados
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {tournament.status === "schedule_review" ? (
                   <>
                     {hasGroups && (

@@ -305,7 +305,7 @@ export default function PlayoffsTab({
   return (
     <Card className="border-none shadow-none p-0 space-y-4">
       <CardHeader className="px-0 pt-0">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
           <div>
             <CardTitle>Playoffs</CardTitle>
             <CardDescription>
@@ -313,7 +313,7 @@ export default function PlayoffsTab({
             </CardDescription>
           </div>
           {rows.length > 0 && (
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-end gap-2 max-md:items-stretch">
               {groupTestToolsEnabled && (
                 <div className="flex items-center gap-2">
                   <Button
