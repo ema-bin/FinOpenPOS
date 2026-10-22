@@ -182,7 +182,7 @@ export function ChargesTab() {
       list.push(charge);
       byProfessor.set(charge.professor_id, list);
     }
-    for (const rows of byProfessor.values()) {
+    for (const rows of Array.from(byProfessor.values())) {
       rows.sort(compareCharges);
     }
     return Array.from(byProfessor.entries())
