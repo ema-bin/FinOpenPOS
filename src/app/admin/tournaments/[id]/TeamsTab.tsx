@@ -939,7 +939,7 @@ export default function TeamsTab({
             pueden editar en borrador y en revisión de horarios.
           </CardDescription>
           {groupSlots.length === 0 && tournament.status === "draft" && (
-            <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3">
+            <div className="mt-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
               <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
                 <ClockIcon className="h-4 w-4 shrink-0" />
                 <span>No hay horarios configurados para este torneo. Generá los slots para poder definir en qué horarios puede jugar cada equipo.</span>

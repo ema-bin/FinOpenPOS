@@ -195,7 +195,7 @@ export default function StandingsTab({ tournament }: { tournament: Pick<Tourname
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Tabla de posiciones */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-hidden max-md:overflow-x-auto">
                   <div className={`${groupColor.bg} px-4 py-2 border-b`}>
                     <h4 className={`font-semibold text-sm ${groupColor.text}`}>
                       Tabla de posiciones
@@ -292,7 +292,7 @@ export default function StandingsTab({ tournament }: { tournament: Pick<Tourname
                 </div>
 
                 {/* Resultados de partidos */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-hidden max-md:overflow-x-auto">
                   <div className={`${groupColor.bg} px-4 py-2 border-b`}>
                     <h4 className={`font-semibold text-sm ${groupColor.text}`}>
                       Resultados

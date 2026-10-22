@@ -345,7 +345,7 @@ export default function PaymentsTab({
             </Button>
           </div>
 
-          <div className="border rounded-lg">
+          <div className="border rounded-lg max-md:overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

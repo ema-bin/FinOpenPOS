@@ -116,7 +116,7 @@ export default function TournamentDetailPage() {
   return (
     <Card className="p-4 flex flex-col gap-4">
       <CardHeader className="p-0">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 max-md:flex-col">
           <CardTitle>
             {tournament.name}{" "}
             <span className="text-xs text-muted-foreground">
@@ -159,7 +159,7 @@ export default function TournamentDetailPage() {
                 <EditIcon className="h-3 w-3" />
                 <span>Edición</span>
               </div>
-              <TabsList className="w-full justify-start">
+              <TabsList className="w-full justify-start max-md:h-auto max-md:flex-wrap max-md:gap-1">
                 <TabsTrigger value="teams">Inscripción</TabsTrigger>
                 <TabsTrigger value="notifications">Notificaciones</TabsTrigger>
                 <TabsTrigger value="payments">
@@ -192,7 +192,7 @@ export default function TournamentDetailPage() {
                 <EyeIcon className="h-3 w-3" />
                 <span>Vista</span>
               </div>
-              <TabsList className="w-full justify-start">
+              <TabsList className="w-full justify-start max-md:h-auto max-md:flex-wrap max-md:gap-1">
                 <TabsTrigger value="standings">Tabla de posiciones</TabsTrigger>
                 <TabsTrigger value="playoffs-view">Vista de playoffs</TabsTrigger>
                 <TabsTrigger value="playoff-preview">Playoffs Preview</TabsTrigger>
@@ -205,7 +205,7 @@ export default function TournamentDetailPage() {
                 <Share2Icon className="h-3 w-3" />
                 <span>Compartir</span>
               </div>
-              <TabsList className="w-full justify-start">
+              <TabsList className="w-full justify-start max-md:h-auto max-md:flex-wrap max-md:gap-1">
                 <TabsTrigger value="share-flyer">Flier Promoción</TabsTrigger>
                 <TabsTrigger value="share-schedule">Horarios Grupos</TabsTrigger>
                 <TabsTrigger value="share-standings-results">Resultados Grupos</TabsTrigger>
