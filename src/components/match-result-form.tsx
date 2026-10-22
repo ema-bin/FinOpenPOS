@@ -474,9 +474,9 @@ export function MatchResultForm({
   return (
     <>
       <div className={`${bgColor} border-b px-4 py-3`}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3">
           {/* Team 1 */}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <div className={`text-sm font-semibold ${textColor} mb-3`}>
               {team1Name!.split(" / ").map((name, idx) => (
                 <div key={idx}>{name}</div>
@@ -567,7 +567,7 @@ export function MatchResultForm({
           </div>
           
           {/* Team 2 */}
-          <div className="flex-1 text-right">
+          <div className="min-w-0 flex-1 text-right max-md:text-left">
             <div className={`text-sm font-semibold ${textColor} mb-3`}>
               {team2Name!.split(" / ").map((name, idx) => (
                 <div key={idx}>{name}</div>
