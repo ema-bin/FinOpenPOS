@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isMissingClassesScope, isMissingRelation } from "@/lib/class-occupancy";
 
 type QueryParams = {
   params: {};
@@ -51,8 +52,14 @@ export async function GET(req: Request, _ctx: QueryParams) {
       balance: string | number;
     }>;
 
+    const classMethodIds = await classPaymentMethodIds(supabase);
+    const cantina = list.filter((row) => {
+      if (row.payment_method_id == null) return true;
+      return !classMethodIds.has(Number(row.payment_method_id));
+    });
+
     const summary: Record<string, number> = {};
-    list.forEach((row) => {
+    cantina.forEach((row) => {
       const inc = Number(row.incomes) || 0;
       const exp = Number(row.expenses) || 0;
       const with_ = Number(row.withdrawals) || 0;
@@ -63,7 +70,7 @@ export async function GET(req: Request, _ctx: QueryParams) {
       summary.adjustment = (summary.adjustment ?? 0) + adj;
     });
 
-    const balanceByPaymentMethod = list.map((row) => ({
+    const balanceByPaymentMethod = cantina.map((row) => ({
       payment_method_id: row.payment_method_id,
       payment_method_name: row.payment_method_name,
       incomes: Number(row.incomes) || 0,
@@ -81,4 +88,20 @@ export async function GET(req: Request, _ctx: QueryParams) {
     console.error("GET /transactions/balance error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+async function classPaymentMethodIds(
+  supabase: ReturnType<typeof createClient>
+): Promise<Set<number>> {
+  const { data, error } = await supabase
+    .from("payment_methods")
+    .select("id")
+    .eq("scope", "CLASSES");
+
+  if (error) {
+    if (isMissingClassesScope(error) || isMissingRelation(error)) return new Set();
+    throw new Error(error.message);
+  }
+
+  return new Set((data ?? []).map((row) => Number(row.id)));
 }
