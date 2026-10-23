@@ -164,11 +164,11 @@ export function ProductSelector({
                     <Button
                       key={product.id}
                       variant="outline"
-                      className="flex flex-col items-start h-auto p-3 hover:bg-primary/5"
+                      className="flex h-auto flex-col items-start p-3 hover:bg-primary/5 max-md:min-w-0 max-md:whitespace-normal"
                       onClick={() => handleProductClick(product)}
                       disabled={disabled}
                     >
-                      <div className="font-medium text-sm">{product.name}</div>
+                      <div className="text-sm font-medium max-md:break-words">{product.name}</div>
                       <div className="text-xs text-muted-foreground mt-1">
                         ${product.price.toFixed(2)}
                       </div>
@@ -192,11 +192,11 @@ export function ProductSelector({
               <Button
                 key={product.id}
                 variant="outline"
-                className="flex flex-col items-start h-auto p-3 hover:bg-primary/5"
+                className="flex h-auto flex-col items-start p-3 hover:bg-primary/5 max-md:min-w-0 max-md:whitespace-normal"
                 onClick={() => handleProductClick(product)}
                 disabled={disabled}
               >
-                <div className="font-medium text-sm">{product.name}</div>
+                <div className="text-sm font-medium max-md:break-words">{product.name}</div>
                 <div className="text-xs text-muted-foreground mt-1">
                   ${product.price.toFixed(2)}
                 </div>

@@ -90,7 +90,7 @@ export function OrderConsumptionPanel({
   return (
     <Card className={!isEditable ? "opacity-75" : ""}>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-2">
           <div>
             <CardTitle>{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
@@ -108,7 +108,60 @@ export function OrderConsumptionPanel({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="space-y-2 p-3 md:hidden">
+          {isLoading ? (
+            [1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)
+          ) : items.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+          ) : (
+            items.map((item) => (
+              <div key={item.id} className="rounded-lg border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 font-medium break-words">
+                    {item.product?.name ?? "Producto"}
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={!isEditable}
+                    onClick={() => onRemoveItem(item)}
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    <span className="sr-only">Eliminar</span>
+                  </Button>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-7 w-7"
+                      disabled={!isEditable}
+                      onClick={() => onUpdateQuantity(item, item.quantity - 1)}
+                    >
+                      <MinusIcon className="h-3 w-3" />
+                    </Button>
+                    <span className="w-8 text-center">{item.quantity}</span>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-7 w-7"
+                      disabled={!isEditable}
+                      onClick={() => onUpdateQuantity(item, item.quantity + 1)}
+                    >
+                      <PlusIcon className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="text-right text-sm">
+                    <div className="text-muted-foreground">${item.unit_price.toFixed(2)}</div>
+                    <div className="font-semibold">${(item.unit_price * item.quantity).toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>

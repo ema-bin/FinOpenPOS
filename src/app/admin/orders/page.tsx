@@ -752,23 +752,27 @@ export default function OrdersPage() {
   return (
     <>
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "open-accounts" | "sales" | "statistics" | "client-ranking")}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="open-accounts">
-            <FilePenIcon className="w-4 h-4 mr-2" />
+        <TabsList
+          className={`mb-4 max-md:grid max-md:h-auto max-md:w-full ${
+            showReports ? "max-md:grid-cols-2" : "max-md:grid-cols-1"
+          }`}
+        >
+          <TabsTrigger value="open-accounts" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:py-2 max-md:text-xs">
+            <FilePenIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Cuentas abiertas
           </TabsTrigger>
           {showReports && (
             <>
-              <TabsTrigger value="sales">
-                <ReceiptIcon className="w-4 h-4 mr-2" />
+              <TabsTrigger value="sales" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:py-2 max-md:text-xs">
+                <ReceiptIcon className="mr-2 h-4 w-4 max-md:hidden" />
                 Ver ventas
               </TabsTrigger>
-              <TabsTrigger value="statistics">
-                <BarChart3Icon className="w-4 h-4 mr-2" />
+              <TabsTrigger value="statistics" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:py-2 max-md:text-xs">
+                <BarChart3Icon className="mr-2 h-4 w-4 max-md:hidden" />
                 Estadísticas de ventas
               </TabsTrigger>
-              <TabsTrigger value="client-ranking">
-                <UsersIcon className="w-4 h-4 mr-2" />
+              <TabsTrigger value="client-ranking" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:py-2 max-md:text-xs">
+                <UsersIcon className="mr-2 h-4 w-4 max-md:hidden" />
                 Ranking de clientes
               </TabsTrigger>
             </>
@@ -776,13 +780,13 @@ export default function OrdersPage() {
         </TabsList>
 
         <TabsContent value="open-accounts">
-          <Card className="flex flex-col gap-6 p-6">
+          <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
             <CardHeader className="p-0 flex flex-col gap-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:items-stretch">
                 <CardTitle className="text-xl font-semibold">
                   Cuentas abiertas
                 </CardTitle>
-                <div className="flex gap-2">
+                <div className="flex gap-2 max-md:flex-col">
                   <Button 
                     size="sm" 
                     variant="outline"
@@ -799,7 +803,7 @@ export default function OrdersPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-4">
-                <div className="relative max-w-xs w-full">
+                <div className="relative w-full max-w-xs max-md:max-w-none">
                   <Input
                     placeholder="Buscar por cliente o #cuenta..."
                     value={searchTerm}
@@ -815,7 +819,7 @@ export default function OrdersPage() {
                     setStatusFilterOpenAccounts(value)
                   }
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[180px] max-md:w-full">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -829,7 +833,51 @@ export default function OrdersPage() {
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="space-y-2 md:hidden">
+                {filteredOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    onClick={() => router.push(`/admin/orders/${order.id}`)}
+                    className="cursor-pointer rounded-lg border p-3 hover:bg-muted/60"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">
+                          {(order.player?.first_name ?? "") + " " + (order.player?.last_name ?? "") || "Sin nombre"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          #{order.id} · {formatDateTime(order.created_at)}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {getStatusBadge(order.status)}
+                        <div className="mt-1 font-semibold">${order.total_amount.toFixed(2)}</div>
+                      </div>
+                    </div>
+                    {order.status === "open" ? (
+                      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          disabled={!order.player?.phone?.trim()}
+                          onClick={() => setDebtReminderOrder(order)}
+                        >
+                          <MessageCircleIcon className="mr-1 h-4 w-4" />
+                          Recordar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {filteredOrders.length === 0 && (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No hay cuentas para mostrar.
+                  </p>
+                )}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -914,9 +962,9 @@ export default function OrdersPage() {
         <TabsContent value="sales">
           <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
             {/* Tabla de ventas */}
-            <Card className="flex flex-col gap-6 p-6">
+            <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
               <CardHeader className="p-0 flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:items-stretch">
                   <CardTitle className="text-xl font-semibold">
                     Ver ventas
                   </CardTitle>
@@ -931,8 +979,8 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="relative max-w-xs w-full">
+                  <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+                    <div className="relative w-full max-w-xs max-md:max-w-none">
                       <Input
                         placeholder="Buscar por cliente o #cuenta..."
                         value={searchTerm}
@@ -948,7 +996,7 @@ export default function OrdersPage() {
                         setStatusFilterSales(value)
                       }
                     >
-                      <SelectTrigger className="w-[180px]">
+                      <SelectTrigger className="w-[180px] max-md:w-full">
                         <SelectValue placeholder="Estado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -961,8 +1009,8 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Rango de fechas y horas */}
-                  <div className="flex flex-wrap gap-3 items-end">
-                    <div className="space-y-1">
+                  <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+                    <div className="space-y-1 max-md:w-full">
                       <Label className="flex items-center gap-1 text-xs">
                         <CalendarIcon className="w-3 h-3" />
                         Desde
@@ -971,10 +1019,10 @@ export default function OrdersPage() {
                         type="datetime-local"
                         value={fromDate}
                         onChange={(e) => setFromDate(e.target.value)}
-                        className="w-48"
+                        className="w-48 max-md:w-full"
                       />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 max-md:w-full">
                       <Label className="flex items-center gap-1 text-xs">
                         <CalendarIcon className="w-3 h-3" />
                         Hasta
@@ -983,7 +1031,7 @@ export default function OrdersPage() {
                         type="datetime-local"
                         value={toDate}
                         onChange={(e) => setToDate(e.target.value)}
-                        className="w-48"
+                        className="w-48 max-md:w-full"
                       />
                     </div>
                   </div>
@@ -991,7 +1039,67 @@ export default function OrdersPage() {
               </CardHeader>
 
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="mb-3 md:hidden">
+                  <Select
+                    value={`${salesSortColumn}:${salesSortDirection}`}
+                    onValueChange={(value) => {
+                      const [column, direction] = value.split(":") as [SortColumn, SortDirection];
+                      setSalesSortColumn(column);
+                      setSalesSortDirection(direction);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Orden" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date:desc">Fecha, más reciente</SelectItem>
+                      <SelectItem value="date:asc">Fecha, más antigua</SelectItem>
+                      <SelectItem value="client:asc">Cliente, A-Z</SelectItem>
+                      <SelectItem value="client:desc">Cliente, Z-A</SelectItem>
+                      <SelectItem value="total:desc">Total, mayor</SelectItem>
+                      <SelectItem value="total:asc">Total, menor</SelectItem>
+                      <SelectItem value="status:asc">Estado, A-Z</SelectItem>
+                      <SelectItem value="status:desc">Estado, Z-A</SelectItem>
+                      <SelectItem value="payment_method:asc">Método de pago, A-Z</SelectItem>
+                      <SelectItem value="payment_method:desc">Método de pago, Z-A</SelectItem>
+                      <SelectItem value="id:desc">Cuenta, mayor</SelectItem>
+                      <SelectItem value="id:asc">Cuenta, menor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:hidden">
+                  {sortedSalesOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      onClick={() => router.push(`/admin/orders/${order.id}`)}
+                      className="cursor-pointer rounded-lg border p-3 hover:bg-muted/60"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">
+                            {(order.player?.first_name ?? "") + " " + (order.player?.last_name ?? "") || "Sin nombre"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            #{order.id} · {order.closed_at ? formatDateTime(order.closed_at) : formatDateTime(order.created_at)}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {orderPaymentMethodMap.get(order.id) || "Sin método"}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          {getStatusBadge(order.status)}
+                          <div className="mt-1 font-semibold">${order.total_amount.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {sortedSalesOrders.length === 0 && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No hay ventas para mostrar.
+                    </p>
+                  )}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1202,21 +1310,21 @@ export default function OrdersPage() {
         </TabsContent>
 
         <TabsContent value="statistics">
-          <Card className="flex flex-col gap-6 p-6">
+          <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
             <CardHeader className="p-0 flex flex-col gap-4">
               <CardTitle className="text-xl font-semibold">
                 Estadísticas de ventas
               </CardTitle>
 
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
                   <Select
                     value={selectedCategoryId === "all" ? "all" : String(selectedCategoryId)}
                     onValueChange={(value) =>
                       setSelectedCategoryId(value === "all" ? "all" : Number(value))
                     }
                   >
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[200px] max-md:w-full">
                       <SelectValue placeholder="Todas las categorías" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1235,7 +1343,7 @@ export default function OrdersPage() {
                       setSelectedProductId(value === "all" ? "all" : Number(value))
                     }
                   >
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[200px] max-md:w-full">
                       <SelectValue placeholder="Todos los productos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1254,8 +1362,8 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Rango de fechas */}
-                <div className="flex flex-wrap gap-3 items-end">
-                  <div className="space-y-1">
+                <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+                  <div className="space-y-1 max-md:w-full">
                     <Label className="flex items-center gap-1 text-xs">
                       <CalendarIcon className="w-3 h-3" />
                       Desde
@@ -1264,10 +1372,10 @@ export default function OrdersPage() {
                       type="date"
                       value={statsFromDate}
                       onChange={(e) => setStatsFromDate(e.target.value)}
-                      className="w-40"
+                      className="w-40 max-md:w-full"
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-md:w-full">
                     <Label className="flex items-center gap-1 text-xs">
                       <CalendarIcon className="w-3 h-3" />
                       Hasta
@@ -1276,7 +1384,7 @@ export default function OrdersPage() {
                       type="date"
                       value={statsToDate}
                       onChange={(e) => setStatsToDate(e.target.value)}
-                      className="w-40"
+                      className="w-40 max-md:w-full"
                     />
                   </div>
                 </div>
@@ -1289,7 +1397,26 @@ export default function OrdersPage() {
                   <Loader2Icon className="h-8 w-8 animate-spin" />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="space-y-2 md:hidden">
+                  {statistics.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No hay datos para mostrar con los filtros seleccionados.
+                    </p>
+                  ) : (
+                    statistics.map((stat) => (
+                      <div key={stat.productId} className="rounded-lg border p-3">
+                        <div className="font-medium">{stat.productName}</div>
+                        <div className="text-xs text-muted-foreground">{stat.categoryName ?? "-"}</div>
+                        <div className="mt-2 flex items-center justify-between text-sm">
+                          <span>Cantidad: {stat.totalQuantity}</span>
+                          <span className="font-semibold">${stat.totalAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1321,11 +1448,12 @@ export default function OrdersPage() {
                     </TableBody>
                   </Table>
                 </div>
+                </>
               )}
             </CardContent>
 
             {statistics.length > 0 && (
-              <CardFooter className="flex justify-between text-sm text-muted-foreground">
+              <CardFooter className="flex justify-between text-sm text-muted-foreground max-md:flex-col max-md:items-start max-md:gap-1">
                 <span>{statistics.length} productos encontrados</span>
                 <span>
                   Total facturado:{" "}
@@ -1339,15 +1467,15 @@ export default function OrdersPage() {
         </TabsContent>
 
         <TabsContent value="client-ranking">
-          <Card className="flex flex-col gap-6 p-6">
+          <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
             <CardHeader className="p-0 flex flex-col gap-4">
               <CardTitle className="text-xl font-semibold">
                 Ranking de clientes
               </CardTitle>
 
               {/* Rango de fechas */}
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="space-y-1">
+              <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+                <div className="space-y-1 max-md:w-full">
                   <Label className="flex items-center gap-1 text-xs">
                     <CalendarIcon className="w-3 h-3" />
                     Desde
@@ -1356,10 +1484,10 @@ export default function OrdersPage() {
                     type="date"
                     value={rankingFromDate}
                     onChange={(e) => setRankingFromDate(e.target.value)}
-                    className="w-40"
+                    className="w-40 max-md:w-full"
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 max-md:w-full">
                   <Label className="flex items-center gap-1 text-xs">
                     <CalendarIcon className="w-3 h-3" />
                     Hasta
@@ -1368,7 +1496,7 @@ export default function OrdersPage() {
                     type="date"
                     value={rankingToDate}
                     onChange={(e) => setRankingToDate(e.target.value)}
-                    className="w-40"
+                    className="w-40 max-md:w-full"
                   />
                 </div>
               </div>
@@ -1380,7 +1508,33 @@ export default function OrdersPage() {
                   <Loader2Icon className="h-8 w-8 animate-spin" />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="space-y-2 md:hidden">
+                  {clientRanking.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      {rankingFromDate && rankingToDate
+                        ? "No hay ventas para mostrar en el rango de fechas seleccionado."
+                        : "Seleccioná un rango de fechas para ver el ranking."}
+                    </p>
+                  ) : (
+                    clientRanking.map((client, index) => (
+                      <div key={client.playerId} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">
+                              {index + 1}. {client.playerName}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {client.orderCount} cuentas
+                            </div>
+                          </div>
+                          <div className="shrink-0 font-semibold">${client.totalAmount.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1420,11 +1574,12 @@ export default function OrdersPage() {
                     </TableBody>
                   </Table>
                 </div>
+                </>
               )}
             </CardContent>
 
             {!loadingRanking && clientRanking.length > 0 && (
-              <CardFooter className="flex justify-between text-sm text-muted-foreground">
+              <CardFooter className="flex justify-between text-sm text-muted-foreground max-md:flex-col max-md:items-start max-md:gap-1">
                 <span>{clientRanking.length} clientes encontrados</span>
                 <span>
                   Total facturado:{" "}
@@ -1464,9 +1619,9 @@ export default function OrdersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <span className="text-right text-sm font-medium">Cliente</span>
-              <div className="col-span-3 flex items-center gap-2">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
+              <span className="text-right text-sm font-medium max-md:text-left">Cliente</span>
+              <div className="col-span-3 flex items-center gap-2 max-md:col-span-1">
                 <PlayerSearchSelect
                   players={players}
                   value={selectedPlayerId}
@@ -1544,33 +1699,33 @@ export default function OrdersPage() {
           </DialogHeader>
 
           <div className="flex flex-col gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="newPlayerName">Nombre</Label>
               <Input
                 id="newPlayerFirstName"
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Nombre del cliente"
                 value={newPlayerFirstName}
                 onChange={(e) => setNewPlayerFirstName(e.target.value)}
               />
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="newPlayerEmail">Apellido</Label>
               <Input
                 id="newPlayerLastName"
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Apellido del cliente"
                 value={newPlayerLastName}
                 onChange={(e) => setNewPlayerLastName(e.target.value)}
               />
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="newPlayerPhone">Teléfono</Label>
               <Input
                 id="newPlayerPhone"
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Teléfono"
                 value={newPlayerPhone}
                 onChange={(e) => setNewPlayerPhone(e.target.value)}
@@ -1585,7 +1740,7 @@ export default function OrdersPage() {
               onSelectExisting={handleUseExistingPlayerFromSuggestion}
             />
 
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="newPlayerStatus">Estado</Label>
               <Select
                 value={newPlayerStatus}
@@ -1593,7 +1748,7 @@ export default function OrdersPage() {
                   setNewPlayerStatus(value)
                 }
               >
-                <SelectTrigger id="newPlayerStatus" className="col-span-3">
+                <SelectTrigger id="newPlayerStatus" className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
