@@ -192,17 +192,17 @@ export function SuppliersTab() {
   }
 
   return (
-    <Card className="flex flex-col gap-6 p-6">
+    <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
       <CardHeader className="p-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
+        <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
+          <div className="flex items-center gap-4 max-md:flex-col max-md:items-stretch">
+            <div className="relative max-md:w-full">
               <Input
                 type="text"
                 placeholder="Buscar proveedores..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-8"
+                className="pr-8 max-md:w-full"
               />
               <SearchIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             </div>
@@ -243,7 +243,7 @@ export function SuppliersTab() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Button size="sm" onClick={openCreateDialog}>
+          <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
             <PlusCircle className="w-4 h-4 mr-2" />
             Nuevo proveedor
           </Button>
@@ -251,7 +251,48 @@ export function SuppliersTab() {
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="space-y-2 md:hidden">
+          {filteredSuppliers.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No hay proveedores cargados.
+            </p>
+          )}
+          {filteredSuppliers.map((supplier) => (
+            <div key={supplier.id} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{supplier.name}</div>
+                  <div className="text-xs capitalize text-muted-foreground">
+                    {supplier.status === "active" ? "Activo" : "Inactivo"}
+                  </div>
+                  <div className="mt-1 text-sm">{supplier.phone ?? "Sin teléfono"}</div>
+                  <div className="text-xs text-muted-foreground">{supplier.contact_email ?? "Sin email"}</div>
+                  {supplier.notes ? (
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{supplier.notes}</p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button size="icon" variant="ghost" onClick={() => openEditDialog(supplier)}>
+                    <FilePenIcon className="h-4 w-4" />
+                    <span className="sr-only">Editar</span>
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      setSupplierToDelete(supplier);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Eliminar</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -331,54 +372,54 @@ export function SuppliersTab() {
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="name">Nombre *</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Nombre del proveedor"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="contact_email">Email</Label>
               <Input
                 id="contact_email"
                 type="email"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="email@ejemplo.com"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="+54 11 1234-5678"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="notes">Notas</Label>
               <Input
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Información adicional"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label>Estado</Label>
               <Select
                 value={status}
                 onValueChange={(value: SupplierStatus) => setStatus(value)}
               >
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>

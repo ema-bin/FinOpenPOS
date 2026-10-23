@@ -299,17 +299,17 @@ export default function PlayersPage() {
   }
 
   return (
-    <Card className="flex flex-col gap-6 p-6">
+    <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
       <CardHeader className="p-0">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative">
+        <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
+          <div className="flex flex-wrap items-center gap-4 max-md:w-full max-md:flex-col max-md:items-stretch">
+            <div className="relative max-md:w-full">
               <Input
                 type="text"
                 placeholder="Buscar Clientes..."
                 value={searchTerm}
                 onChange={handleSearch}
-                className="pr-8"
+                className="pr-8 max-md:w-full"
               />
               <SearchIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             </div>
@@ -385,7 +385,7 @@ export default function PlayersPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Button size="sm" onClick={() => setShowNewPlayerDialog(true)}>
+          <Button size="sm" className="max-md:w-full" onClick={() => setShowNewPlayerDialog(true)}>
             <PlusCircle className="w-4 h-4 mr-2" />
             Nuevo Cliente
           </Button>
@@ -393,7 +393,64 @@ export default function PlayersPage() {
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="space-y-2 md:hidden">
+          {filteredPlayers.map((player) => (
+            <div key={player.id} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">
+                    {player.first_name} {player.last_name}
+                  </div>
+                  <div className="text-sm">{player.phone}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {player.city ?? "Sin ciudad"} · {[player.category, player.female_category].filter(Boolean).join(" · ") || "Sin categoría"}
+                  </div>
+                  <div className="text-xs capitalize text-muted-foreground">{player.status}</div>
+                </div>
+                {canManagePlayers && (
+                  <div className="flex shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedPlayerId(player.id);
+                        setNewPlayerFirstName(player.first_name);
+                        setNewPlayerLastName(player.last_name ?? "");
+                        setNewPlayerPhone(player.phone ?? "");
+                        setNewPlayerCity(player.city ?? "");
+                        setNewPlayerStatus(player.status);
+                        setNewPlayerCategoryId(player.category_id ?? null);
+                        setNewPlayerGender(player.gender ?? "");
+                        setNewPlayerFemaleCategoryId(player.female_category_id ?? null);
+                        setIsEditPlayerDialogOpen(true);
+                      }}
+                    >
+                      <FilePenIcon className="h-4 w-4" />
+                      <span className="sr-only">Edit</span>
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setPlayerToDelete(player);
+                        setIsDeleteConfirmationOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {filteredPlayers.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No se encontraron clientes.
+            </p>
+          )}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -491,31 +548,31 @@ export default function PlayersPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="name">Nombre</Label>
               <Input
                 id="firstName"
                 value={newPlayerFirstName}
                 onChange={(e) => setNewPlayerFirstName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="lastName">Apellido</Label>
               <Input
                 id="lastName"
                 value={newPlayerLastName}
                 onChange={(e) => setNewPlayerLastName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={newPlayerPhone}
                 onChange={(e) => setNewPlayerPhone(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
             {showNewPlayerDialog ? (
@@ -527,20 +584,20 @@ export default function PlayersPage() {
                 className="w-full"
               />
             ) : null}
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="city">Ciudad</Label>
               <Input
                 id="city"
                 value={newPlayerCity}
                 onChange={(e) => setNewPlayerCity(e.target.value)}
                 placeholder="Opcional"
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label>Categoría (libre)</Label>
               <Select value={newPlayerCategoryId != null ? String(newPlayerCategoryId) : "_"} onValueChange={(v) => setNewPlayerCategoryId(v === "_" ? null : Number(v))}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="Sin categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -551,10 +608,10 @@ export default function PlayersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label>Género</Label>
               <Select value={newPlayerGender || "_"} onValueChange={(v) => { setNewPlayerGender(v === "_" ? "" : v); if (v !== "female") setNewPlayerFemaleCategoryId(null); }}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="No especificado" />
                 </SelectTrigger>
                 <SelectContent>
@@ -565,10 +622,10 @@ export default function PlayersPage() {
               </Select>
             </div>
             {newPlayerGender === "female" && (
-              <div className="grid grid-cols-4 items-center gap-4">
+              <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
                 <Label>Categoría damas</Label>
                 <Select value={newPlayerFemaleCategoryId != null ? String(newPlayerFemaleCategoryId) : "_"} onValueChange={(v) => setNewPlayerFemaleCategoryId(v === "_" ? null : Number(v))}>
-                  <SelectTrigger className="col-span-3">
+                  <SelectTrigger className="col-span-3 max-md:col-span-1">
                     <SelectValue placeholder="Sin categoría damas" />
                   </SelectTrigger>
                   <SelectContent>
@@ -580,7 +637,7 @@ export default function PlayersPage() {
                 </Select>
               </div>
             )}
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="status">Estado</Label>
               <Select
                 value={newPlayerStatus}
@@ -588,7 +645,7 @@ export default function PlayersPage() {
                   setNewPlayerStatus(value)
                 }
               >
-                <SelectTrigger id="status" className="col-span-3">
+                <SelectTrigger id="status" className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>

@@ -336,7 +336,7 @@ export default function RegistrationNotificationsTab({
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
                 <p className="text-sm text-muted-foreground">
                   {withPhoneCount} con teléfono en esta vista ·{" "}
                   {visiblePlayers.length} jugador
@@ -353,7 +353,57 @@ export default function RegistrationNotificationsTab({
                   </Label>
                 </div>
               </div>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="space-y-2 md:hidden">
+                {visiblePlayers.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Todos los jugadores visibles ya fueron notificados.
+                  </p>
+                ) : (
+                  visiblePlayers.map((p) => (
+                    <div
+                      key={p.id}
+                      className={cn(
+                        "rounded-lg border p-3",
+                        p.is_notified && "bg-muted/40 text-muted-foreground"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {p.first_name} {p.last_name}
+                          </div>
+                          <div className="text-xs">{p.category_label ?? "—"}</div>
+                          <div className="text-xs tabular-nums">{p.phone?.trim() ? p.phone : "Sin teléfono"}</div>
+                          {p.is_notified && p.notified_at ? (
+                            <div className="text-xs">Notificado</div>
+                          ) : null}
+                        </div>
+                        <Checkbox
+                          checked={p.is_notified}
+                          disabled={markMutation.isPending}
+                          onCheckedChange={(checked) => toggleNotified(p.id, checked === true)}
+                          aria-label={`Notificado: ${p.first_name} ${p.last_name}`}
+                        />
+                      </div>
+                      {p.whatsapp_url ? (
+                        <Button type="button" variant="outline" size="sm" className="mt-2 w-full" asChild>
+                          <a
+                            href={p.whatsapp_url}
+                            onClick={() => {
+                              if (!p.is_notified) toggleNotified(p.id, true);
+                              messageVariants.markSent();
+                            }}
+                          >
+                            <MessageCircleIcon className="mr-1 h-4 w-4" />
+                            Enviar
+                          </a>
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="hidden overflow-x-auto rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>

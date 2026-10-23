@@ -195,6 +195,22 @@ function DetailTables({
         {products.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
+          <>
+          <div className="space-y-2 md:hidden">
+            {products.map((row) => (
+              <div key={row.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{row.product_name}</div>
+                  <div className="text-xs text-muted-foreground">{row.category_name ?? "—"}</div>
+                </div>
+                <div className="shrink-0 text-right text-sm">
+                  <div>{row.quantity_sold}</div>
+                  <div className="font-medium">${row.total_amount.toFixed(2)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -217,6 +233,8 @@ function DetailTables({
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </div>
       <div>
@@ -333,7 +351,7 @@ export default function MonthlySalesClosurePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-wrap items-end gap-4 max-md:w-full max-md:flex-col max-md:items-stretch">
             <div className="space-y-1">
               <Label htmlFor="year-month">Mes</Label>
               <Input
@@ -341,7 +359,7 @@ export default function MonthlySalesClosurePage() {
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-44"
+                className="w-44 max-md:w-full"
               />
             </div>
             <p className="text-sm text-muted-foreground pb-2 capitalize">
@@ -449,6 +467,31 @@ export default function MonthlySalesClosurePage() {
           ) : history.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">Sin cierres mensuales.</div>
           ) : (
+            <>
+            <div className="space-y-2 md:hidden">
+              {history.map((row) => (
+                <div key={row.id} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium capitalize">{formatYearMonthLabel(row.year_month)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.daily_closures_count}/{row.days_in_month} días · Rev. {row.revision_count ?? 1}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-semibold">${row.total_sales.toFixed(2)}</div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={() => setHistoryMonth(row.year_month)}
+                  >
+                    Ver detalle
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -483,6 +526,8 @@ export default function MonthlySalesClosurePage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

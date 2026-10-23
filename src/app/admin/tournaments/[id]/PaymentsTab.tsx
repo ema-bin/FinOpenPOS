@@ -326,8 +326,9 @@ export default function PaymentsTab({
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end max-md:justify-stretch">
             <Button 
+              className="max-md:w-full"
               onClick={handleSave} 
               disabled={!hasChanges || saving}
             >
@@ -345,7 +346,81 @@ export default function PaymentsTab({
             </Button>
           </div>
 
-          <div className="border rounded-lg max-md:overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {payments.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No hay equipos registrados todavía
+              </p>
+            ) : (
+              Array.from(paymentsByTeam.entries()).map(([teamId, teamPayments]) => {
+                const teamName = teamPayments[0]?.team?.display_name || `Equipo #${teamId}`;
+                const ordered = [...teamPayments].sort((a, b) => a.player_id - b.player_id);
+                return (
+                  <div key={teamId} className="space-y-3 rounded-lg border p-3">
+                    <div className="font-medium">{teamName}</div>
+                    {ordered.map((payment) => {
+                      const key = getPaymentKey(teamId, payment.player_id);
+                      const row = getEffectiveRow(payment, key);
+                      const playerName = payment.player
+                        ? `${payment.player.first_name} ${payment.player.last_name}`
+                        : "Jugador";
+                      return (
+                        <div key={key} className="space-y-2 border-t pt-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-medium">{playerName}</span>
+                            <span className={row.has_paid ? "font-medium text-green-700" : ""}>
+                              ${getDisplayAmountDue(payment, key).toFixed(2)}
+                            </span>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={row.is_registration_free}
+                              onCheckedChange={(checked) =>
+                                handleRegistrationFreeChange(payment, key, checked as boolean)
+                              }
+                              aria-label="Inscripción gratis"
+                            />
+                            Gratis
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={row.has_paid}
+                              onCheckedChange={(checked) =>
+                                handlePaymentChange(payment, key, checked as boolean)
+                              }
+                              aria-label="Pagó inscripción"
+                            />
+                            Pagó
+                          </label>
+                          <Select
+                            value={row.payment_method_id?.toString() || "none"}
+                            onValueChange={(value) => handleMethodChange(payment, key, value)}
+                            disabled={!row.has_paid}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Seleccionar método" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No especificado</SelectItem>
+                              {paymentMethodsList.map((method) => (
+                                <SelectItem key={method.id} value={method.id.toString()}>
+                                  {method.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {getDisplayPricingReason(payment, key)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden rounded-lg border md:block">
             <Table>
               <TableHeader>
                 <TableRow>

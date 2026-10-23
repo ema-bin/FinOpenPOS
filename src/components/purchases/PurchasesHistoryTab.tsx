@@ -185,9 +185,9 @@ export function PurchasesHistoryTab() {
   }
 
   return (
-    <Card className="flex flex-col gap-4 p-6">
+    <Card className="flex flex-col gap-4 p-6 max-md:p-3">
       <CardHeader className="p-0 space-y-1">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
           <div>
             <CardTitle>Historial de compras</CardTitle>
             <CardDescription>
@@ -195,12 +195,12 @@ export function PurchasesHistoryTab() {
               métodos de pago.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setQuickPurchaseOpen(true)}>
+          <div className="flex flex-wrap gap-2 max-md:flex-col">
+            <Button variant="outline" className="max-md:w-full" onClick={() => setQuickPurchaseOpen(true)}>
               <ZapIcon className="w-4 h-4 mr-2" />
               Compra rápida
             </Button>
-            <Button onClick={() => router.push("/admin/purchases/new")}>
+            <Button className="max-md:w-full" onClick={() => router.push("/admin/purchases/new")}>
               <PlusIcon className="w-4 h-4 mr-2" />
               Nueva compra
             </Button>
@@ -218,14 +218,14 @@ export function PurchasesHistoryTab() {
       <CardContent className="space-y-4 p-0">
         {/* Filtros */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="relative">
+          <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+            <div className="relative max-md:w-full">
               <Input
                 type="text"
                 placeholder="Buscar por proveedor, notas o #compra..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-8 w-64"
+                className="w-64 pr-8 max-md:w-full"
               />
               <SearchIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             </div>
@@ -327,8 +327,8 @@ export function PurchasesHistoryTab() {
           </div>
 
           {/* Rango de fechas */}
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="space-y-1">
+          <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
+            <div className="space-y-1 max-md:w-full">
               <Label className="flex items-center gap-1 text-xs">
                 <CalendarIcon className="w-3 h-3" />
                 Desde
@@ -337,10 +337,10 @@ export function PurchasesHistoryTab() {
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-40"
+                className="w-40 max-md:w-full"
               />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 max-md:w-full">
               <Label className="flex items-center gap-1 text-xs">
                 <CalendarIcon className="w-3 h-3" />
                 Hasta
@@ -349,14 +349,55 @@ export function PurchasesHistoryTab() {
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="w-40"
+                className="w-40 max-md:w-full"
               />
             </div>
           </div>
         </div>
 
+        <div className="space-y-2 md:hidden">
+          {filteredPurchases.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No se encontraron compras con los filtros actuales.
+            </p>
+          )}
+          {filteredPurchases.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="w-full rounded-lg border p-3 text-left hover:bg-muted/50"
+              onClick={() => router.push(`/admin/purchases/${p.id}`)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{p.supplier?.name ?? "-"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    #{p.id} · {formatDateTime(p.created_at)}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {p.payment_method?.name ?? "Sin método"}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="font-semibold">${Number(p.total_amount).toFixed(2)}</div>
+                  <div className="text-xs capitalize text-muted-foreground">
+                    {p.status === "completed"
+                      ? "Completada"
+                      : p.status === "pending"
+                      ? "Pendiente"
+                      : "Cancelada"}
+                  </div>
+                </div>
+              </div>
+              {p.notes ? (
+                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{p.notes}</p>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
         {/* Tabla */}
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -409,7 +450,7 @@ export function PurchasesHistoryTab() {
         </div>
 
         {/* Resumen */}
-        <div className="flex justify-between text-xs text-muted-foreground mt-2">
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground max-md:flex-col max-md:gap-1">
           <span>{filteredPurchases.length} compras encontradas</span>
           <span>
             Total filtrado:{" "}

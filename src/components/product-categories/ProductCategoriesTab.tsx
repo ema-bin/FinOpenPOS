@@ -263,17 +263,17 @@ export function ProductCategoriesTab() {
 
   return (
     <>
-      <Card className="flex flex-col gap-6 p-6">
+      <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
         <CardHeader className="p-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
+          <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
+            <div className="flex items-center gap-4 max-md:flex-col max-md:items-stretch">
+              <div className="relative max-md:w-full">
                 <Input
                   type="text"
                   placeholder="Buscar categorías..."
                   value={searchTerm}
                   onChange={handleSearchChange}
-                  className="pr-8"
+                  className="pr-8 max-md:w-full"
                 />
                 <SearchIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               </div>
@@ -332,7 +332,7 @@ export function ProductCategoriesTab() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <Button size="sm" onClick={openCreateDialog}>
+            <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
               <PlusIcon className="w-4 h-4 mr-2" />
               Nueva categoría
             </Button>
@@ -340,7 +340,52 @@ export function ProductCategoriesTab() {
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="space-y-2 md:hidden">
+            {filteredCategories.map((cat) => (
+              <div key={cat.id} className="rounded-lg border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      {cat.color ? (
+                        <span className="inline-block h-3 w-3 shrink-0 rounded-full border" style={{ backgroundColor: cat.color }} />
+                      ) : null}
+                      <span className="truncate font-medium">{cat.name}</span>
+                    </div>
+                    {cat.description ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{cat.description}</p>
+                    ) : null}
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Venta {cat.is_sellable ? "sí" : "no"} · Cantina {cat.is_cantina_revenue ? "sí" : "no"} · {cat.is_active ? "Activa" : "Inactiva"}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0">
+                    <Button size="icon" variant="ghost" onClick={() => openEditDialog(cat)}>
+                      <FilePenIcon className="h-4 w-4" />
+                      <span className="sr-only">Editar</span>
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setCategoryToDelete(cat);
+                        setIsDeleteConfirmationOpen(true);
+                      }}
+                      disabled={!cat.is_active}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                      <span className="sr-only">Eliminar</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {filteredCategories.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No se encontraron categorías.
+              </p>
+            )}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -456,7 +501,7 @@ export function ProductCategoriesTab() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="cat-name" className="text-right">
                 Nombre
               </Label>
@@ -464,10 +509,10 @@ export function ProductCategoriesTab() {
                 id="cat-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="cat-description" className="text-right">
                 Descripción
               </Label>
@@ -475,10 +520,10 @@ export function ProductCategoriesTab() {
                 id="cat-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="cat-color" className="text-right">
                 Color
               </Label>
@@ -501,7 +546,7 @@ export function ProductCategoriesTab() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="cat-sellable" className="text-right">
                 ¿Se vende?
               </Label>
@@ -518,7 +563,7 @@ export function ProductCategoriesTab() {
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="cat-cantina" className="text-right">
                 ¿Cuenta como cantina?
               </Label>

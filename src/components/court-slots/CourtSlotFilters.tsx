@@ -21,9 +21,9 @@ export function CourtSlotFilters({
   isRefreshing,
 }: CourtSlotFiltersProps) {
   return (
-    <div className="flex flex-wrap gap-4 items-end justify-between">
-      <div className="flex flex-wrap gap-4 items-end">
-        <div className="space-y-1">
+    <div className="flex flex-wrap items-end justify-between gap-4 max-md:flex-col max-md:items-stretch">
+      <div className="flex flex-wrap items-end gap-4 max-md:w-full max-md:flex-col max-md:items-stretch">
+        <div className="space-y-1 max-md:w-full">
           <Label className="flex items-center gap-1 text-xs">
             <CalendarIcon className="w-3 h-3" />
             Fecha
@@ -32,11 +32,13 @@ export function CourtSlotFilters({
             type="date"
             value={selectedDate}
             onChange={(e) => onDateChange(e.target.value)}
+            className="max-md:w-full"
           />
         </div>
         <Button
           variant="outline"
           size="sm"
+          className="max-md:w-full"
           onClick={onRefresh}
           disabled={isRefreshing}
         >
@@ -45,7 +47,7 @@ export function CourtSlotFilters({
         </Button>
       </div>
 
-      <Button onClick={onGenerate} disabled={isGenerating}>
+      <Button className="max-md:w-full" onClick={onGenerate} disabled={isGenerating}>
         {isGenerating && (
           <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
         )}

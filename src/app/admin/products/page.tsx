@@ -468,37 +468,37 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
   return (
     <>
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "products" | "categories" | "share" | "stock")}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="products">
-            <PackageIcon className="w-4 h-4 mr-2" />
+        <TabsList className="mb-4 max-md:grid max-md:h-auto max-md:w-full max-md:grid-cols-2">
+          <TabsTrigger value="products" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:text-xs">
+            <PackageIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Productos
           </TabsTrigger>
-          <TabsTrigger value="categories">
-            <TagIcon className="w-4 h-4 mr-2" />
+          <TabsTrigger value="categories" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:text-xs">
+            <TagIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Categorías
           </TabsTrigger>
-          <TabsTrigger value="stock">
-            <WarehouseIcon className="w-4 h-4 mr-2" />
+          <TabsTrigger value="stock" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:text-xs">
+            <WarehouseIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Control de stock
           </TabsTrigger>
-          <TabsTrigger value="share">
-            <Share2Icon className="w-4 h-4 mr-2" />
+          <TabsTrigger value="share" className="max-md:h-auto max-md:whitespace-normal max-md:px-2 max-md:text-xs">
+            <Share2Icon className="mr-2 h-4 w-4 max-md:hidden" />
             Compartir
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="products">
-          <Card className="flex flex-col gap-6 p-6">
+          <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
             <CardHeader className="p-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
+              <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
+                <div className="flex items-center gap-4 max-md:flex-col max-md:items-stretch">
+                  <div className="relative max-md:w-full">
                     <Input
                       type="text"
                       placeholder="Buscar productos..."
                       value={searchTerm}
                       onChange={handleSearch}
-                      className="pr-8"
+                      className="pr-8 max-md:w-full"
                     />
                     <SearchIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   </div>
@@ -580,7 +580,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <Button size="sm" onClick={() => setIsAddProductDialogOpen(true)}>
+                <Button size="sm" className="max-md:w-full" onClick={() => setIsAddProductDialogOpen(true)}>
                   <PlusIcon className="w-4 h-4 mr-2" />
                   Crear Producto
                 </Button>
@@ -588,7 +588,62 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="space-y-2 md:hidden">
+                {currentProducts.map((product) => (
+                  <div key={product.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{product.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {getCategoryName(product.category?.id ?? null)}
+                          {product.uses_stock ? " · Con stock" : " · Sin stock"}
+                        </div>
+                        {product.description ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="font-semibold">${product.price.toFixed(2)}</div>
+                        <div className="mt-1 flex justify-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedProductId(product.id);
+                              setProductName(product.name);
+                              setProductDescription(product.description ?? "");
+                              setProductPrice(product.price);
+                              setProductCategoryId(product.category?.id ?? "none");
+                              setProductUsesStock(product.uses_stock ?? true);
+                              setIsEditProductDialogOpen(true);
+                            }}
+                          >
+                            <FilePenIcon className="h-4 w-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setProductToDelete(product);
+                              setIsDeleteConfirmationOpen(true);
+                            }}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {currentProducts.length === 0 && (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No se encontraron productos.
+                  </p>
+                )}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -681,7 +736,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
               </div>
             </CardContent>
 
-            <CardFooter className="flex justify-end gap-2">
+            <CardFooter className="flex justify-end gap-2 max-md:flex-wrap">
               {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(
                 (page) => (
                   <Button
@@ -703,14 +758,15 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
         </TabsContent>
 
         <TabsContent value="stock">
-          <Card className="flex flex-col gap-6 p-6">
+          <Card className="flex flex-col gap-6 p-6 max-md:gap-4 max-md:p-3">
             <CardHeader className="p-0 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
                 <CardTitle className="text-xl font-semibold">
                   Control de stock
                 </CardTitle>
                 <Button 
-                  size="sm" 
+                  size="sm"
+                  className="max-md:w-full"
                   onClick={() => setIsAdjustmentDialogOpen(true)}
                 >
                   <PlusIcon className="w-4 h-4 mr-2" />
@@ -718,7 +774,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                 </Button>
               </div>
 
-              <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
                 <div className="space-y-1">
                   <Label className="flex items-center gap-1 text-xs">
                     <CalendarIcon className="w-3 h-3" />
@@ -728,7 +784,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                     type="date"
                     value={stockFromDate}
                     onChange={(e) => setStockFromDate(e.target.value)}
-                    className="w-40"
+                    className="w-40 max-md:w-full"
                   />
                 </div>
                 <div className="space-y-1">
@@ -740,7 +796,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                     type="date"
                     value={stockToDate}
                     onChange={(e) => setStockToDate(e.target.value)}
-                    className="w-40"
+                    className="w-40 max-md:w-full"
                   />
                 </div>
                 <div className="space-y-1">
@@ -758,7 +814,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                       }
                     }}
                   >
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-40 max-md:w-full">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
@@ -774,14 +830,46 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
               </div>
             </CardHeader>
 
-            <div className="flex gap-6 items-start">
-              <div className="flex-1">
+            <div className="flex items-start gap-6 max-md:flex-col">
+              <div className="min-w-0 flex-1 max-md:w-full">
                 {loadingStockStats ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2Icon className="h-8 w-8 animate-spin" />
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                  <div className="space-y-2 md:hidden">
+                    {stockStatistics.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        {stockFromDate || stockToDate
+                          ? "No hay movimientos de stock en el rango de fechas seleccionado."
+                          : "Seleccioná un rango de fechas para ver los movimientos de stock."}
+                      </p>
+                    ) : (
+                      stockStatistics.map((stat: StockStatisticsItem) => {
+                        const product = products.find((p) => p.id === stat.productId);
+                        const productPrice = product?.price ?? 0;
+                        const saleValue = productPrice * stat.currentStock;
+                        return (
+                          <div key={stat.productId} className="rounded-lg border p-3">
+                            <div className="font-medium">{stat.productName}</div>
+                            <div className="text-xs text-muted-foreground">{stat.categoryName ?? "-"}</div>
+                            <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
+                              <span className="text-green-600">Compras +{stat.totalPurchases}</span>
+                              <span className="text-right text-red-600">Ventas -{stat.totalSales}</span>
+                              <span>Ajustes {stat.totalAdjustments > 0 ? "+" : ""}{stat.totalAdjustments}</span>
+                              <span className="text-right font-semibold">Stock {stat.currentStock}</span>
+                            </div>
+                            <div className="mt-1 flex justify-between text-sm">
+                              <span>${productPrice.toFixed(2)}</span>
+                              <span className="font-semibold">${saleValue.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -839,12 +927,13 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 )}
               </div>
 
               {/* Resumen */}
               {!loadingStockStats && stockStatistics.length > 0 && (
-                <Card className="h-fit w-80 flex-shrink-0">
+                <Card className="h-fit w-80 flex-shrink-0 max-md:w-full">
                   <CardHeader>
                     <CardTitle className="text-lg font-semibold">Resumen de stock</CardTitle>
                   </CardHeader>
@@ -934,11 +1023,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="adjustment-product" className="text-right">
                 Producto
               </Label>
-              <div className="col-span-3">
+              <div className="col-span-3 max-md:col-span-1">
                 <Select
                   value={adjustmentProductId === "none" ? "none" : String(adjustmentProductId)}
                   onValueChange={(value) =>
@@ -960,11 +1049,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="adjustment-quantity" className="text-right">
                 Cantidad
               </Label>
-              <div className="col-span-3">
+              <div className="col-span-3 max-md:col-span-1">
                 <Input
                   id="adjustment-quantity"
                   type="number"
@@ -982,11 +1071,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="adjustment-notes" className="text-right">
                 Motivo
               </Label>
-              <div className="col-span-3">
+              <div className="col-span-3 max-md:col-span-1">
                 <Input
                   id="adjustment-notes"
                   placeholder="Ej: Inventario físico, producto dañado, etc."
@@ -1044,7 +1133,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="name" className="text-right">
                 Nombre
               </Label>
@@ -1052,11 +1141,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                 id="name"
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Nombre del producto"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="description" className="text-right">
                 Descripción
               </Label>
@@ -1064,11 +1153,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                 id="description"
                 value={productDescription}
                 onChange={(e) => setProductDescription(e.target.value)}
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="Descripción del producto (opcional)"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="price" className="text-right">
                 Precio
               </Label>
@@ -1083,11 +1172,11 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                     e.target.value === "" ? "" : Number(e.target.value)
                   )
                 }
-                className="col-span-3"
+                className="col-span-3 max-md:col-span-1"
                 placeholder="0.00"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="category" className="text-right">
                 Categoría
               </Label>
@@ -1105,7 +1194,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                   }
                 }}
               >
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="col-span-3 max-md:col-span-1">
                   <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1118,7 +1207,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4 max-md:grid-cols-1 max-md:items-stretch max-md:gap-2">
               <Label htmlFor="uses-stock" className="text-right">
                 Control de stock
               </Label>

@@ -482,7 +482,7 @@ export default function ScheduleReviewTab({
                 {groupsWithTeams.map(({ group, teams }) => (
                   <div
                     key={group.id}
-                    className="rounded-lg border bg-background p-3 min-w-[180px]"
+                    className="min-w-[180px] rounded-lg border bg-background p-3 max-md:w-full"
                   >
                     <div className="font-semibold text-sm text-muted-foreground mb-2">
                       {group.name}
@@ -871,7 +871,7 @@ export default function ScheduleReviewTab({
                 {groupsWithTeams.map(({ group, teams }) => (
                   <div
                     key={group.id}
-                    className="rounded-lg border bg-muted/30 p-2 min-w-[160px]"
+                    className="min-w-[160px] rounded-lg border bg-muted/30 p-2 max-md:w-full"
                   >
                     <div className="font-semibold text-xs text-muted-foreground mb-2">
                       {group.name}

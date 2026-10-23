@@ -47,13 +47,13 @@ export default function PurchasesPage() {
   return (
     <>
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "history" | "suppliers")}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="history">
-            <LayersIcon className="w-4 h-4 mr-2" />
+        <TabsList className="mb-4 max-md:grid max-md:h-auto max-md:w-full max-md:grid-cols-2">
+          <TabsTrigger value="history" className="max-md:h-auto max-md:px-2">
+            <LayersIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Historial
           </TabsTrigger>
-          <TabsTrigger value="suppliers">
-            <UsersIcon className="w-4 h-4 mr-2" />
+          <TabsTrigger value="suppliers" className="max-md:h-auto max-md:px-2">
+            <UsersIcon className="mr-2 h-4 w-4 max-md:hidden" />
             Proveedores
           </TabsTrigger>
         </TabsList>

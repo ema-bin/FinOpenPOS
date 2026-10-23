@@ -264,6 +264,68 @@ export default function UsersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="space-y-3 p-4 md:hidden">
+            {data.users.map((user) => {
+              const isSelf = user.id === data.currentUserId;
+              const pending = setRole.isPending && setRole.variables?.userId === user.id;
+              return (
+                <div key={user.id} className="space-y-2 rounded-lg border p-3">
+                  <div className="font-medium">
+                    {user.email || "Sin email"}
+                    {!user.active ? (
+                      <span className="ml-2 text-xs font-normal text-destructive">Desactivado</span>
+                    ) : null}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {[user.name, isSelf ? "Vos" : ""].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                  <Select
+                    value={user.role_id != null ? String(user.role_id) : undefined}
+                    onValueChange={(value) =>
+                      setRole.mutate({ userId: user.id, roleId: Number(value) })
+                    }
+                    disabled={pending}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {data.roles.map((role) => (
+                        <SelectItem key={role.id} value={String(role.id)}>
+                          {role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={isSelf || (setActive.isPending && setActive.variables?.userId === user.id)}
+                      onClick={() => setActive.mutate({ userId: user.id, active: !user.active })}
+                    >
+                      {user.active ? "Desactivar" : "Activar"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openReset(user)}
+                    >
+                      Blanquear
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {data.users.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">No hay usuarios.</p>
+            )}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -343,6 +405,7 @@ export default function UsersPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
