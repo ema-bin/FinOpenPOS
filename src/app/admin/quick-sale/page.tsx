@@ -325,7 +325,7 @@ export default function QuickSalePage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
             <div>
               <CardTitle className="text-xl font-semibold flex items-center gap-2">
                 <ShoppingCartIcon className="h-5 w-5" />
@@ -347,7 +347,7 @@ export default function QuickSalePage() {
 
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
-            <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+            <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2 max-md:max-h-[50vh] max-md:pr-0">
               <div className="mb-3">
                 <Input
                   placeholder="Filtrar productos..."

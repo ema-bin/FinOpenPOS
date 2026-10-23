@@ -877,19 +877,20 @@ export default function OrderDetailPage() {
   const isOrderLoading = loadingOrder && !displayOrder;
 
   return (
-    <div className="flex flex-col gap-4 p-6 w-full">
+    <div className="flex w-full flex-col gap-4 p-6 max-md:p-0">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 max-md:flex-col max-md:items-stretch">
+        <div className="flex items-center gap-2 max-md:min-w-0 max-md:flex-col max-md:items-stretch">
           <Button
             variant="ghost"
             size="sm"
+            className="max-md:self-start"
             onClick={() => router.push("/admin/orders")}
           >
             <ArrowLeftIcon className="w-4 h-4 mr-2" />
             Volver
           </Button>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-semibold max-md:min-w-0 max-md:flex-wrap max-md:text-base">
             {loadingOrder && !displayOrder ? (
               <Skeleton className="h-6 w-40" />
             ) : (
@@ -904,7 +905,7 @@ export default function OrderDetailPage() {
             )}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-md:justify-between">
           {loadingOrder && !displayOrder ? (
             <Skeleton className="h-4 w-40" />
           ) : (
@@ -921,7 +922,7 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
-          <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2">
+          <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2 max-md:max-h-[50vh] max-md:pr-0">
             <div className="mb-3">
               <Input
                 placeholder="Filtrar productos..."
