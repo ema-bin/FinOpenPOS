@@ -205,19 +205,19 @@ export default function BalancePage() {
     <div className="space-y-6">
       <Card>
         <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 max-md:flex-col max-md:items-stretch">
             <div>
               <CardTitle>Balance</CardTitle>
               <CardDescription>Resumen de movimientos de caja</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
-              <Button variant="outline" onClick={() => setIsWithdrawalDialogOpen(true)}>
+            <div className="flex gap-2 max-md:flex-col">
+              <Button className="max-md:w-full" onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
+              <Button variant="outline" className="max-md:w-full" onClick={() => setIsWithdrawalDialogOpen(true)}>
                 Registrar retiro
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">Desde</span>
               <Input
@@ -240,7 +240,7 @@ export default function BalancePage() {
                 value={typeFilter}
                 onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32 max-md:w-full">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -258,7 +258,7 @@ export default function BalancePage() {
                 value={partnerFilter}
                 onValueChange={(value) => setPartnerFilter(value)}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-40 max-md:w-full">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -299,7 +299,27 @@ export default function BalancePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="space-y-2 md:hidden">
+              {balanceByPaymentMethod.map((method: BalanceByPaymentMethod, index: number) => (
+                <div key={index} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 font-medium">
+                      {method.payment_method_name || "Sin método de pago"}
+                    </div>
+                    <div className={`shrink-0 font-bold ${method.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      ${method.balance.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
+                    <span className="text-green-600">Ingresos ${method.incomes.toFixed(2)}</span>
+                    <span className="text-right text-red-600">Gastos ${method.expenses.toFixed(2)}</span>
+                    <span className="text-red-600">Retiros ${method.withdrawals.toFixed(2)}</span>
+                    <span className="text-right text-blue-600">Ajustes ${method.adjustments.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b">
@@ -399,7 +419,38 @@ export default function BalancePage() {
               No se encontraron retiros para los filtros seleccionados.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-2 md:hidden">
+              {partnerWithdrawals.map((withdrawal) => (
+                <div key={withdrawal.id} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        {withdrawal.partner
+                          ? `${withdrawal.partner.first_name} ${withdrawal.partner.last_name}`
+                          : withdrawal.partner_id
+                          ? `ID ${withdrawal.partner_id}`
+                          : "Sin socio"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(withdrawal.created_at).toLocaleString("es-AR")}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {withdrawal.payment_method?.name || "Sin método"}
+                      </div>
+                      {withdrawal.description ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{withdrawal.description}</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-semibold">${withdrawal.amount.toFixed(2)}</div>
+                      <div className="text-xs capitalize text-muted-foreground">{withdrawal.status}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -449,6 +500,7 @@ export default function BalancePage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
         {withdrawalsSummary.length > 0 && (

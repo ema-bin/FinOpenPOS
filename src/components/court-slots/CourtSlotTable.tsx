@@ -7,7 +7,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CourtSlotRow } from "./CourtSlotRow";
+import { CourtSlotCard, CourtSlotRow } from "./CourtSlotRow";
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
 import type { CourtSlotDB } from "@/models/db/court";
@@ -51,7 +51,13 @@ export function CourtSlotTable({
 }: CourtSlotTableProps) {
   if (isLoading) {
     return (
-      <div className="overflow-x-auto">
+      <>
+      <div className="space-y-2 md:hidden">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-28 w-full" />
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -94,6 +100,7 @@ export function CourtSlotTable({
           </TableBody>
         </Table>
       </div>
+      </>
     );
   }
 
@@ -108,7 +115,26 @@ export function CourtSlotTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    <div className="space-y-3 md:hidden">
+      {slots.map((slot) => {
+        const hasChanges = pendingChanges.has(slot.id) &&
+          Object.keys(pendingChanges.get(slot.id) || {}).length > 0;
+        return (
+          <CourtSlotCard
+            key={slot.id}
+            slot={slot}
+            paymentMethods={paymentMethods}
+            onUpdate={onSlotUpdate}
+            onSave={() => onSaveSlot(slot.id)}
+            onCancel={() => onCancelSlot(slot.id)}
+            hasChanges={hasChanges}
+            isSaving={isSaving}
+          />
+        );
+      })}
+    </div>
+    <div className="hidden overflow-x-auto md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -143,6 +169,7 @@ export function CourtSlotTable({
         </TableBody>
       </Table>
     </div>
+    </>
   );
 }
 

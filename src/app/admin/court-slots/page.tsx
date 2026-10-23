@@ -285,7 +285,7 @@ export default function CourtSlotsPage() {
   const saving = updateSlotMutation.isPending;
 
   return (
-    <Card className="flex flex-col gap-4 p-6">
+    <Card className="flex flex-col gap-4 p-6 max-md:p-3">
       <CardHeader className="p-0 space-y-1">
         <CardTitle>Turnos de canchas</CardTitle>
         <CardDescription>

@@ -368,10 +368,10 @@ export default function PurchaseDetailPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto space-y-6 p-6 max-md:p-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-2">
+        <div className="flex items-center gap-4 max-md:min-w-0">
           <Button
             variant="ghost"
             size="icon"
@@ -380,7 +380,7 @@ export default function PurchaseDetailPage() {
             <ArrowLeftIcon className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-3xl font-bold max-md:text-xl">
               {isNewPurchase ? "Nueva compra" : `Compra #${purchase?.id}`}
             </h1>
             {!isNewPurchase && purchase && (
@@ -581,7 +581,7 @@ export default function PurchaseDetailPage() {
       {/* Items de la compra */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3">
             <div>
               <CardTitle>Items</CardTitle>
               <CardDescription>
@@ -596,7 +596,7 @@ export default function PurchaseDetailPage() {
               </CardDescription>
             </div>
             {!isPurchaseReadOnly && (
-              <Button variant="outline" size="sm" onClick={addLine}>
+              <Button variant="outline" size="sm" className="max-md:w-full" onClick={addLine}>
                 <PlusIcon className="w-4 h-4 mr-1" />
                 Agregar línea
               </Button>
@@ -604,7 +604,90 @@ export default function PurchaseDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="space-y-3 md:hidden">
+            {lines.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No hay items en esta compra.
+              </p>
+            ) : (
+              lines.map((line) => {
+                const qty = typeof line.quantity === "string" ? Number(line.quantity) : line.quantity;
+                const cost = typeof line.unitCost === "string" ? Number(line.unitCost) : line.unitCost;
+                const subtotal = !qty || !cost ? 0 : Number(qty) * Number(cost);
+                return (
+                  <div key={line.id} className="space-y-2 rounded-lg border p-3">
+                    {isPurchaseReadOnly ? (
+                      <div className="font-medium">
+                        {products.find((p) => p.id === line.productId)?.name ?? "Producto"}
+                      </div>
+                    ) : (
+                      <ProductSearchSelect
+                        products={products}
+                        value={line.productId}
+                        onValueChange={(productId) => updateLine(line.id, { productId })}
+                        disabled={savePurchaseMutation.isPending}
+                        placeholder="Seleccionar producto"
+                        searchPlaceholder="Buscar producto..."
+                      />
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Cantidad</span>
+                        {isPurchaseReadOnly ? (
+                          <div>{line.quantity}</div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min={0}
+                            value={line.quantity}
+                            onChange={(e) =>
+                              updateLine(line.id, {
+                                quantity: e.target.value === "" ? "" : Number(e.target.value),
+                              })
+                            }
+                            disabled={savePurchaseMutation.isPending}
+                          />
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Costo unitario</span>
+                        {isPurchaseReadOnly ? (
+                          <div>${typeof line.unitCost === "number" ? line.unitCost.toFixed(2) : line.unitCost}</div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={line.unitCost}
+                            onChange={(e) =>
+                              updateLine(line.id, {
+                                unitCost: e.target.value === "" ? "" : Number(e.target.value),
+                              })
+                            }
+                            disabled={savePurchaseMutation.isPending}
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">${subtotal.toFixed(2)}</span>
+                      {!isPurchaseReadOnly && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => removeLine(line.id)}
+                          disabled={savePurchaseMutation.isPending || lines.length === 1}
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden rounded-md border md:block">
             <Table>
               <TableHeader>
                 <TableRow>
