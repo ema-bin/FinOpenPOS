@@ -168,6 +168,19 @@ function DetailTables({
         {paymentMethods.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
+          <>
+          <div className="space-y-2 md:hidden">
+            {paymentMethods.map((row) => (
+              <div key={row.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{row.payment_method_name}</div>
+                  <div className="text-xs text-muted-foreground">{row.transaction_count} cobros</div>
+                </div>
+                <div className="shrink-0 font-medium">${row.total_amount.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -188,6 +201,8 @@ function DetailTables({
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </div>
       <div>
@@ -242,6 +257,19 @@ function DetailTables({
         {categories.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
+          <>
+          <div className="space-y-2 md:hidden">
+            {categories.map((row) => (
+              <div key={row.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{row.category_name}</div>
+                  <div className="text-xs text-muted-foreground">Cant. {row.quantity_sold}</div>
+                </div>
+                <div className="shrink-0 font-medium">${row.total_amount.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -262,6 +290,8 @@ function DetailTables({
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </div>
     </div>

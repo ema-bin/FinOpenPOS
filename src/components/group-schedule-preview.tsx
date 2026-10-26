@@ -748,8 +748,128 @@ export function GroupSchedulePreview({
     );
   };
 
+  const renderMatchCard = (
+    flat: FlatMatch,
+    showTournamentColumn: boolean
+  ) => {
+    const isEditing = editingKey === flat.key;
+    const isSelected = selectedRow1 === flat.key || selectedRow2 === flat.key;
+    const m = flat.match;
+    const label1 = teamLabel(m.team1);
+    const label2 = teamLabel(m.team2);
+    const vs =
+      label1 !== "—" && label2 !== "—"
+        ? `${label1} vs ${label2}`
+        : label1 !== "—" || label2 !== "—"
+          ? `${label1 !== "—" ? label1 : label2}`
+          : "Por definir";
+    return (
+      <div
+        key={flat.key}
+        className={cn(
+          "rounded-lg border p-3",
+          isSelected && "ring-2 ring-blue-400",
+          !readOnly && "cursor-pointer"
+        )}
+        onClick={() => {
+          if (!readOnly && !isEditing) toggleRowSelection(flat.key);
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            {showTournamentColumn ? (
+              <div className="text-xs text-muted-foreground">{flat.tournamentName}</div>
+            ) : null}
+            <div className="text-xs text-muted-foreground">{flat.groupName}</div>
+            <div className="font-medium">{vs}</div>
+          </div>
+          {!readOnly && !isEditing ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                startEdit(flat);
+              }}
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+        </div>
+        {isEditing ? (
+          <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="h-8 text-xs" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} className="h-8 text-xs" step="60" />
+              <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="h-8 text-xs" step="60" />
+            </div>
+            <Select value={editCourtId} onValueChange={setEditCourtId}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Cancha" />
+              </SelectTrigger>
+              <SelectContent>
+                {courts.map((court) => (
+                  <SelectItem key={court.id} value={String(court.id)}>
+                    {court.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-1">
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" disabled={saving} onClick={() => saveEdit(flat)}>
+                <CheckIcon className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={cancelEdit}>
+                <XIcon className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-1 text-xs text-muted-foreground">
+            {m.match_date ? formatDate(m.match_date) : "—"}
+            {" · "}
+            {m.start_time
+              ? formatTimeRange(m.start_time, resolveMatchEndTime(m.start_time, m.end_time, flat.matchDuration))
+              : "—"}
+            {" · "}
+            {m.court_id ? courtMap.get(m.court_id) ?? `Cancha ${m.court_id}` : "—"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderTable = (rows: ScheduleRow[], showTournamentColumn: boolean) => (
-    <div className="border rounded-lg overflow-x-auto">
+    <>
+    <div className="space-y-2 md:hidden">
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No hay partidos programados para mostrar
+        </p>
+      ) : (
+        rows.map((row) =>
+          row.type === "match" ? (
+            renderMatchCard(row.flat, showTournamentColumn)
+          ) : (
+            <div
+              key={row.key}
+              className={cn(
+                "rounded-lg border bg-muted/30 p-3 text-sm italic text-muted-foreground",
+                (selectedRow1 === row.key || selectedRow2 === row.key) && "ring-2 ring-blue-400",
+                !readOnly && "cursor-pointer"
+              )}
+              onClick={() => {
+                if (!readOnly) toggleRowSelection(row.key);
+              }}
+            >
+              Slot libre · {formatDate(row.slotDate)} · {formatTimeRange(row.startTime, resolveMatchEndTime(row.startTime, row.endTime, 60))} · {courtMap.get(row.courtId) ?? `Cancha ${row.courtId}`}
+            </div>
+          )
+        )
+      )}
+    </div>
+    <div className="hidden overflow-x-auto rounded-lg border md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -783,6 +903,7 @@ export function GroupSchedulePreview({
         </TableBody>
       </Table>
     </div>
+    </>
   );
 
   if (isLoading) {

@@ -744,6 +744,125 @@ export function PlayoffSchedulePreview({
     );
   };
 
+  const renderMatchCard = (item: FlatMatch, showTournament: boolean) => {
+    const isEditing = editingKey === item.key;
+    const isSwapSelected = swapMode && swapSourceKey === item.key;
+    const rowCanModify =
+      canModify &&
+      (item.match.id > 0 || (isPlannedMode && Boolean(onPlannedTournamentsChange)));
+    const label1 = item.team1Display ?? teamLabel(item.match.team1);
+    const label2 = item.team2Display ?? teamLabel(item.match.team2);
+    const vs =
+      label1 !== "—" && label2 !== "—"
+        ? `${label1} vs ${label2}`
+        : label1 !== "—" || label2 !== "—"
+          ? `${label1 !== "—" ? label1 : label2} (BYE)`
+          : "Por definir";
+
+    return (
+      <div
+        key={item.key}
+        className={cn(
+          "rounded-lg border p-3",
+          swapMode && rowCanModify && "cursor-pointer",
+          isSwapSelected && "ring-2 ring-amber-400"
+        )}
+        onClick={() => {
+          if (swapMode && rowCanModify && !isEditing) void handleSwapSelect(item);
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-xs text-muted-foreground">
+              {showTournament ? `${item.tournamentName} · ` : ""}
+              {ROUND_LABELS[item.round] ?? item.round}
+            </div>
+            <div className="font-medium">{vs}</div>
+          </div>
+          {rowCanModify && !swapMode && !isEditing && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                startEdit(item);
+              }}
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {isEditing ? (
+          <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <Input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                type="time"
+                value={editTime}
+                onChange={(e) => setEditTime(e.target.value)}
+                className="h-8 text-xs"
+                step="60"
+              />
+              <Input
+                type="time"
+                value={editEndTime}
+                onChange={(e) => setEditEndTime(e.target.value)}
+                className="h-8 text-xs"
+                step="60"
+              />
+            </div>
+            <Select value={editCourtId} onValueChange={setEditCourtId}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Cancha" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin cancha</SelectItem>
+                {courts.map((court) => (
+                  <SelectItem key={court.id} value={String(court.id)}>
+                    {court.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-1">
+              <Button size="sm" variant="ghost" disabled={saving} onClick={() => saveEdit(item)}>
+                <CheckIcon className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                <XIcon className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-1 text-xs text-muted-foreground">
+            {item.match.match_date ? formatDate(item.match.match_date) : "—"}
+            {" · "}
+            {item.match.start_time
+              ? formatTimeRange(
+                  item.match.start_time,
+                  resolveMatchEndTime(
+                    item.match.start_time,
+                    item.match.end_time,
+                    item.playoffDuration
+                  )
+                )
+              : "—"}
+            {" · "}
+            {item.match.court_id
+              ? courtMap.get(item.match.court_id) ?? `Cancha ${item.match.court_id}`
+              : "—"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (!isPlannedMode && isLoading) {
     return (
       <div className="h-[160px] flex items-center justify-center">
@@ -847,7 +966,11 @@ export function PlayoffSchedulePreview({
       )}
 
       {viewMode === "timeline" ? (
-        <div className="rounded-md border overflow-x-auto">
+        <>
+        <div className="space-y-2 md:hidden">
+          {flatMatches.map((item) => renderMatchCard(item, true))}
+        </div>
+        <div className="hidden overflow-x-auto rounded-md border md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -863,6 +986,7 @@ export function PlayoffSchedulePreview({
             <TableBody>{flatMatches.map(renderRow)}</TableBody>
           </Table>
         </div>
+        </>
       ) : (
         <div className="space-y-6">
           {groupedByTournament.map(([name, items]) => {
@@ -882,7 +1006,10 @@ export function PlayoffSchedulePreview({
                 />
                 {name}
               </h4>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="space-y-2 md:hidden">
+                {items.map((item) => renderMatchCard(item, false))}
+              </div>
+              <div className="hidden overflow-x-auto rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>

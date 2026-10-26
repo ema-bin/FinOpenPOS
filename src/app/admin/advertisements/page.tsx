@@ -239,17 +239,17 @@ export default function AdvertisementsPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="p-6 max-md:p-3">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between max-md:items-stretch">
           <div>
             <h1 className="text-xl font-semibold">Publicidad</h1>
             <p className="text-sm text-muted-foreground">
               Administrá los banners que se muestran en la app (solo las activas aparecen).
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AdvertisementFilterOption)}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[140px] max-md:w-full">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
@@ -258,11 +258,67 @@ export default function AdvertisementsPage() {
                 <SelectItem value="all">Todas</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => openDialog()}>Nueva publicidad</Button>
+            <Button className="max-md:w-full" onClick={() => openDialog()}>Nueva publicidad</Button>
           </div>
         </CardHeader>
       <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="space-y-2 md:hidden">
+            {isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Cargando...</p>
+            ) : filteredAds.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {sortedAds.length ? "No hay publicidades con este filtro" : "No hay publicidades todavía"}
+              </p>
+            ) : (
+              filteredAds.map((ad) => (
+                <div key={ad.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  {ad.image_url ? (
+                    <Image
+                      src={ad.image_url}
+                      alt={ad.name}
+                      width={96}
+                      height={40}
+                      className="h-10 w-24 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-24 shrink-0 rounded bg-muted/40" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{ad.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Orden {ad.ordering} · {ad.is_active ? "Activa" : "Inactiva"}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0">
+                    <Button size="icon" variant="ghost" onClick={() => openDialog(ad)} aria-label="Editar publicidad">
+                      <FilePenIcon className="h-4 w-4" />
+                    </Button>
+                    {ad.is_active ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => mutateDeactivate.mutate(ad.id)}
+                        aria-label="Inactivar publicidad"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => mutateReactivate.mutate(ad.id)}
+                        disabled={mutateReactivate.isPending}
+                        aria-label="Reactivar publicidad"
+                      >
+                        <RotateCcwIcon className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>

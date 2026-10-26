@@ -566,7 +566,34 @@ export default function ScheduleReviewTab({
                     {scheduleCompatibilityByGroup.map((groupComp) => (
                       <div key={groupComp.groupId} className="rounded-md border bg-background p-3">
                         <div className="text-sm font-semibold mb-2">{groupComp.groupName}</div>
-                        <div className="overflow-x-auto">
+                        <div className="space-y-2 md:hidden">
+                          {groupComp.rows.map((row, idx) => {
+                            const badgeClass =
+                              row.compatibilityPct < 40
+                                ? "bg-red-100 text-red-800"
+                                : row.compatibilityPct < 70
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-green-100 text-green-800";
+                            return (
+                              <div key={`${groupComp.groupId}-${idx}`} className="rounded-lg border p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 text-sm">
+                                    {row.teamA}
+                                    <span className="text-muted-foreground"> vs </span>
+                                    {row.teamB}
+                                  </div>
+                                  <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                    {row.compatibilityPct}%
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Disp. {row.availableA}/{row.availableB} · Comunes {row.overlap}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="hidden overflow-x-auto md:block">
                           <Table>
                             <TableHeader>
                               <TableRow>
