@@ -1094,6 +1094,8 @@ export class TournamentPlayoffsRepository extends BaseRepository {
           set2_team2_games,
           set3_team1_games,
           set3_team2_games,
+          super_tiebreak_team1_points,
+          super_tiebreak_team2_points,
           team1:team1_id (
             id,
             display_name,
