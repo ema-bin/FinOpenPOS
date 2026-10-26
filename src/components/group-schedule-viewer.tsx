@@ -1523,8 +1523,78 @@ export function GroupScheduleViewer({
 
           <TabsContent value="matches" className="space-y-4 mt-4">
           <TooltipProvider>
+          <div className="space-y-2 md:hidden">
+            {scheduleRows.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No hay slots ni partidos para mostrar
+              </p>
+            ) : (
+              scheduleRows.map((rowItem) => {
+                const match = rowItem.type === "match" ? rowItem.match : null;
+                const selected = selectedRow1 === rowItem.key || selectedRow2 === rowItem.key;
+                const team1 = match ? teamLabel(match.team1, match.match_order, true) : "Slot libre";
+                const team2 = match ? teamLabel(match.team2, match.match_order, false) : "";
+                const courtId = match?.court_id ?? (rowItem.type === "free" ? rowItem.courtId : undefined);
+                const groupInfo = match?.tournament_group_id
+                  ? groupMap.get(match.tournament_group_id)
+                  : null;
+                const groupName = rowItem.type === "free" ? "Slot libre" : groupInfo?.name || "Sin grupo";
+                const tournamentName =
+                  match?.tournament_group_id != null
+                    ? tournamentNameByGroupId?.get(match.tournament_group_id)
+                    : undefined;
+                const slotViolation = match ? matchSlotViolation.get(match.id) : undefined;
+                const violatesSlotRestriction =
+                  !!slotViolation &&
+                  (slotViolation.team1 ||
+                    slotViolation.team2 ||
+                    (slotViolation.round2TeamsCantPlay?.length ?? 0) > 0);
+                const courtConflictKey =
+                  match?.match_date && match.start_time && match.court_id != null
+                    ? `${normalizeMatchDate(match.match_date)}\t${toHHMM(match.start_time)}\t${match.court_id}`
+                    : null;
+                const hasCourtConflict = !!courtConflictKey && courtConflictKeys.has(courtConflictKey);
+                const multiDayInfo = match
+                  ? matchMultiDayInfo.get(match.id) ?? { team1PlaysMultipleDays: false, team2PlaysMultipleDays: false }
+                  : { team1PlaysMultipleDays: false, team2PlaysMultipleDays: false };
+                return (
+                  <button
+                    key={rowItem.key}
+                    type="button"
+                    onClick={() => handleSelectRow(rowItem.key)}
+                    className={cn(
+                      "w-full rounded-lg border p-3 text-left",
+                      selected && "ring-2 ring-blue-500",
+                      hasCourtConflict && "border-red-600 bg-red-200 dark:bg-red-950/50",
+                      !hasCourtConflict && violatesSlotRestriction && "border-red-400 bg-red-100",
+                      !hasCourtConflict && !violatesSlotRestriction && rowItem.type === "free" && "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <div className="text-xs text-muted-foreground">
+                      {globalMode && tournamentName ? `${tournamentName} · ` : ""}
+                      {groupName}
+                    </div>
+                    <div className="font-medium">
+                      {team2 ? `${team1} vs ${team2}` : team1}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {rowItem.slotDate ? formatDate(rowItem.slotDate) : "—"}
+                      {" · "}
+                      {rowItem.startTime ? formatTimeRange(rowItem.startTime, rowItem.endTime) : "—"}
+                      {courtId != null
+                        ? ` · ${courtMap.get(courtId) ?? `Cancha #${courtId}`}`
+                        : ""}
+                    </div>
+                    {(multiDayInfo.team1PlaysMultipleDays || multiDayInfo.team2PlaysMultipleDays) && (
+                      <div className="mt-1 text-xs font-medium text-red-700">Juega en días diferentes</div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
           {/* Tabla de partidos */}
-          <div className="border rounded-lg">
+          <div className="hidden rounded-lg border md:block">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                 <TableRow>

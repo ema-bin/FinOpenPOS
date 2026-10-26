@@ -195,12 +195,51 @@ export default function StandingsTab({ tournament }: { tournament: Pick<Tourname
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Tabla de posiciones */}
-                <div className="border rounded-lg overflow-hidden max-md:overflow-x-auto">
+                <div className="overflow-hidden rounded-lg border">
                   <div className={`${groupColor.bg} px-4 py-2 border-b`}>
                     <h4 className={`font-semibold text-sm ${groupColor.text}`}>
                       Tabla de posiciones
                     </h4>
                   </div>
+                  <div className="space-y-2 p-3 md:hidden">
+                    {groupStandings.length > 0 ? (
+                      groupStandings.map((standing) => {
+                        const sets = standing.sets_won - standing.sets_lost;
+                        const games = standing.games_won - standing.games_lost;
+                        return (
+                          <div key={standing.id} className="rounded-lg border p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 font-medium">
+                                {standing.position ?? "—"} · {teamLabelShort(standing.team)}
+                              </div>
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-1 text-xs">
+                              <span>PJ {standing.matches_played}</span>
+                              <span className="text-green-600">G {standing.wins}</span>
+                              <span className="text-red-600">P {standing.losses}</span>
+                              <span>Sets {sets > 0 ? `+${sets}` : sets}</span>
+                              <span>Games {games > 0 ? `+${games}` : games}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (data.groupTeams || []).filter((gt) => gt.tournament_group_id === group.id).length === 0 ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">No hay equipos en este grupo</p>
+                    ) : (
+                      (data.groupTeams || [])
+                        .filter((gt) => gt.tournament_group_id === group.id)
+                        .sort((a, b) => (a.team?.seed_number ?? 999) - (b.team?.seed_number ?? 999))
+                        .map((gt, index) => (
+                          <div key={gt.id} className="rounded-lg border p-3">
+                            <div className="font-medium">
+                              {index + 1} · {gt.team ? teamLabelShort(gt.team) : "—"}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">Sin partidos todavía</div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  <div className="hidden md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -289,6 +328,7 @@ export default function StandingsTab({ tournament }: { tournament: Pick<Tourname
                       })()}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
 
                 {/* Resultados de partidos */}

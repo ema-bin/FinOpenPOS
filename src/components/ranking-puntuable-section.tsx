@@ -909,6 +909,34 @@ export function RankingPuntuableSection() {
                     <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : breakdown && breakdown.entries.length > 0 ? (
+                  <>
+                  <div className="space-y-2 md:hidden">
+                    {breakdown.entries.map((entry) => (
+                      <div key={entry.tournament_id} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium">{entry.tournament_name}</div>
+                            {entry.is_grand_prix ? (
+                              <div className="text-xs text-muted-foreground">Grand Prix</div>
+                            ) : null}
+                            {entry.from_lower_category ? (
+                              <div className="text-xs text-muted-foreground">50% (cat. inferior)</div>
+                            ) : null}
+                            <div className="text-xs text-muted-foreground">
+                              {ROUND_LABELS[entry.round_reached] ?? entry.round_reached}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right font-medium tabular-nums">
+                            {entry.points_counted}
+                            {entry.from_lower_category && entry.points_raw !== entry.points_counted ? (
+                              <span className="block text-xs font-normal text-muted-foreground">de {entry.points_raw}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -950,6 +978,8 @@ export function RankingPuntuableSection() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
+                  </>
                 ) : (
                   <p className="py-8 text-center text-sm text-muted-foreground">
                     Sin torneos que sumen en esta categoría.
@@ -984,6 +1014,41 @@ export function RankingPuntuableSection() {
                 Nadie en {categoryName} supera {minTournaments} torneos en {currentYear}.
               </p>
             ) : (
+            <>
+            <div className="space-y-2 md:hidden">
+              {(masterSplit
+                ? [
+                    ...masterSplit.qualifiers.map((row) => ({ row, role: "entra" as const })),
+                    ...masterSplit.substitutes.map((row) => ({ row, role: "suplente" as const })),
+                  ]
+                : ranking.rows.map((row) => ({ row, role: null }))
+              ).map(({ row, role }, index, list) => (
+                <Fragment key={row.player_id}>
+                  {role === "suplente" && list[index - 1]?.role === "entra" ? (
+                    <p className="px-1 text-sm font-medium text-muted-foreground">Suplentes</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="flex w-full items-start justify-between gap-2 rounded-lg border p-3 text-left"
+                    onClick={() => setBreakdownPlayer(row)}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        {row.position}. {row.first_name} {row.last_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{row.tournaments_played} torneos</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-semibold">{row.total_points}</div>
+                      {masterSplit ? (
+                        role === "entra" ? <Badge>Entra</Badge> : <Badge variant="secondary">Suplente</Badge>
+                      ) : null}
+                    </div>
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1048,6 +1113,8 @@ export function RankingPuntuableSection() {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
             )
           ) : (
             <p className="py-8 text-center text-muted-foreground">
@@ -1074,6 +1141,16 @@ export function RankingPuntuableSection() {
               <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
+            <>
+            <div className="space-y-2 md:hidden">
+              {(pointRules as TournamentRankingPointRule[]).map((r) => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                  <span>{ROUND_LABELS[r.round_reached] ?? r.round_reached}</span>
+                  <span className="font-medium">{r.points}</span>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1094,6 +1171,8 @@ export function RankingPuntuableSection() {
                 ))}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
