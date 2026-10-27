@@ -999,7 +999,7 @@ export function RankingPuntuableSection() {
             <p className="text-sm text-muted-foreground">
               {minIsValid && masterSplit
                 ? `Entran ${masterSplit.qualifiers.length} de ${MASTER_QUALIFIER_COUNT} en ${categoryName}. Suplentes: ${masterSplit.substitutes.length}.`
-                : `Entran los primeros ${MASTER_QUALIFIER_COUNT} de ${categoryName} con más torneos que este mínimo. El resto que también llega queda como suplente.`}
+                : `Entran los primeros ${MASTER_QUALIFIER_COUNT} de ${categoryName} con más torneos que este mínimo. Si no hay ${MASTER_FLYER_SUBSTITUTE_COUNT} suplentes que lleguen, se completan con los siguientes del ranking.`}
             </p>
           )}
           {loadingRanking ? (
@@ -1024,7 +1024,7 @@ export function RankingPuntuableSection() {
                 : ranking.rows.map((row) => ({ row, role: null }))
               ).map(({ row, role }, index, list) => (
                 <Fragment key={row.player_id}>
-                  {role === "suplente" && list[index - 1]?.role === "entra" ? (
+                  {role === "suplente" && list[index - 1]?.role !== "suplente" ? (
                     <p className="px-1 text-sm font-medium text-muted-foreground">Suplentes</p>
                   ) : null}
                   <button
@@ -1070,7 +1070,7 @@ export function RankingPuntuableSection() {
                   : ranking.rows.map((row) => ({ row, role: null }))
                 ).map(({ row, role }, index, list) => (
                   <Fragment key={row.player_id}>
-                    {role === "suplente" && list[index - 1]?.role === "entra" && (
+                    {role === "suplente" && list[index - 1]?.role !== "suplente" && (
                       <TableRow>
                         <TableCell
                           colSpan={5}
