@@ -12,6 +12,7 @@ export interface CreatePurchaseInput {
     unitCost: number;
   }>;
   notes?: string | null;
+  purchaseDate?: string;
 }
 
 class PurchasesService {
