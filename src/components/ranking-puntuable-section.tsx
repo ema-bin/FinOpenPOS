@@ -467,27 +467,78 @@ export function RankingPuntuableSection() {
         const colW = (outW - listPadX * 2 - colGap) / 2;
         const leftX = listPadX;
         const rightX = listPadX + colW + colGap;
-        const rowH = 78;
-        const headingY = dateLabel ? 430 : 320;
+        const rowH = 52;
+        const headingY = dateLabel ? 530 : 410;
         const listTop = headingY + 86;
+        const classCount = Math.max(leftRows.length, rightRows.length, 1);
+        const classLastLine = listTop + (classCount - 1) * rowH;
+        const boxX = listPadX - 16;
+        const boxW = outW - boxX * 2;
+        const classBoxY = headingY - 72;
+        const classBoxH = classLastLine + 30 - classBoxY;
+
+        ctx.save();
+        ctx.shadowColor = "rgba(90, 52, 0, 0.55)";
+        ctx.shadowBlur = 26;
+        ctx.shadowOffsetY = 12;
+        ctx.beginPath();
+        ctx.roundRect(boxX, classBoxY, boxW, classBoxH, 22);
+        const gold = ctx.createLinearGradient(boxX, classBoxY, boxX, classBoxY + classBoxH);
+        gold.addColorStop(0, "rgba(255, 214, 120, 0.28)");
+        gold.addColorStop(0.55, "rgba(212, 156, 42, 0.22)");
+        gold.addColorStop(1, "rgba(140, 88, 12, 0.4)");
+        ctx.fillStyle = gold;
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255, 236, 186, 0.95)";
+        ctx.stroke();
+        ctx.restore();
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 4;
 
         paintHeading("CLASIFICADOS", padX, headingY, 68);
         leftRows.forEach((row, index) => {
-          paintPosterLine(row, index + 1, leftX, listTop + index * rowH, colW, 34);
+          paintPosterLine(row, index + 1, leftX, listTop + index * rowH, colW, 40);
         });
         rightRows.forEach((row, index) => {
-          paintPosterLine(row, index + 9, rightX, listTop + index * rowH, colW, 34);
+          paintPosterLine(row, index + 9, rightX, listTop + index * rowH, colW, 40);
         });
 
         if (flyerSubstitutes.length > 0) {
-          const substitutesY = listTop + 8 * rowH + 70;
+          const subLineStep = 68;
+          const boxY = classBoxY + classBoxH + 140;
+          const substitutesY = boxY + 72;
+          const subFirstLine = substitutesY + 78;
+          const subLastLine = subFirstLine + (flyerSubstitutes.length - 1) * subLineStep;
+          const boxH = subLastLine + 28 - boxY;
+
+          ctx.save();
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 22);
+          ctx.fillStyle = "rgba(0,0,0,0.42)";
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.stroke();
+          ctx.restore();
+          ctx.shadowColor = "rgba(0,0,0,0.45)";
+          ctx.shadowBlur = 18;
+          ctx.shadowOffsetY = 4;
+
           paintHeading("SUPLENTES", padX, substitutesY, 58);
           flyerSubstitutes.forEach((row, index) => {
             paintPosterLine(
               row,
               index + 1,
               padX,
-              substitutesY + 70 + index * 68,
+              subFirstLine + index * subLineStep,
               outW - listPadX * 2,
               36
             );
