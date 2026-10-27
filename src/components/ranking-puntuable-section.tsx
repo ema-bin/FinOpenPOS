@@ -55,6 +55,7 @@ import {
 import { toast } from "sonner";
 
 const MASTER_MIN_TOURNAMENTS_KEY = "pcp-ranking-master-min-tournaments";
+const MASTER_FLYER_DATE_KEY = "pcp-ranking-master-flyer-date";
 
 const ROUND_LABELS: Record<string, string> = {
   champion: "Campeón",
@@ -139,6 +140,8 @@ export function RankingPuntuableSection() {
   const [masterCutoffOn, setMasterCutoffOn] = useState(false);
   const [minByCategory, setMinByCategory] = useState<Record<string, string>>({});
   const [minsReady, setMinsReady] = useState(false);
+  const [masterFlyerDate, setMasterFlyerDate] = useState("");
+  const [flyerDateReady, setFlyerDateReady] = useState(false);
 
   useEffect(() => {
     if (sortedCategories.length > 0 && selectedCategoryId == null) {
@@ -157,12 +160,24 @@ export function RankingPuntuableSection() {
       // Si el valor guardado no se puede leer, el mínimo queda vacío.
     }
     setMinsReady(true);
+    try {
+      const savedDate = localStorage.getItem(MASTER_FLYER_DATE_KEY);
+      if (typeof savedDate === "string") setMasterFlyerDate(savedDate);
+    } catch {
+      // Si no se puede leer, la fecha del flyer queda vacía.
+    }
+    setFlyerDateReady(true);
   }, []);
 
   useEffect(() => {
     if (!minsReady) return;
     localStorage.setItem(MASTER_MIN_TOURNAMENTS_KEY, JSON.stringify(minByCategory));
   }, [minByCategory, minsReady]);
+
+  useEffect(() => {
+    if (!flyerDateReady) return;
+    localStorage.setItem(MASTER_FLYER_DATE_KEY, masterFlyerDate);
+  }, [masterFlyerDate, flyerDateReady]);
 
   useEffect(() => {
     // Resetear preview cuando cambie la categoría
@@ -298,7 +313,7 @@ export function RankingPuntuableSection() {
       const perRowH = 60;
       const headerH = 360;
       const footerH = 140;
-      const masterCanvasH = 1350;
+      const masterCanvasH = 1920;
       // Fijamos altura por página para que todas las imágenes sean consistentes.
       const outH = kind === "master" ? masterCanvasH : Math.max(2060, headerH + perRowH * PAGE_SIZE + footerH);
       const previewCssH = Math.round((outH / outW) * 320);
@@ -393,17 +408,26 @@ export function RankingPuntuableSection() {
         ctx.shadowOffsetY = 4;
 
         const title = `MASTER ${categoryName}`.toUpperCase();
-        let titleSize = 108;
+        let titleSize = 132;
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
         ctx.font = `bold ${titleSize}px ${anton}`;
-        while (titleSize > 64 && ctx.measureText(title).width > outW - padX * 2) {
+        while (titleSize > 72 && ctx.measureText(title).width > outW - padX * 2) {
           titleSize -= 4;
           ctx.font = `bold ${titleSize}px ${anton}`;
         }
-        ctx.fillText(title, outW / 2, 150);
-        ctx.font = `bold 42px ${anton}`;
-        ctx.fillText(String(currentYear), outW / 2, 210);
+        ctx.fillText(title, outW / 2, 200);
+
+        const dateLabel = masterFlyerDate.trim();
+        if (dateLabel) {
+          let dateSize = 72;
+          ctx.font = `bold ${dateSize}px ${anton}`;
+          while (dateSize > 36 && ctx.measureText(dateLabel).width > outW - padX * 2) {
+            dateSize -= 2;
+            ctx.font = `bold ${dateSize}px ${anton}`;
+          }
+          ctx.fillText(dateLabel, outW / 2, 310);
+        }
 
         const paintHeading = (label: string, x: number, y: number, size: number) => {
           ctx.font = `bold ${size}px ${anton}`;
@@ -438,32 +462,85 @@ export function RankingPuntuableSection() {
 
         const leftRows = qualifiers.slice(0, 8);
         const rightRows = qualifiers.slice(8, 16);
-        const colGap = 40;
-        const colW = (outW - padX * 2 - colGap) / 2;
-        const leftX = padX;
-        const rightX = padX + colW + colGap;
+        const colGap = 28;
+        const listPadX = 56;
+        const colW = (outW - listPadX * 2 - colGap) / 2;
+        const leftX = listPadX;
+        const rightX = listPadX + colW + colGap;
         const rowH = 52;
-        const listTop = 348;
+        const headingY = dateLabel ? 530 : 410;
+        const listTop = headingY + 86;
+        const classCount = Math.max(leftRows.length, rightRows.length, 1);
+        const classLastLine = listTop + (classCount - 1) * rowH;
+        const boxX = listPadX - 16;
+        const boxW = outW - boxX * 2;
+        const classBoxY = headingY - 72;
+        const classBoxH = classLastLine + 30 - classBoxY;
 
-        paintHeading("CLASIFICADOS", padX, 278, 54);
+        ctx.save();
+        ctx.shadowColor = "rgba(90, 52, 0, 0.55)";
+        ctx.shadowBlur = 26;
+        ctx.shadowOffsetY = 12;
+        ctx.beginPath();
+        ctx.roundRect(boxX, classBoxY, boxW, classBoxH, 22);
+        const gold = ctx.createLinearGradient(boxX, classBoxY, boxX, classBoxY + classBoxH);
+        gold.addColorStop(0, "rgba(255, 214, 120, 0.28)");
+        gold.addColorStop(0.55, "rgba(212, 156, 42, 0.22)");
+        gold.addColorStop(1, "rgba(140, 88, 12, 0.4)");
+        ctx.fillStyle = gold;
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255, 236, 186, 0.95)";
+        ctx.stroke();
+        ctx.restore();
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 4;
+
+        paintHeading("CLASIFICADOS", padX, headingY, 68);
         leftRows.forEach((row, index) => {
-          paintPosterLine(row, index + 1, leftX, listTop + index * rowH, colW, 32);
+          paintPosterLine(row, index + 1, leftX, listTop + index * rowH, colW, 40);
         });
         rightRows.forEach((row, index) => {
-          paintPosterLine(row, index + 9, rightX, listTop + index * rowH, colW, 32);
+          paintPosterLine(row, index + 9, rightX, listTop + index * rowH, colW, 40);
         });
 
         if (flyerSubstitutes.length > 0) {
-          const substitutesY = listTop + 8 * rowH + 28;
-          paintHeading("SUPLENTES", padX, substitutesY, 46);
+          const subLineStep = 68;
+          const boxY = classBoxY + classBoxH + 140;
+          const substitutesY = boxY + 72;
+          const subFirstLine = substitutesY + 78;
+          const subLastLine = subFirstLine + (flyerSubstitutes.length - 1) * subLineStep;
+          const boxH = subLastLine + 28 - boxY;
+
+          ctx.save();
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 22);
+          ctx.fillStyle = "rgba(0,0,0,0.42)";
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.stroke();
+          ctx.restore();
+          ctx.shadowColor = "rgba(0,0,0,0.45)";
+          ctx.shadowBlur = 18;
+          ctx.shadowOffsetY = 4;
+
+          paintHeading("SUPLENTES", padX, substitutesY, 58);
           flyerSubstitutes.forEach((row, index) => {
             paintPosterLine(
               row,
               index + 1,
               padX,
-              substitutesY + 58 + index * 44,
-              outW - padX * 2,
-              28
+              subFirstLine + index * subLineStep,
+              outW - listPadX * 2,
+              36
             );
           });
         }
@@ -707,6 +784,19 @@ export function RankingPuntuableSection() {
                 </div>
               </div>
             )}
+            {masterCutoffOn && (
+              <div className="space-y-2">
+                <Label htmlFor="master-flyer-date">Fecha en el flyer</Label>
+                <Input
+                  id="master-flyer-date"
+                  type="text"
+                  placeholder="4/5/6 Noviembre"
+                  className="w-52 max-md:w-full"
+                  value={masterFlyerDate}
+                  onChange={(event) => setMasterFlyerDate(event.target.value)}
+                />
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">Año {currentYear}</p>
             <div className="ml-auto flex flex-wrap gap-2">
               {masterCutoffOn && (
@@ -776,7 +866,7 @@ export function RankingPuntuableSection() {
                 <DialogDescription>
                   {shareKind === "ranking"
                     ? "Copiá la imagen para compartir en redes con el ranking de tu categoría."
-                    : `Una sola hoja: clasificados en dos columnas y hasta ${MASTER_FLYER_SUBSTITUTE_COUNT} suplentes abajo.`}
+                    : `Historia de Instagram: clasificados en dos columnas y hasta ${MASTER_FLYER_SUBSTITUTE_COUNT} suplentes abajo.`}
                 </DialogDescription>
               </DialogHeader>
 
