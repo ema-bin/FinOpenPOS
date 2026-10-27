@@ -172,7 +172,7 @@ export class PurchasesRepository extends BaseRepository {
    */
   async update(
     purchaseId: number,
-    updates: Partial<Omit<PurchaseDB, "id" | "user_uid" | "created_at">>
+    updates: Partial<Omit<PurchaseDB, "id" | "user_uid">>
   ): Promise<PurchaseWithRelations> {
     const { data, error } = await this.supabase
       .from("purchases")
@@ -288,6 +288,7 @@ export class PurchasesRepository extends BaseRepository {
         notes: `Purchase #${purchase.id} from supplier: ${supplier.name}`,
         purchase_id: purchase.id,
         user_uid: this.userId,
+        ...(input.created_at ? { created_at: input.created_at } : {}),
       }));
 
     if (stockMovementsPayload.length > 0) {

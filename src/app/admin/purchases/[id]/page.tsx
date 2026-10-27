@@ -73,6 +73,29 @@ async function fetchSuppliers(): Promise<SupplierDTO[]> {
   return suppliersService.getAll();
 }
 
+function todayInputValue(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function toDateInputValue(iso: string): string {
+  let normalized = iso.trim();
+  if (
+    !normalized.endsWith("Z") &&
+    !/[+-]\d{2}:?\d{2}$/.test(normalized) &&
+    normalized.includes("T")
+  ) {
+    normalized += "Z";
+  }
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return todayInputValue();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 type PurchaseLine = {
   id: number | string;
   productId: number | "none";
@@ -94,6 +117,7 @@ export default function PurchaseDetailPage() {
     number | "none"
   >("none");
   const [notes, setNotes] = useState<string>("");
+  const [purchaseDate, setPurchaseDate] = useState(todayInputValue);
   const [lines, setLines] = useState<PurchaseLine[]>([
     { id: 1, productId: "none", quantity: "", unitCost: "" },
   ]);
@@ -149,6 +173,7 @@ export default function PurchaseDetailPage() {
         purchaseData.payment_method?.id ?? "none"
       );
       setNotes(purchaseData.notes ?? "");
+      setPurchaseDate(toDateInputValue(purchaseData.created_at));
       
       // Convert purchase items to lines
       const initialLines: PurchaseLine[] = (purchaseData.items ?? []).map((item, index) => ({
@@ -249,9 +274,12 @@ export default function PurchaseDetailPage() {
           supplier_id: Number(selectedSupplierId),
           payment_method_id: selectedPaymentMethodId === "none" ? null : Number(selectedPaymentMethodId),
           notes: notes || null,
+          purchaseDate,
           items,
         });
       } else {
+        const dateChanged =
+          purchase != null && purchaseDate !== toDateInputValue(purchase.created_at);
         // Update existing purchase
         const res = await fetch(`/api/purchases/${purchaseId}`, {
           method: "PATCH",
@@ -260,6 +288,7 @@ export default function PurchaseDetailPage() {
             supplier_id: Number(selectedSupplierId),
             payment_method_id: selectedPaymentMethodId === "none" ? null : Number(selectedPaymentMethodId),
             notes: notes || null,
+            ...(dateChanged ? { purchaseDate } : {}),
             items,
           }),
         });
@@ -318,6 +347,32 @@ export default function PurchaseDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["purchases"] });
       setIsCancelDialogOpen(false);
       toast.success("Compra cancelada.");
+    },
+  });
+
+  const updatePurchaseDateMutation = useMutation({
+    mutationFn: async () => {
+      if (!purchaseId) throw new Error("No se puede cambiar la fecha de una compra nueva");
+      const res = await fetch(`/api/purchases/${purchaseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchaseDate }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Error al cambiar la fecha");
+      }
+      return (await res.json()) as PurchaseDTO;
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Error al cambiar la fecha.");
+    },
+    onSuccess: (updatedPurchase) => {
+      setPurchase(updatedPurchase);
+      setPurchaseDate(toDateInputValue(updatedPurchase.created_at));
+      queryClient.setQueryData(["purchase", purchaseId], updatedPurchase);
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      toast.success("Fecha actualizada.");
     },
   });
 
@@ -441,6 +496,17 @@ export default function PurchaseDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="purchase-date">Fecha</Label>
+                <Input
+                  id="purchase-date"
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-44 max-md:w-full"
+                  disabled={savePurchaseMutation.isPending}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label className="text-sm font-semibold">Proveedor</Label>
                 <Select
                   value={
@@ -550,10 +616,43 @@ export default function PurchaseDetailPage() {
             <CardHeader>
               <CardTitle>Acciones</CardTitle>
               <CardDescription>
-                La compra está completada y no se puede editar. Podés cancelarla para revertir el
-                ingreso de stock y el registro de pago asociado.
+                Los productos y el pago no se pueden cambiar. Sí podés corregir la fecha, o
+                cancelarla para revertir el ingreso de stock y el registro de pago.
               </CardDescription>
             </CardHeader>
+            <CardContent className="space-y-2">
+              <Label htmlFor="completed-purchase-date">Fecha</Label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  id="completed-purchase-date"
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-44 max-md:w-full"
+                  disabled={updatePurchaseDateMutation.isPending}
+                />
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={
+                    updatePurchaseDateMutation.isPending ||
+                    !purchaseDate ||
+                    (purchase != null &&
+                      purchaseDate === toDateInputValue(purchase.created_at))
+                  }
+                  onClick={() => updatePurchaseDateMutation.mutate()}
+                >
+                  {updatePurchaseDateMutation.isPending ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    "Guardar fecha"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
             <CardFooter className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="destructive"

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
 import type { PurchaseStatus } from "@/models/db/purchase";
 
 export async function GET(request: Request) {
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
         ? Number(body.paymentMethodId)
         : null;
     const notes: string = body.notes ?? "";
+    const purchaseDate = quickPurchaseCreatedAt(body.purchaseDate ?? body.purchase_date);
+    if (!purchaseDate.ok) {
+      return NextResponse.json({ error: purchaseDate.error }, { status: 400 });
+    }
     const items: Array<{
       productId: number;
       quantity: number;
@@ -97,6 +102,7 @@ export async function POST(request: Request) {
       supplier_id: supplierId,
       payment_method_id: paymentMethodId,
       notes,
+      ...(purchaseDate.createdAt ? { created_at: purchaseDate.createdAt } : {}),
       items,
     });
 

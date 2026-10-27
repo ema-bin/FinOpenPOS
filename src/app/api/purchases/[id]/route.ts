@@ -1,8 +1,46 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
 
 type RouteParams = { params: { id: string } };
+
+function readPurchaseDate(body: {
+  purchaseDate?: unknown;
+  purchase_date?: unknown;
+}): { ok: true; createdAt?: string } | { ok: false; error: string } {
+  if (body.purchaseDate === undefined && body.purchase_date === undefined) {
+    return { ok: true };
+  }
+  return quickPurchaseCreatedAt(body.purchaseDate ?? body.purchase_date);
+}
+
+async function alignPurchaseDate(
+  purchaseId: number,
+  transactionId: number | null,
+  createdAt: string
+) {
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = createClient();
+
+  if (transactionId) {
+    const { error } = await supabase
+      .from("transactions")
+      .update({ created_at: createdAt })
+      .eq("id", transactionId);
+    if (error) {
+      throw new Error(`Failed to update transaction date: ${error.message}`);
+    }
+  }
+
+  const { error: stockError } = await supabase
+    .from("stock_movements")
+    .update({ created_at: createdAt })
+    .eq("purchase_id", purchaseId);
+  if (stockError) {
+    throw new Error(`Failed to update stock movement date: ${stockError.message}`);
+  }
+}
 
 export async function GET(request: Request, { params }: RouteParams) {
   try {
@@ -42,6 +80,38 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     const body = await request.json();
+    const purchaseDate = readPurchaseDate(body);
+    if (!purchaseDate.ok) {
+      return NextResponse.json({ error: purchaseDate.error }, { status: 400 });
+    }
+
+    const createdAt = purchaseDate.createdAt;
+    const isDateOnly =
+      createdAt != null &&
+      body.items === undefined &&
+      body.supplier_id === undefined &&
+      body.payment_method_id === undefined &&
+      body.paymentMethodId === undefined &&
+      body.notes === undefined &&
+      body.status === undefined;
+
+    if (isDateOnly && createdAt) {
+      const currentPurchase = await repos.purchases.findById(purchaseId);
+      if (!currentPurchase) {
+        return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+      }
+      if (currentPurchase.status === "cancelled") {
+        return NextResponse.json(
+          { error: "No se puede cambiar la fecha de una compra cancelada" },
+          { status: 400 }
+        );
+      }
+
+      await repos.purchases.update(purchaseId, { created_at: createdAt });
+      await alignPurchaseDate(purchaseId, currentPurchase.transaction_id, createdAt);
+      const updated = await repos.purchases.findById(purchaseId);
+      return NextResponse.json(updated);
+    }
     
     // Check if items are being updated
     if (body.items && Array.isArray(body.items)) {
@@ -143,6 +213,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         updates.notes = notes;
       }
 
+      if (createdAt) {
+        updates.created_at = createdAt;
+      }
+
       // Handle transaction updates (similar to PUT logic)
       const finalPaymentMethodId = paymentMethodId !== undefined ? paymentMethodId : currentPurchase.payment_method_id;
       
@@ -180,6 +254,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
             status: "completed",
             payment_method_id: finalPaymentMethodId,
             description: `Purchase #${purchaseId} from ${supplier.name} (${paymentMethod.name})`,
+            ...(createdAt ? { created_at: createdAt } : {}),
           })
           .select("id")
           .single();
@@ -221,7 +296,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
         const { error: txUpdateError } = await supabase
           .from("transactions")
-          .update({ amount: newTotal })
+          .update({
+            amount: newTotal,
+            ...(createdAt ? { created_at: createdAt } : {}),
+          })
           .eq("id", currentPurchase.transaction_id);
 
         if (txUpdateError) {
@@ -251,6 +329,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         notes: `Purchase #${purchaseId} from supplier: ${supplier.name}`,
         purchase_id: purchaseId,
         user_uid: user.id,
+        ...(createdAt ? { created_at: createdAt } : {}),
       }));
 
       const { error: smError } = await supabase
