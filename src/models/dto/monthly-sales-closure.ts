@@ -55,6 +55,14 @@ export type MonthlySalesClosureDTO = {
   products?: MonthlySalesClosureProductDTO[];
   categories?: MonthlySalesClosureCategoryDTO[];
   included_days?: MonthlySalesClosureDayDTO[];
+  purchases?: Array<{
+    id: number;
+    date: string;
+    supplierName: string;
+    paymentMethodName: string | null;
+    totalAmount: number;
+  }>;
+  total_purchases?: number;
 };
 
 export type MonthlySalesClosurePreviewDTO = {
@@ -95,5 +103,13 @@ export type MonthlySalesClosurePreviewDTO = {
       quantitySold: number;
       totalAmount: number;
     }>;
+    purchases: Array<{
+      id: number;
+      date: string;
+      supplierName: string;
+      paymentMethodName: string | null;
+      totalAmount: number;
+    }>;
+    totalPurchases: number;
   };
 };
