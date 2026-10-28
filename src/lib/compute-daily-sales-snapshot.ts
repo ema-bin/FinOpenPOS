@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getBusinessDayRange } from "@/lib/business-day";
+import { getBusinessDayRange, getBusinessDayStart } from "@/lib/business-day";
+import { summarizeDiscountedLines, type DiscountableLine } from "@/lib/discounted-sale-lines";
 
 export type DailySalesSnapshotPaymentMethod = {
   paymentMethodId: number | null;
@@ -54,6 +55,100 @@ function isCantinaRevenue(product: {
   category?: { is_cantina_revenue?: boolean } | null;
 } | null): boolean {
   return product?.category?.is_cantina_revenue !== false;
+}
+
+const ORDER_ITEMS_SELECT = `
+  order_id,
+  quantity,
+  total_price,
+  product:product_id (
+    id,
+    name,
+    category_id,
+    category:category_id ( id, name, is_cantina_revenue )
+  )
+`;
+
+function mapOrderItems(items: unknown[]): DiscountableLine[] {
+  return items.map((raw) => {
+    const item = raw as {
+      order_id: number;
+      quantity: number;
+      total_price: number;
+      product:
+        | {
+            id: number;
+            name: string;
+            category_id: number | null;
+            category?: { id: number; name: string; is_cantina_revenue?: boolean } | null;
+          }
+        | {
+            id: number;
+            name: string;
+            category_id: number | null;
+            category?: { id: number; name: string; is_cantina_revenue?: boolean } | null;
+          }[]
+        | null;
+    };
+    const product = normalizeJoin(item.product);
+    return {
+      orderId: item.order_id,
+      quantity: Number(item.quantity) || 0,
+      lineTotal: Number(item.total_price) || 0,
+      cantina: isCantinaRevenue(product),
+      productId: product?.id ?? null,
+      productName: product?.name ?? "",
+      categoryId: product?.category?.id ?? product?.category_id ?? null,
+      categoryName: product?.category?.name ?? null,
+    };
+  });
+}
+
+/** Productos y categorías de la cantina, con el descuento de cada venta ya aplicado. */
+export async function loadDiscountedCantinaBreakdown(
+  supabase: SupabaseClient,
+  businessDates: readonly string[]
+): Promise<{
+  byProduct: DailySalesSnapshotProduct[];
+  byCategory: DailySalesSnapshotCategory[];
+}> {
+  if (businessDates.length === 0) return { byProduct: [], byCategory: [] };
+
+  const sorted = [...businessDates].sort();
+  const periodStart = getBusinessDayRange(sorted[0]).start.toISOString();
+  const periodEnd = getBusinessDayRange(sorted[sorted.length - 1]).end.toISOString();
+  const allowed = new Set(businessDates);
+
+  const { data: orders, error } = await supabase
+    .from("orders")
+    .select("id, closed_at, total_amount, discount_percentage, discount_amount")
+    .eq("status", "closed")
+    .gte("closed_at", periodStart)
+    .lt("closed_at", periodEnd);
+
+  if (error) throw new Error(error.message);
+
+  const included = (orders ?? []).filter((order) => {
+    if (!order.closed_at) return false;
+    const businessDate = getBusinessDayStart(new Date(order.closed_at)).toISOString().slice(0, 10);
+    return allowed.has(businessDate);
+  });
+
+  if (included.length === 0) return { byProduct: [], byCategory: [] };
+
+  const orderIds = included.map((order) => order.id);
+  const items: unknown[] = [];
+  for (let offset = 0; offset < orderIds.length; offset += 200) {
+    const { data: chunk, error: itemsError } = await supabase
+      .from("order_items")
+      .select(ORDER_ITEMS_SELECT)
+      .in("order_id", orderIds.slice(offset, offset + 200));
+    if (itemsError) throw new Error(itemsError.message);
+    items.push(...(chunk ?? []));
+  }
+
+  const summary = summarizeDiscountedLines(included, mapOrderItems(items));
+  return { byProduct: summary.byProduct, byCategory: summary.byCategory };
 }
 
 export async function computeDailySalesSnapshot(
@@ -122,90 +217,23 @@ export async function computeDailySalesSnapshot(
   if (closedOrderIds.length > 0) {
     const { data: items, error: itemsError } = await supabase
       .from("order_items")
-      .select(
-        `
-          order_id,
-          quantity,
-          total_price,
-          product:product_id (
-            id,
-            name,
-            category_id,
-            category:category_id ( id, name, is_cantina_revenue )
-          )
-        `
-      )
+      .select(ORDER_ITEMS_SELECT)
       .in("order_id", closedOrderIds);
 
     if (itemsError) throw new Error(itemsError.message);
 
-    const subtotalByOrder = new Map<number, number>();
+    const lines = mapOrderItems(items ?? []);
 
-    for (const item of items ?? []) {
-      const product = normalizeJoin(
-        item.product as unknown as
-          | {
-              id: number;
-              name: string;
-              category_id: number | null;
-              category?: { id: number; name: string; is_cantina_revenue?: boolean } | null;
-            }
-          | {
-              id: number;
-              name: string;
-              category_id: number | null;
-              category?: { id: number; name: string; is_cantina_revenue?: boolean } | null;
-            }[]
-          | null
-      );
-      if (!isCantinaRevenue(product)) continue;
-
-      const orderId = item.order_id as number;
-      const lineTotal = Number(item.total_price) || 0;
-      const quantity = Number(item.quantity) || 0;
-      subtotalByOrder.set(orderId, (subtotalByOrder.get(orderId) ?? 0) + lineTotal);
-
-      if (!product) continue;
-
-      const existingProduct = productMap.get(product.id) ?? {
-        productId: product.id,
-        productName: product.name,
-        categoryId: product.category_id ?? product.category?.id ?? null,
-        categoryName: product.category?.name ?? null,
-        quantitySold: 0,
-        totalAmount: 0,
-      };
-      existingProduct.quantitySold += quantity;
-      existingProduct.totalAmount += lineTotal;
-      productMap.set(product.id, existingProduct);
-
-      const categoryId = product.category?.id ?? product.category_id ?? null;
-      const categoryKey = categoryId?.toString() ?? "none";
-      const existingCategory = categoryMap.get(categoryKey) ?? {
-        categoryId,
-        categoryName: product.category?.name ?? "Sin categoría",
-        quantitySold: 0,
-        totalAmount: 0,
-      };
-      existingCategory.quantitySold += quantity;
-      existingCategory.totalAmount += lineTotal;
-      categoryMap.set(categoryKey, existingCategory);
+    const summary = summarizeDiscountedLines(closedOrders ?? [], lines);
+    totalDiscount = summary.totalDiscount;
+    discountedOrdersCount = summary.discountedOrdersCount;
+    for (const row of summary.byProduct) productMap.set(row.productId, row);
+    for (const row of summary.byCategory) {
+      categoryMap.set(row.categoryId?.toString() ?? "none", row);
     }
 
     for (const order of closedOrders ?? []) {
-      const subtotal = subtotalByOrder.get(order.id) ?? 0;
-      const finalTotal = Number(order.total_amount) || 0;
-      const explicitDiscount = Number(order.discount_amount) || 0;
-      const pctDiscount = Number(order.discount_percentage) || 0;
-      const discount =
-        explicitDiscount > 0
-          ? explicitDiscount
-          : pctDiscount > 0
-          ? (subtotal * pctDiscount) / 100
-          : Math.max(0, subtotal - finalTotal);
-      totalDiscount += discount;
-      if (discount > 0.005) discountedOrdersCount += 1;
-      if (finalTotal <= 0) zeroAmountOrdersCount += 1;
+      if ((Number(order.total_amount) || 0) <= 0) zeroAmountOrdersCount += 1;
     }
   }
 

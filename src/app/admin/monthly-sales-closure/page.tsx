@@ -288,6 +288,9 @@ function DetailTables({
       </div>
       <div>
         <h3 className="font-semibold mb-2">Ventas por producto</h3>
+        <p className="mb-2 text-sm text-muted-foreground">
+          El monto es el precio cobrado, con el descuento de la venta ya aplicado.
+        </p>
         {products.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
@@ -335,6 +338,9 @@ function DetailTables({
       </div>
       <div>
         <h3 className="font-semibold mb-2">Ventas por categoría</h3>
+        <p className="mb-2 text-sm text-muted-foreground">
+          El monto es el precio cobrado, con el descuento de la venta ya aplicado.
+        </p>
         {categories.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin datos.</p>
         ) : (
