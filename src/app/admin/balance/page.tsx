@@ -90,6 +90,60 @@ function money(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
+function todayInputValue(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function toDateInputValue(iso: string): string {
+  let normalized = iso.trim();
+  if (
+    !normalized.endsWith("Z") &&
+    !/[+-]\d{2}:?\d{2}$/.test(normalized) &&
+    normalized.includes("T")
+  ) {
+    normalized += "Z";
+  }
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return todayInputValue();
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function WithdrawalDateField({
+  createdAt,
+  pending,
+  onSave,
+}: {
+  createdAt: string;
+  pending: boolean;
+  onSave: (date: string) => void;
+}) {
+  const saved = toDateInputValue(createdAt);
+  const [value, setValue] = useState(saved);
+  const dirty = value !== "" && value !== saved;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        type="date"
+        aria-label="Fecha del retiro"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        className="w-40 max-md:w-full"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={!dirty || pending}
+        onClick={() => onSave(value)}
+      >
+        Guardar fecha
+      </Button>
+    </div>
+  );
+}
+
 function MethodBreakdown({
   rows,
   tone,
@@ -143,6 +197,7 @@ export default function BalancePage() {
   const [withdrawalDescription, setWithdrawalDescription] = useState("");
   const [withdrawalPlayerId, setWithdrawalPlayerId] = useState<string>("");
   const [withdrawalPaymentMethodId, setWithdrawalPaymentMethodId] = useState<string>("");
+  const [withdrawalDate, setWithdrawalDate] = useState(todayInputValue);
   const [monthKey, setMonthKey] = useState(monthOptions[0]?.value ?? "all");
   const [dateFrom, setDateFrom] = useState(monthOptions[0]?.from ?? "");
   const [dateTo, setDateTo] = useState(monthOptions[0]?.to ?? "");
@@ -235,6 +290,7 @@ export default function BalancePage() {
         description: withdrawalDescription.trim(),
         player_id: Number(withdrawalPlayerId),
         payment_method_id: withdrawalPaymentMethodId ? Number(withdrawalPaymentMethodId) : null,
+        withdrawalDate,
       }),
     onSuccess: () => {
       toast.success("Retiro registrado");
@@ -242,11 +298,23 @@ export default function BalancePage() {
       setWithdrawalDescription("");
       setWithdrawalPlayerId("");
       setWithdrawalPaymentMethodId("");
+      setWithdrawalDate(todayInputValue());
       setIsWithdrawalDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["partner-withdrawals"] });
     },
     onError: () => toast.error("No se pudo registrar el retiro"),
+  });
+
+  const updateWithdrawalDateMutation = useMutation({
+    mutationFn: ({ id, date }: { id: number; date: string }) =>
+      transactionsService.updateWithdrawalDate(id, date),
+    onSuccess: () => {
+      toast.success("Fecha del retiro actualizada");
+      queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-withdrawals"] });
+    },
+    onError: () => toast.error("No se pudo cambiar la fecha del retiro"),
   });
 
   const parsedWithdrawalAmount = Number(withdrawalAmount);
@@ -282,6 +350,10 @@ export default function BalancePage() {
     }
     if (!withdrawalDescription.trim()) {
       toast.error("Ingresá una descripción");
+      return;
+    }
+    if (!withdrawalDate) {
+      toast.error("Elegí la fecha del retiro");
       return;
     }
     withdrawalMutation.mutate();
@@ -492,8 +564,15 @@ export default function BalancePage() {
                           ? `ID ${withdrawal.partner_id}`
                           : "Sin socio"}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(withdrawal.created_at).toLocaleString("es-AR")}
+                      <div className="mt-2">
+                        <WithdrawalDateField
+                          key={`${withdrawal.id}-${withdrawal.created_at}`}
+                          createdAt={withdrawal.created_at}
+                          pending={updateWithdrawalDateMutation.isPending}
+                          onSave={(date) =>
+                            updateWithdrawalDateMutation.mutate({ id: withdrawal.id, date })
+                          }
+                        />
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {withdrawal.payment_method?.name || "Sin método"}
@@ -526,7 +605,14 @@ export default function BalancePage() {
                   {partnerWithdrawals.map((withdrawal) => (
                     <TableRow key={withdrawal.id}>
                       <TableCell>
-                        {new Date(withdrawal.created_at).toLocaleString("es-AR")}
+                        <WithdrawalDateField
+                          key={`${withdrawal.id}-${withdrawal.created_at}`}
+                          createdAt={withdrawal.created_at}
+                          pending={updateWithdrawalDateMutation.isPending}
+                          onSave={(date) =>
+                            updateWithdrawalDateMutation.mutate({ id: withdrawal.id, date })
+                          }
+                        />
                       </TableCell>
                       <TableCell>
                         {withdrawal.partner
@@ -683,6 +769,16 @@ export default function BalancePage() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="withdrawal-date">Fecha</Label>
+              <Input
+                id="withdrawal-date"
+                type="date"
+                value={withdrawalDate}
+                onChange={(event) => setWithdrawalDate(event.target.value)}
+                className="w-44 max-md:w-full"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="withdrawal-amount">
                 Monto <span className="text-destructive">*</span>
               </Label>
@@ -734,7 +830,8 @@ export default function BalancePage() {
                 withdrawalMutation.isPending ||
                 !withdrawalAmountValid ||
                 !withdrawalDescription.trim() ||
-                !withdrawalPlayerId
+                !withdrawalPlayerId ||
+                !withdrawalDate
               }
             >
               {withdrawalMutation.isPending ? "Guardando..." : "Guardar retiro"}

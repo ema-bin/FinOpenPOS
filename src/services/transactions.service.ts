@@ -60,7 +60,9 @@ class TransactionsService {
     return response.json();
   }
 
-  async createWithdrawal(input: TransactionCreateInput & { player_id: number }) {
+  async createWithdrawal(
+    input: TransactionCreateInput & { player_id: number; withdrawalDate?: string }
+  ) {
     const response = await fetch(`${this.baseUrl}/withdrawal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,6 +70,19 @@ class TransactionsService {
     });
     if (!response.ok) {
       throw new Error("Failed to create withdrawal");
+    }
+    return response.json();
+  }
+
+  async updateWithdrawalDate(id: number, withdrawalDate: string) {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ withdrawalDate }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "No se pudo cambiar la fecha del retiro");
     }
     return response.json();
   }
