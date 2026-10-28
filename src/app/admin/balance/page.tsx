@@ -44,8 +44,98 @@ type BalanceByPaymentMethod = {
   balance: number;
 };
 
+const MONTH_NAMES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+type MonthOption = { value: string; label: string; from: string; to: string };
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function monthRange(year: number, monthIndex: number): MonthOption {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return {
+    value: `${year}-${pad(monthIndex + 1)}`,
+    label: `${MONTH_NAMES[monthIndex]} ${year}`,
+    from: `${year}-${pad(monthIndex + 1)}-01`,
+    to: `${year}-${pad(monthIndex + 1)}-${pad(lastDay)}`,
+  };
+}
+
+function buildMonthOptions(now = new Date()): MonthOption[] {
+  const options: MonthOption[] = [];
+  const cursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  const start = new Date(now.getFullYear() - 1, 0, 1);
+  while (cursor >= start) {
+    options.push(monthRange(cursor.getFullYear(), cursor.getMonth()));
+    cursor.setMonth(cursor.getMonth() - 1);
+  }
+  return options;
+}
+
+function money(value: number) {
+  return `$${value.toFixed(2)}`;
+}
+
+function MethodBreakdown({
+  rows,
+  tone,
+}: {
+  rows: Array<{ key: string; name: string; amount: number }>;
+  tone: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sin movimientos en este período.</p>;
+  }
+
+  return (
+    <>
+      <div className="space-y-2 md:hidden">
+        {rows.map((row) => (
+          <div key={row.key} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+            <span className="min-w-0 font-medium">{row.name}</span>
+            <span className={`shrink-0 font-semibold ${tone}`}>{money(row.amount)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Método de pago</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.key}>
+                <TableCell>{row.name}</TableCell>
+                <TableCell className={`text-right font-medium ${tone}`}>{money(row.amount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
 export default function BalancePage() {
   const queryClient = useQueryClient();
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentDescription, setAdjustmentDescription] = useState("");
   const [adjustmentPaymentMethodId, setAdjustmentPaymentMethodId] = useState<string>("");
@@ -53,26 +143,25 @@ export default function BalancePage() {
   const [withdrawalDescription, setWithdrawalDescription] = useState("");
   const [withdrawalPlayerId, setWithdrawalPlayerId] = useState<string>("");
   const [withdrawalPaymentMethodId, setWithdrawalPaymentMethodId] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense" | "adjustment" | "withdrawal">("all");
+  const [monthKey, setMonthKey] = useState(monthOptions[0]?.value ?? "all");
+  const [dateFrom, setDateFrom] = useState(monthOptions[0]?.from ?? "");
+  const [dateTo, setDateTo] = useState(monthOptions[0]?.to ?? "");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["transactions-balance", dateFrom, dateTo, typeFilter],
+    queryKey: ["transactions-balance", dateFrom, dateTo],
     queryFn: () =>
       transactionsService.getBalance({
         fromDate: dateFrom || undefined,
         toDate: dateTo || undefined,
-        type: typeFilter === "all" ? undefined : typeFilter,
       }),
     staleTime: 1000 * 30,
   });
 
   // Cargar socios activos
-  const { data: partners = [], isLoading: isLoadingPartners } = useQuery({
+  const { data: partners = [] } = useQuery({
     queryKey: ["partners"],
     queryFn: () => partnersService.getAll(true), // solo activos
     staleTime: 1000 * 60 * 5, // 5 minutos
@@ -199,7 +288,43 @@ export default function BalancePage() {
   };
 
   const summary = data?.summary ?? {};
-  const balanceByPaymentMethod = data?.balanceByPaymentMethod ?? [];
+  const balanceByPaymentMethod: BalanceByPaymentMethod[] = data?.balanceByPaymentMethod ?? [];
+  const sales = Number(summary.income) || 0;
+  const purchases = Number(summary.expense) || 0;
+  const withdrawals = Number(summary.withdrawal) || 0;
+  const adjustments = Number(summary.adjustment) || 0;
+  const saldo = sales - purchases - withdrawals + adjustments;
+
+  const applyMonth = (value: string) => {
+    setMonthKey(value);
+    if (value === "all") {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    if (value === "custom") return;
+    const month = monthOptions.find((option) => option.value === value);
+    if (!month) return;
+    setDateFrom(month.from);
+    setDateTo(month.to);
+  };
+
+  const syncMonthFromDates = (from: string, to: string) => {
+    const match = monthOptions.find((option) => option.from === from && option.to === to);
+    setMonthKey(match?.value ?? (from || to ? "custom" : "all"));
+  };
+
+  const methodRows = (
+    pick: (method: BalanceByPaymentMethod) => number
+  ): Array<{ key: string; name: string; amount: number }> =>
+    balanceByPaymentMethod
+      .map((method, index) => ({
+        key: method.payment_method_id?.toString() ?? `none-${index}`,
+        name: method.payment_method_name || "Sin método de pago",
+        amount: pick(method),
+      }))
+      .filter((row) => Math.abs(row.amount) > 0.004)
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
   return (
     <div className="space-y-6">
@@ -208,7 +333,9 @@ export default function BalancePage() {
           <div className="flex items-center justify-between gap-2 max-md:flex-col max-md:items-stretch">
             <div>
               <CardTitle>Balance</CardTitle>
-              <CardDescription>Resumen de movimientos de caja</CardDescription>
+              <CardDescription>
+                Ventas, compras, retiros y ajustes, tomados de las transacciones.
+              </CardDescription>
             </div>
             <div className="flex gap-2 max-md:flex-col">
               <Button className="max-md:w-full" onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
@@ -219,11 +346,32 @@ export default function BalancePage() {
           </div>
           <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
             <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Mes</span>
+              <Select value={monthKey} onValueChange={applyMonth}>
+                <SelectTrigger className="w-52 max-md:w-full">
+                  <SelectValue placeholder="Mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">Personalizado</SelectItem>
+                  <SelectItem value="all">Todo el período</SelectItem>
+                  {monthOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <span className="text-xs text-muted-foreground">Desde</span>
               <Input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDateFrom(value);
+                  syncMonthFromDates(value, dateTo);
+                }}
               />
             </div>
             <div className="space-y-1">
@@ -231,187 +379,99 @@ export default function BalancePage() {
               <Input
                 type="date"
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDateTo(value);
+                  syncMonthFromDates(dateFrom, value);
+                }}
               />
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-muted-foreground">Tipo</span>
-              <Select
-                value={typeFilter}
-                onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}
-              >
-                <SelectTrigger className="w-32 max-md:w-full">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="income">Ingresos</SelectItem>
-                  <SelectItem value="expense">Gastos</SelectItem>
-                  <SelectItem value="adjustment">Ajustes</SelectItem>
-                  <SelectItem value="withdrawal">Retiros</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-muted-foreground">Socio</span>
-              <Select
-                value={partnerFilter}
-                onValueChange={(value) => setPartnerFilter(value)}
-              >
-                <SelectTrigger className="w-40 max-md:w-full">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {partners.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id.toString()}>
-                      {partner.first_name} {partner.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { key: "income", label: "Ingresos" },
-              { key: "expense", label: "Gastos" },
-              { key: "adjustment", label: "Ajustes" },
-              { key: "withdrawal", label: "Retiros" },
-            ].map(({ key, label }) => (
-              <div key={key} className="border rounded-lg p-4 shadow-sm">
-                <div className="text-xs uppercase text-muted-foreground">{label}</div>
-                <div className="text-2xl font-bold">${(summary[key] ?? 0).toFixed(2)}</div>
+          {isLoading ? (
+            <div className="py-6 text-center text-muted-foreground">Cargando balance...</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border p-4 shadow-sm">
+                  <div className="text-xs uppercase text-muted-foreground">Ventas</div>
+                  <div className="text-2xl font-bold text-green-600">{money(sales)}</div>
+                </div>
+                <div className="rounded-lg border p-4 shadow-sm">
+                  <div className="text-xs uppercase text-muted-foreground">Compras</div>
+                  <div className="text-2xl font-bold text-red-600">{money(purchases)}</div>
+                </div>
+                <div className="rounded-lg border p-4 shadow-sm">
+                  <div className="text-xs uppercase text-muted-foreground">Retiros de socios</div>
+                  <div className="text-2xl font-bold text-red-600">{money(withdrawals)}</div>
+                </div>
+                <div className="rounded-lg border p-4 shadow-sm">
+                  <div className="text-xs uppercase text-muted-foreground">Ajustes</div>
+                  <div className="text-2xl font-bold text-blue-600">{money(adjustments)}</div>
+                </div>
               </div>
-            ))}
-          </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Saldo</div>
+                  <div className="text-sm text-muted-foreground">Ventas − compras − retiros + ajustes</div>
+                </div>
+                <div className={`text-2xl font-bold ${saldo >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {money(saldo)}
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {balanceByPaymentMethod.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Balance por Método de Pago</CardTitle>
-            <CardDescription>
-              Desglose de ingresos, gastos, retiros y ajustes por método de pago
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 md:hidden">
-              {balanceByPaymentMethod.map((method: BalanceByPaymentMethod, index: number) => (
-                <div key={index} className="rounded-lg border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 font-medium">
-                      {method.payment_method_name || "Sin método de pago"}
-                    </div>
-                    <div className={`shrink-0 font-bold ${method.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      ${method.balance.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
-                    <span className="text-green-600">Ingresos ${method.incomes.toFixed(2)}</span>
-                    <span className="text-right text-red-600">Gastos ${method.expenses.toFixed(2)}</span>
-                    <span className="text-red-600">Retiros ${method.withdrawals.toFixed(2)}</span>
-                    <span className="text-right text-blue-600">Ajustes ${method.adjustments.toFixed(2)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2 font-semibold">Método de Pago</th>
-                    <th className="text-right p-2 font-semibold">Ingresos</th>
-                    <th className="text-right p-2 font-semibold">Gastos</th>
-                    <th className="text-right p-2 font-semibold">Retiros</th>
-                    <th className="text-right p-2 font-semibold">Ajustes</th>
-                    <th className="text-right p-2 font-semibold">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {balanceByPaymentMethod.map((method: BalanceByPaymentMethod, index: number) => (
-                    <tr key={index} className="border-b hover:bg-muted/50">
-                      <td className="p-2">
-                        {method.payment_method_name || "Sin método de pago"}
-                      </td>
-                      <td className="text-right p-2 text-green-600">
-                        ${method.incomes.toFixed(2)}
-                      </td>
-                      <td className="text-right p-2 text-red-600">
-                        ${method.expenses.toFixed(2)}
-                      </td>
-                      <td className="text-right p-2 text-red-600">
-                        ${method.withdrawals.toFixed(2)}
-                      </td>
-                      <td className="text-right p-2 text-blue-600">
-                        ${method.adjustments.toFixed(2)}
-                      </td>
-                      <td className="text-right p-2 font-bold">
-                        <span
-                          className={
-                            method.balance >= 0 ? "text-green-600" : "text-red-600"
-                          }
-                        >
-                          ${method.balance.toFixed(2)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 font-bold">
-                    <td className="p-2">TOTAL</td>
-                    <td className="text-right p-2 text-green-600">
-                      ${balanceByPaymentMethod.reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.incomes, 0).toFixed(2)}
-                    </td>
-                    <td className="text-right p-2 text-red-600">
-                      ${balanceByPaymentMethod.reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.expenses, 0).toFixed(2)}
-                    </td>
-                    <td className="text-right p-2 text-red-600">
-                      $
-                      {balanceByPaymentMethod
-                        .reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.withdrawals, 0)
-                        .toFixed(2)}
-                    </td>
-                    <td className="text-right p-2 text-blue-600">
-                      $
-                      {balanceByPaymentMethod
-                        .reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.adjustments, 0)
-                        .toFixed(2)}
-                    </td>
-                    <td className="text-right p-2">
-                      <span
-                        className={
-                          balanceByPaymentMethod.reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.balance, 0) >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        $
-                        {balanceByPaymentMethod
-                          .reduce((sum: number, m: BalanceByPaymentMethod) => sum + m.balance, 0)
-                          .toFixed(2)}
-                      </span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
-        <CardHeader className="flex flex-col gap-1">
-          <CardTitle>Retiros de socios</CardTitle>
-          <CardDescription>
-            Historial de retiros filtrado por fecha y socio, con método de pago asociado.
-          </CardDescription>
+        <CardHeader>
+          <CardTitle>Ventas</CardTitle>
+          <CardDescription>Ingresos de las ventas, por método de pago. No incluye cobros de clases.</CardDescription>
         </CardHeader>
         <CardContent>
+          <MethodBreakdown rows={methodRows((method) => method.incomes)} tone="text-green-600" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Compras</CardTitle>
+          <CardDescription>Gastos de compras, por método de pago.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MethodBreakdown rows={methodRows((method) => method.expenses)} tone="text-red-600" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-1">
+            <CardTitle>Retiros de socios</CardTitle>
+            <CardDescription>
+              Total del período por método de pago, y el detalle de cada retiro.
+            </CardDescription>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Socio</span>
+            <Select value={partnerFilter} onValueChange={(value) => setPartnerFilter(value)}>
+              <SelectTrigger className="w-52 max-md:w-full">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {partners.map((partner) => (
+                  <SelectItem key={partner.id} value={partner.id.toString()}>
+                    {partner.first_name} {partner.last_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <MethodBreakdown rows={methodRows((method) => method.withdrawals)} tone="text-red-600" />
           {loadingWithdrawals ? (
             <div className="text-center py-6 text-muted-foreground">Cargando retiros...</div>
           ) : partnerWithdrawals.length === 0 ? (
@@ -502,9 +562,8 @@ export default function BalancePage() {
             </div>
             </>
           )}
-        </CardContent>
-        {withdrawalsSummary.length > 0 && (
-          <div className="p-4 border-t bg-muted/50 text-sm space-y-4">
+          {withdrawalsSummary.length > 0 && (
+          <div className="border-t pt-4 text-sm space-y-4">
             <div className="font-semibold">Resumen de retiros por socio</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {withdrawalsSummary.map((entry) => (
@@ -518,7 +577,18 @@ export default function BalancePage() {
               ))}
             </div>
           </div>
-        )}
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ajustes</CardTitle>
+          <CardDescription>Ajustes de caja, por método de pago.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MethodBreakdown rows={methodRows((method) => method.adjustments)} tone="text-blue-600" />
+        </CardContent>
       </Card>
 
       <Dialog open={isAdjustmentDialogOpen} onOpenChange={setIsAdjustmentDialogOpen}>
