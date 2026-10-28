@@ -32,6 +32,7 @@ import {
 import { Loader2Icon, LockIcon } from "lucide-react";
 import { toast } from "sonner";
 import { monthlySalesClosuresService } from "@/services/monthly-sales-closures.service";
+import { formatDate } from "@/lib/date-utils";
 import { formatYearMonthLabel, getCurrentYearMonth } from "@/lib/month-period";
 import type {
   MonthlySalesClosureDTO,
@@ -74,6 +75,8 @@ function mapPreviewToDisplay(preview: NonNullable<MonthlySalesClosurePreviewDTO[
       quantity_sold: row.quantitySold,
       total_amount: row.totalAmount,
     })),
+    purchases: preview.purchases ?? [],
+    totalPurchases: preview.totalPurchases ?? 0,
   };
 }
 
@@ -89,6 +92,7 @@ function SummaryCards({
   openOrdersTotal,
   zeroAmountOrdersCount,
   discountedOrdersCount,
+  totalPurchases = 0,
 }: {
   dailyClosuresCount: number;
   daysInMonth: number;
@@ -101,12 +105,24 @@ function SummaryCards({
   openOrdersTotal: number;
   zeroAmountOrdersCount: number;
   discountedOrdersCount: number;
+  totalPurchases?: number;
 }) {
+  const profit = Math.round((totalSales - totalPurchases) * 100) / 100;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div className="border rounded-lg p-4">
         <div className="text-xs uppercase text-muted-foreground">Total ventas del mes</div>
         <div className="text-2xl font-bold text-green-600">${totalSales.toFixed(2)}</div>
+      </div>
+      <div className="border rounded-lg p-4">
+        <div className="text-xs uppercase text-muted-foreground">Compras del mes</div>
+        <div className="text-2xl font-bold text-red-600">${totalPurchases.toFixed(2)}</div>
+      </div>
+      <div className="border rounded-lg p-4">
+        <div className="text-xs uppercase text-muted-foreground">Ganancia cantina</div>
+        <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+          ${profit.toFixed(2)}
+        </div>
       </div>
       <div className="border rounded-lg p-4">
         <div className="text-xs uppercase text-muted-foreground">Cierres diarios incluidos</div>
@@ -148,6 +164,71 @@ function SummaryCards({
         <div className="text-xs uppercase text-muted-foreground">Ventas sin cobro</div>
         <div className="text-2xl font-bold">{zeroAmountOrdersCount}</div>
       </div>
+    </div>
+  );
+}
+
+function PurchasesSection({
+  purchases,
+}: {
+  purchases: Array<{
+    id: number;
+    date: string;
+    supplierName: string;
+    paymentMethodName: string | null;
+    totalAmount: number;
+  }>;
+}) {
+  return (
+    <div>
+      <h3 className="font-semibold mb-2">Compras del mes</h3>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Compras completadas. Se restan de las ventas para la ganancia de la cantina.
+      </p>
+      {purchases.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No hay compras en este mes.</p>
+      ) : (
+        <>
+          <div className="space-y-2 md:hidden">
+            {purchases.map((row) => (
+              <div key={row.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{row.supplierName}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(row.date)}
+                    {row.paymentMethodName ? ` · ${row.paymentMethodName}` : ""}
+                  </div>
+                </div>
+                <div className="shrink-0 font-medium">${row.totalAmount.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {purchases.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{formatDate(row.date)}</TableCell>
+                    <TableCell>{row.supplierName}</TableCell>
+                    <TableCell>{row.paymentMethodName ?? "—"}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      ${row.totalAmount.toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -376,8 +457,8 @@ export default function MonthlySalesClosurePage() {
         <CardHeader>
           <CardTitle>Cierre de caja mensual</CardTitle>
           <CardDescription>
-            Integra los cierres diarios guardados del mes (solo ventas cantina). No recalcula desde
-            transacciones en vivo.
+            Integra los cierres diarios del mes y resta las compras completadas para la ganancia de
+            la cantina.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -469,7 +550,10 @@ export default function MonthlySalesClosurePage() {
                 openOrdersTotal={displayData.openOrdersTotal}
                 zeroAmountOrdersCount={displayData.zeroAmountOrdersCount}
                 discountedOrdersCount={displayData.discountedOrdersCount}
+                totalPurchases={displayData.totalPurchases}
               />
+
+              <PurchasesSection purchases={displayData.purchases} />
 
               <DetailTables
                 paymentMethods={displayData.paymentMethods}
@@ -581,6 +665,13 @@ export default function MonthlySalesClosurePage() {
               <p>
                 <strong>Total ventas:</strong> ${displayData.totalSales.toFixed(2)}
               </p>
+              <p>
+                <strong>Compras:</strong> ${displayData.totalPurchases.toFixed(2)}
+              </p>
+              <p>
+                <strong>Ganancia cantina:</strong> $
+                {(displayData.totalSales - displayData.totalPurchases).toFixed(2)}
+              </p>
             </div>
           ) : null}
           <DialogFooter>
@@ -625,7 +716,9 @@ export default function MonthlySalesClosurePage() {
                 openOrdersTotal={historyDetail.open_orders_total}
                 zeroAmountOrdersCount={historyDetail.zero_amount_orders_count}
                 discountedOrdersCount={historyDetail.discounted_orders_count}
+                totalPurchases={historyDetail.total_purchases ?? 0}
               />
+              <PurchasesSection purchases={historyDetail.purchases ?? []} />
               <DetailTables
                 paymentMethods={historyDetail.payment_methods}
                 products={historyDetail.products}

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DailySalesClosuresRepository } from "@/repositories/daily-sales-closures.repository";
 import { getMonthDateRange } from "@/lib/month-period";
+import { listCompletedPurchasesInMonth, sumPurchases, type MonthPurchase } from "@/lib/month-purchases";
 
 export type MonthlySalesSnapshotPaymentMethod = {
   paymentMethodId: number | null;
@@ -44,6 +45,8 @@ export type MonthlySalesSnapshot = {
   byPaymentMethod: MonthlySalesSnapshotPaymentMethod[];
   byProduct: MonthlySalesSnapshotProduct[];
   byCategory: MonthlySalesSnapshotCategory[];
+  purchases: MonthPurchase[];
+  totalPurchases: number;
 };
 
 function roundMoney(value: number): number {
@@ -165,6 +168,8 @@ export async function aggregateMonthlySalesClosure(
     .map((row) => ({ ...row, totalAmount: roundMoney(row.totalAmount) }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
+  const purchases = await listCompletedPurchasesInMonth(supabase, yearMonth);
+
   return {
     yearMonth,
     periodStart: startDate,
@@ -184,5 +189,7 @@ export async function aggregateMonthlySalesClosure(
     byPaymentMethod,
     byProduct,
     byCategory,
+    purchases,
+    totalPurchases: sumPurchases(purchases),
   };
 }
