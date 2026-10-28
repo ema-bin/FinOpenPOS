@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { DailySalesClosuresRepository } from "@/repositories/daily-sales-closures.repository";
 import { getMonthDateRange } from "@/lib/month-period";
 import { listCompletedPurchasesInMonth, sumPurchases, type MonthPurchase } from "@/lib/month-purchases";
+import { loadDiscountedCantinaBreakdown } from "@/lib/compute-daily-sales-snapshot";
 
 export type MonthlySalesSnapshotPaymentMethod = {
   paymentMethodId: number | null;
@@ -125,33 +126,15 @@ export async function aggregateMonthlySalesClosure(
       current.transactionCount += row.transaction_count;
       paymentMap.set(key, current);
     }
+  }
 
-    for (const row of details.products ?? []) {
-      const current = productMap.get(row.product_id) ?? {
-        productId: row.product_id,
-        productName: row.product_name,
-        categoryId: row.category_id,
-        categoryName: row.category_name,
-        quantitySold: 0,
-        totalAmount: 0,
-      };
-      current.quantitySold += row.quantity_sold;
-      current.totalAmount += row.total_amount;
-      productMap.set(row.product_id, current);
-    }
-
-    for (const row of details.categories ?? []) {
-      const key = row.category_id?.toString() ?? "none";
-      const current = categoryMap.get(key) ?? {
-        categoryId: row.category_id,
-        categoryName: row.category_name,
-        quantitySold: 0,
-        totalAmount: 0,
-      };
-      current.quantitySold += row.quantity_sold;
-      current.totalAmount += row.total_amount;
-      categoryMap.set(key, current);
-    }
+  const discounted = await loadDiscountedCantinaBreakdown(
+    supabase,
+    dailies.map((daily) => daily.business_date as string)
+  );
+  for (const row of discounted.byProduct) productMap.set(row.productId, row);
+  for (const row of discounted.byCategory) {
+    categoryMap.set(row.categoryId?.toString() ?? "none", row);
   }
 
   const lastDaily = dailies[dailies.length - 1];

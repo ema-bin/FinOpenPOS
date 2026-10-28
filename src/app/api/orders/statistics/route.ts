@@ -2,6 +2,11 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import {
+  summarizeDiscountedLines,
+  type DiscountableLine,
+  type DiscountableOrder,
+} from '@/lib/discounted-sale-lines';
 
 export interface OrderStatisticsItem {
   productId: number;
@@ -10,6 +15,11 @@ export interface OrderStatisticsItem {
   categoryName: string | null;
   totalQuantity: number;
   totalAmount: number;
+}
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 export async function GET(request: Request) {
@@ -36,26 +46,135 @@ export async function GET(request: Request) {
     const p_product_id = productId ? Number(productId) : null;
     const p_category_id = categoryId ? Number(categoryId) : null;
 
-    const { data: rows, error: rpcError } = await supabase.rpc(
-      'order_sales_statistics',
-      { p_from_date, p_to_date, p_product_id, p_category_id }
-    );
+    let ranged = supabase
+      .from('order_items')
+      .select('id, order:order_id!inner ( id, status )')
+      .eq('order.status', 'closed');
 
-    if (rpcError) {
-      console.error('order_sales_statistics RPC error:', rpcError);
+    if (p_from_date) ranged = ranged.gte('created_at', p_from_date);
+    if (p_to_date) ranged = ranged.lte('created_at', p_to_date);
+
+    const { data: rangedRows, error: rangedError } = await ranged;
+    if (rangedError) {
+      console.error('order statistics items error:', rangedError);
       return NextResponse.json(
-        { error: rpcError.message || 'Failed to fetch statistics' },
+        { error: rangedError.message || 'Failed to fetch statistics' },
         { status: 500 }
       );
     }
 
-    const statistics: OrderStatisticsItem[] = (rows ?? []).map((row: any) => ({
-      productId: row.product_id,
-      productName: row.product_name ?? '',
-      categoryId: row.category_id ?? null,
-      categoryName: row.category_name ?? null,
-      totalQuantity: Number(row.total_quantity) ?? 0,
-      totalAmount: Number(row.total_amount) ?? 0,
+    const orderIds = Array.from(
+      new Set(
+        (rangedRows ?? [])
+          .map((row) => one(row.order as { id: number } | { id: number }[] | null)?.id)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+    const includedItemIds = new Set((rangedRows ?? []).map((row) => row.id as number));
+
+    if (orderIds.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    const items: Array<{
+      id: number;
+      order_id: number;
+      quantity: number;
+      total_price: number;
+      product: unknown;
+      order: unknown;
+    }> = [];
+    for (let offset = 0; offset < orderIds.length; offset += 200) {
+      const { data: chunk, error: itemsError } = await supabase
+        .from('order_items')
+        .select(
+          `
+            id,
+            order_id,
+            quantity,
+            total_price,
+            product:product_id (
+              id,
+              name,
+              category_id,
+              category:category_id ( id, name )
+            ),
+            order:order_id (
+              id,
+              total_amount,
+              discount_percentage,
+              discount_amount
+            )
+          `
+        )
+        .in('order_id', orderIds.slice(offset, offset + 200));
+
+      if (itemsError) {
+        console.error('order statistics lines error:', itemsError);
+        return NextResponse.json(
+          { error: itemsError.message || 'Failed to fetch statistics' },
+          { status: 500 }
+        );
+      }
+      items.push(...((chunk ?? []) as typeof items));
+    }
+
+    const orders = new Map<number, DiscountableOrder>();
+    const lines: DiscountableLine[] = [];
+
+    for (const raw of items ?? []) {
+      const product = one(
+        raw.product as
+          | {
+              id: number;
+              name: string;
+              category_id: number | null;
+              category?: { id: number; name: string } | { id: number; name: string }[] | null;
+            }
+          | {
+              id: number;
+              name: string;
+              category_id: number | null;
+              category?: { id: number; name: string } | { id: number; name: string }[] | null;
+            }[]
+          | null
+      );
+      const category = one(product?.category);
+      const order = one(
+        raw.order as
+          | DiscountableOrder
+          | DiscountableOrder[]
+          | null
+      );
+      if (order && !orders.has(order.id)) orders.set(order.id, order);
+
+      const matchesProduct = p_product_id == null || product?.id === p_product_id;
+      const matchesCategory =
+        p_category_id == null || (product?.category_id ?? category?.id ?? null) === p_category_id;
+
+      lines.push({
+        orderId: raw.order_id as number,
+        quantity: Number(raw.quantity) || 0,
+        lineTotal: Number(raw.total_price) || 0,
+        cantina: true,
+        productId: product?.id ?? null,
+        productName: product?.name ?? '',
+        categoryId: category?.id ?? product?.category_id ?? null,
+        categoryName: category?.name ?? null,
+        includeInTotals: includedItemIds.has(raw.id as number) && matchesProduct && matchesCategory,
+      });
+    }
+
+    const statistics: OrderStatisticsItem[] = summarizeDiscountedLines(
+      Array.from(orders.values()),
+      lines
+    ).byProduct.map((row) => ({
+      productId: row.productId,
+      productName: row.productName,
+      categoryId: row.categoryId,
+      categoryName: row.categoryName,
+      totalQuantity: row.quantitySold,
+      totalAmount: row.totalAmount,
     }));
 
     return NextResponse.json(statistics);
@@ -67,4 +186,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
