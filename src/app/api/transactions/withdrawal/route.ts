@@ -1,17 +1,23 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
 
 type Body = {
   amount: number;
   description: string;
   player_id: number; // Usado para referenciar al socio
   payment_method_id?: number | null;
+  withdrawalDate?: unknown;
 };
 
 export async function POST(req: Request) {
   try {
-    const { amount, description, player_id, payment_method_id } = (await req.json()) as Body;
+    const { amount, description, player_id, payment_method_id, withdrawalDate } = (await req.json()) as Body;
+    const parsedDate = quickPurchaseCreatedAt(withdrawalDate);
+    if (!parsedDate.ok) {
+      return NextResponse.json({ error: "La fecha del retiro no es válida" }, { status: 400 });
+    }
     if (!description || typeof amount !== "number" || Number.isNaN(amount) || !player_id) {
       return NextResponse.json({ error: "amount, description and player_id required" }, { status: 400 });
     }
@@ -36,6 +42,7 @@ export async function POST(req: Request) {
         status: "completed",
         partner_id: player_id, // Use partner_id instead of player_id
         payment_method_id: payment_method_id ?? null,
+        ...(parsedDate.createdAt ? { created_at: parsedDate.createdAt } : {}),
       })
       .select()
       .single();

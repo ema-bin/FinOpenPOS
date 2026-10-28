@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { quickPurchaseCreatedAt } from '@/lib/quick-purchase-date';
 
 export async function GET(request: Request) {
   const supabase = createClient();
@@ -139,4 +140,62 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(data, { status: 201 });
+}
+
+type RouteParams = { params: { id: string } };
+
+export async function PATCH(request: Request, { params }: RouteParams) {
+  try {
+    const id = Number(params.id);
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid transaction id" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const parsedDate = quickPurchaseCreatedAt(body.withdrawalDate ?? body.withdrawal_date);
+    if (!parsedDate.ok || !parsedDate.createdAt) {
+      return NextResponse.json({ error: "La fecha del retiro no es válida" }, { status: 400 });
+    }
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { data: existing, error: findError } = await supabase
+      .from("transactions")
+      .select("id, type")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (findError) {
+      return NextResponse.json({ error: findError.message }, { status: 500 });
+    }
+    if (!existing) {
+      return NextResponse.json({ error: "Retiro no encontrado" }, { status: 404 });
+    }
+    if (existing.type !== "withdrawal") {
+      return NextResponse.json(
+        { error: "Solo se puede cambiar la fecha de un retiro" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .update({ created_at: parsedDate.createdAt })
+      .eq("id", id)
+      .select("id, created_at, type")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error("PATCH /transactions/[id] error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
