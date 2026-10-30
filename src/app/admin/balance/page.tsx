@@ -144,6 +144,84 @@ function WithdrawalDateField({
   );
 }
 
+function AccountBalances({ rows }: { rows: BalanceByPaymentMethod[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sin movimientos en este período.</p>;
+  }
+
+  const totals = rows.reduce(
+    (sum, row) => ({
+      incomes: sum.incomes + row.incomes,
+      expenses: sum.expenses + row.expenses,
+      withdrawals: sum.withdrawals + row.withdrawals,
+      adjustments: sum.adjustments + row.adjustments,
+      balance: sum.balance + row.balance,
+    }),
+    { incomes: 0, expenses: 0, withdrawals: 0, adjustments: 0, balance: 0 }
+  );
+
+  return (
+    <>
+      <div className="space-y-2 md:hidden">
+        {rows.map((row, index) => (
+          <div key={row.payment_method_id ?? `none-${index}`} className="rounded-lg border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 font-medium">{row.payment_method_name || "Sin método de pago"}</div>
+              <div className={`shrink-0 font-bold ${row.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {money(row.balance)}
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
+              <span className="text-green-600">Ventas {money(row.incomes)}</span>
+              <span className="text-right text-red-600">Compras {money(row.expenses)}</span>
+              <span className="text-red-600">Retiros {money(row.withdrawals)}</span>
+              <span className="text-right text-blue-600">Ajustes {money(row.adjustments)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cuenta</TableHead>
+              <TableHead className="text-right">Ventas</TableHead>
+              <TableHead className="text-right">Compras</TableHead>
+              <TableHead className="text-right">Retiros</TableHead>
+              <TableHead className="text-right">Ajustes</TableHead>
+              <TableHead className="text-right">Debería haber</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={row.payment_method_id ?? `none-${index}`}>
+                <TableCell className="font-medium">{row.payment_method_name || "Sin método de pago"}</TableCell>
+                <TableCell className="text-right text-green-600">{money(row.incomes)}</TableCell>
+                <TableCell className="text-right text-red-600">{money(row.expenses)}</TableCell>
+                <TableCell className="text-right text-red-600">{money(row.withdrawals)}</TableCell>
+                <TableCell className="text-right text-blue-600">{money(row.adjustments)}</TableCell>
+                <TableCell className={`text-right font-bold ${row.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {money(row.balance)}
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell className="font-bold">Total</TableCell>
+              <TableCell className="text-right font-bold text-green-600">{money(totals.incomes)}</TableCell>
+              <TableCell className="text-right font-bold text-red-600">{money(totals.expenses)}</TableCell>
+              <TableCell className="text-right font-bold text-red-600">{money(totals.withdrawals)}</TableCell>
+              <TableCell className="text-right font-bold text-blue-600">{money(totals.adjustments)}</TableCell>
+              <TableCell className={`text-right font-bold ${totals.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {money(totals.balance)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
 function MethodBreakdown({
   rows,
   tone,
@@ -244,6 +322,17 @@ export default function BalancePage() {
     staleTime: 1000 * 30,
   });
 
+  const { data: adjustmentsList = [], isLoading: loadingAdjustments } = useQuery({
+    queryKey: ["adjustments", dateFrom, dateTo],
+    queryFn: () =>
+      transactionsService.getAll({
+        type: "adjustment",
+        from: buildTimestamp(dateFrom),
+        to: buildTimestamp(dateTo, true),
+      }),
+    staleTime: 1000 * 30,
+  });
+
   const withdrawalsSummary = useMemo(() => {
     const map = new Map<string, { label: string; amount: number }>();
     partnerWithdrawals.forEach((withdrawal) => {
@@ -279,6 +368,7 @@ export default function BalancePage() {
       setAdjustmentPaymentMethodId("");
       setIsAdjustmentDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["adjustments"] });
     },
     onError: () => toast.error("No se pudo registrar el ajuste"),
   });
@@ -481,6 +571,9 @@ export default function BalancePage() {
                 <div className="rounded-lg border p-4 shadow-sm">
                   <div className="text-xs uppercase text-muted-foreground">Ajustes</div>
                   <div className="text-2xl font-bold text-blue-600">{money(adjustments)}</div>
+                  <a href="#ajustes" className="mt-1 inline-block text-sm text-blue-700 underline">
+                    Ver detalle
+                  </a>
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
@@ -494,6 +587,20 @@ export default function BalancePage() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldo por cuenta</CardTitle>
+          <CardDescription>
+            Lo que debería haber en cada cuenta: ventas − compras − retiros + ajustes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AccountBalances
+            rows={[...balanceByPaymentMethod].sort((a, b) => b.balance - a.balance)}
+          />
         </CardContent>
       </Card>
 
@@ -667,13 +774,65 @@ export default function BalancePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="ajustes">
         <CardHeader>
           <CardTitle>Ajustes</CardTitle>
-          <CardDescription>Ajustes de caja, por método de pago.</CardDescription>
+          <CardDescription>Cada ajuste del período, con fecha, cuenta y descripción.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <MethodBreakdown rows={methodRows((method) => method.adjustments)} tone="text-blue-600" />
+          {loadingAdjustments ? (
+            <div className="text-center py-6 text-muted-foreground">Cargando ajustes...</div>
+          ) : adjustmentsList.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              No hay ajustes en este período.
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 md:hidden">
+                {adjustmentsList.map((adjustment) => (
+                  <div key={adjustment.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium">{adjustment.description || "Sin descripción"}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(adjustment.created_at).toLocaleString("es-AR")}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {adjustment.payment_method?.name || "Sin método"}
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-semibold text-blue-600">{money(adjustment.amount)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {adjustmentsList.map((adjustment) => (
+                      <TableRow key={adjustment.id}>
+                        <TableCell>{new Date(adjustment.created_at).toLocaleString("es-AR")}</TableCell>
+                        <TableCell>{adjustment.description || "Sin descripción"}</TableCell>
+                        <TableCell>{adjustment.payment_method?.name || "Sin método"}</TableCell>
+                        <TableCell className="text-right font-semibold text-blue-600">
+                          {money(adjustment.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
