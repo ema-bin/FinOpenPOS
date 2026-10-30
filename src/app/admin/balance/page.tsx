@@ -113,10 +113,12 @@ function WithdrawalDateField({
   createdAt,
   pending,
   onSave,
+  label = "Fecha del retiro",
 }: {
   createdAt: string;
   pending: boolean;
   onSave: (date: string) => void;
+  label?: string;
 }) {
   const saved = toDateInputValue(createdAt);
   const [value, setValue] = useState(saved);
@@ -126,7 +128,7 @@ function WithdrawalDateField({
     <div className="flex flex-wrap items-center gap-2">
       <Input
         type="date"
-        aria-label="Fecha del retiro"
+        aria-label={label}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         className="w-40 max-md:w-full"
@@ -271,6 +273,7 @@ export default function BalancePage() {
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentDescription, setAdjustmentDescription] = useState("");
   const [adjustmentPaymentMethodId, setAdjustmentPaymentMethodId] = useState<string>("");
+  const [adjustmentDate, setAdjustmentDate] = useState(todayInputValue);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [withdrawalDescription, setWithdrawalDescription] = useState("");
   const [withdrawalPlayerId, setWithdrawalPlayerId] = useState<string>("");
@@ -360,17 +363,30 @@ export default function BalancePage() {
         amount: Number(adjustmentAmount),
         description: adjustmentDescription.trim(),
         payment_method_id: Number(adjustmentPaymentMethodId),
+        adjustmentDate,
       }),
     onSuccess: () => {
       toast.success("Ajuste registrado");
       setAdjustmentAmount("");
       setAdjustmentDescription("");
       setAdjustmentPaymentMethodId("");
+      setAdjustmentDate(todayInputValue());
       setIsAdjustmentDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["adjustments"] });
     },
     onError: () => toast.error("No se pudo registrar el ajuste"),
+  });
+
+  const updateAdjustmentDateMutation = useMutation({
+    mutationFn: ({ id, date }: { id: number; date: string }) =>
+      transactionsService.updateAdjustmentDate(id, date),
+    onSuccess: () => {
+      toast.success("Fecha del ajuste actualizada");
+      queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["adjustments"] });
+    },
+    onError: () => toast.error("No se pudo cambiar la fecha del ajuste"),
   });
 
   const withdrawalMutation = useMutation({
@@ -424,6 +440,10 @@ export default function BalancePage() {
     }
     if (!adjustmentPaymentMethodId) {
       toast.error("Seleccioná un método de pago");
+      return;
+    }
+    if (!adjustmentDate) {
+      toast.error("Elegí la fecha del ajuste");
       return;
     }
     adjustmentMutation.mutate();
@@ -795,8 +815,16 @@ export default function BalancePage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium">{adjustment.description || "Sin descripción"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(adjustment.created_at).toLocaleString("es-AR")}
+                        <div className="mt-2">
+                          <WithdrawalDateField
+                            key={`${adjustment.id}-${adjustment.created_at}`}
+                            createdAt={adjustment.created_at}
+                            label="Fecha del ajuste"
+                            pending={updateAdjustmentDateMutation.isPending}
+                            onSave={(date) =>
+                              updateAdjustmentDateMutation.mutate({ id: adjustment.id, date })
+                            }
+                          />
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {adjustment.payment_method?.name || "Sin método"}
@@ -820,7 +848,17 @@ export default function BalancePage() {
                   <TableBody>
                     {adjustmentsList.map((adjustment) => (
                       <TableRow key={adjustment.id}>
-                        <TableCell>{new Date(adjustment.created_at).toLocaleString("es-AR")}</TableCell>
+                        <TableCell>
+                          <WithdrawalDateField
+                            key={`${adjustment.id}-${adjustment.created_at}`}
+                            createdAt={adjustment.created_at}
+                            label="Fecha del ajuste"
+                            pending={updateAdjustmentDateMutation.isPending}
+                            onSave={(date) =>
+                              updateAdjustmentDateMutation.mutate({ id: adjustment.id, date })
+                            }
+                          />
+                        </TableCell>
                         <TableCell>{adjustment.description || "Sin descripción"}</TableCell>
                         <TableCell>{adjustment.payment_method?.name || "Sin método"}</TableCell>
                         <TableCell className="text-right font-semibold text-blue-600">
@@ -843,6 +881,16 @@ export default function BalancePage() {
             <DialogDescription>Ingresá el monto, método de pago y detalle del ajuste.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="adjustment-date">Fecha</Label>
+              <Input
+                id="adjustment-date"
+                type="date"
+                value={adjustmentDate}
+                onChange={(event) => setAdjustmentDate(event.target.value)}
+                className="w-44 max-md:w-full"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="adjustment-amount">Monto</Label>
               <Input
@@ -893,7 +941,8 @@ export default function BalancePage() {
                 adjustmentMutation.isPending ||
                 !adjustmentAmount ||
                 !adjustmentDescription.trim() ||
-                !adjustmentPaymentMethodId
+                !adjustmentPaymentMethodId ||
+                !adjustmentDate
               }
             >
               {adjustmentMutation.isPending ? "Guardando..." : "Guardar ajuste"}
