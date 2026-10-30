@@ -48,7 +48,7 @@ class TransactionsService {
     return response.json();
   }
 
-  async createAdjustment(input: TransactionCreateInput) {
+  async createAdjustment(input: TransactionCreateInput & { adjustmentDate?: string }) {
     const response = await fetch(`${this.baseUrl}/adjustment`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -83,6 +83,19 @@ class TransactionsService {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "No se pudo cambiar la fecha del retiro");
+    }
+    return response.json();
+  }
+
+  async updateAdjustmentDate(id: number, adjustmentDate: string) {
+    const response = await fetch(`${this.baseUrl}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adjustmentDate }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "No se pudo cambiar la fecha del ajuste");
     }
     return response.json();
   }

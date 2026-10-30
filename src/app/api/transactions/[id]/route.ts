@@ -152,9 +152,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const parsedDate = quickPurchaseCreatedAt(body.withdrawalDate ?? body.withdrawal_date);
+    const parsedDate = quickPurchaseCreatedAt(
+      body.adjustmentDate ?? body.adjustment_date ?? body.withdrawalDate ?? body.withdrawal_date
+    );
     if (!parsedDate.ok || !parsedDate.createdAt) {
-      return NextResponse.json({ error: "La fecha del retiro no es válida" }, { status: 400 });
+      return NextResponse.json({ error: "La fecha no es válida" }, { status: 400 });
     }
 
     const supabase = createClient();
@@ -173,11 +175,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: findError.message }, { status: 500 });
     }
     if (!existing) {
-      return NextResponse.json({ error: "Retiro no encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
     }
-    if (existing.type !== "withdrawal") {
+    if (existing.type !== "withdrawal" && existing.type !== "adjustment") {
       return NextResponse.json(
-        { error: "Solo se puede cambiar la fecha de un retiro" },
+        { error: "Solo se puede cambiar la fecha de un retiro o un ajuste" },
         { status: 400 }
       );
     }
