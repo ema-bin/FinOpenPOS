@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { validateCategoryEligibility, validateSuma13DamasEligibility } from "@/lib/tournament-category-eligibility";
+import { isMastersFormat } from "@/lib/tournament-format";
+import { MASTERS_TEAM_COUNT } from "@/lib/masters-tournament";
 
 type RouteParams = { params: { id: string } };
 
@@ -55,6 +57,16 @@ export async function POST(req: Request, { params }: RouteParams) {
         { error: "Cannot add teams once registration is closed" },
         { status: 400 }
       );
+    }
+
+    if (isMastersFormat(tournament.format)) {
+      const existingTeams = await repos.tournamentTeams.findByTournamentId(tournamentId);
+      if (existingTeams.length >= MASTERS_TEAM_COUNT) {
+        return NextResponse.json(
+          { error: "Un Master admite como máximo 8 parejas" },
+          { status: 400 }
+        );
+      }
     }
 
     const player1 = await repos.players.findById(player1_id);

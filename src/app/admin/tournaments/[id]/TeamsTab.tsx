@@ -73,6 +73,10 @@ async function fetchTournamentGroupSlots(tournamentId: number) {
   return tournamentsService.getGroupSlots(tournamentId);
 }
 
+function formatAnnualPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 /** Convierte slots individuales en rangos (fecha + desde-hasta) uniendo consecutivos el mismo día */
 function slotsToRanges(
   slots: Array<{ slot_date: string; start_time: string; end_time: string }>
@@ -121,6 +125,7 @@ export default function TeamsTab({
     | "is_puntuable"
     | "category_id"
     | "format"
+    | "start_date"
   >;
 }) {
   const queryClient = useQueryClient();
@@ -237,22 +242,29 @@ export default function TeamsTab({
   });
 
   const currentYear = new Date().getFullYear();
+  const isMasterTournament = isMastersFormat(tournament.format);
+  const startYearMatch = tournament.start_date?.match(/^(\d{4})/);
+  const rankingYear =
+    isMasterTournament && startYearMatch ? Number(startYearMatch[1]) : currentYear;
   const canSeedByCategoryPoints =
-    !isMastersFormat(tournament.format) &&
+    !isMasterTournament &&
     Boolean(tournament.is_puntuable) &&
     tournament.category_id != null;
-  const { data: rankingForCategory } = useQuery<{
+  const showMasterAnnualPoints =
+    isMasterTournament && tournament.category_id != null;
+  const masterRosterFull = isMasterTournament && teams.length >= MASTERS_TEAM_COUNT;
+  const { data: rankingForCategory, isLoading: loadingRanking } = useQuery<{
     rows: Array<{ player_id: number; total_points: number }>;
   }>({
-    queryKey: ["ranking", tournament.category_id, currentYear],
+    queryKey: ["ranking", tournament.category_id, rankingYear],
     queryFn: async () => {
       const res = await fetch(
-        `/api/ranking?category_id=${tournament.category_id}&year=${currentYear}`
+        `/api/ranking?category_id=${tournament.category_id}&year=${rankingYear}`
       );
       if (!res.ok) throw new Error("No se pudo obtener el ranking de la categoría");
       return res.json();
     },
-    enabled: canSeedByCategoryPoints,
+    enabled: canSeedByCategoryPoints || showMasterAnnualPoints,
     staleTime: 1000 * 60,
   });
 
@@ -414,6 +426,10 @@ export default function TeamsTab({
   const handleCreate = useCallback(async () => {
     if (player1Id === "none" || player2Id === "none") return;
     if (player1Id === player2Id) return;
+    if (isMasterTournament && teams.length >= MASTERS_TEAM_COUNT) {
+      setError("Un Master admite como máximo 8 parejas");
+      return;
+    }
 
     try {
       setCreating(true);
@@ -437,7 +453,7 @@ export default function TeamsTab({
     } finally {
       setCreating(false);
     }
-  }, [player1Id, player2Id, tournament.id, queryClient]);
+  }, [player1Id, player2Id, tournament.id, queryClient, isMasterTournament, teams.length]);
 
   const handleDelete = async (teamId: number) => {
     try {
@@ -633,7 +649,7 @@ export default function TeamsTab({
   };
 
   const handleSortByCategoryPoints = () => {
-    if (!canSeedByCategoryPoints) return;
+    if (!canSeedByCategoryPoints && !showMasterAnnualPoints) return;
     const sorted = [...teamsToUse].sort((a, b) => {
       // Suplentes al final
       if (a.is_substitute !== b.is_substitute) return a.is_substitute ? 1 : -1;
@@ -1048,6 +1064,14 @@ export default function TeamsTab({
                     </span>
                   </div>
                 )}
+                {showMasterAnnualPoints && (
+                  <div>
+                    <span className="text-muted-foreground">Puntaje anual:</span>{" "}
+                    <span className="font-medium">
+                      Ranking {rankingYear} de la categoría. Si no figura, suma 0.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1056,6 +1080,16 @@ export default function TeamsTab({
           {tournament.status === "draft" && !hasGroups && teams.length > 1 && canSeedByCategoryPoints && (
             <Button size="sm" variant="outline" onClick={handleSortByCategoryPoints}>
               Ordenar por puntos (pareja)
+            </Button>
+          )}
+          {tournament.status === "draft" && !hasGroups && teams.length > 1 && showMasterAnnualPoints && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSortByCategoryPoints}
+              disabled={loadingRanking}
+            >
+              Ordenar por puntos
             </Button>
           )}
           {canEditAvailability && teams.length > 0 && (
@@ -1131,7 +1165,8 @@ export default function TeamsTab({
           <Button
             size="sm"
             onClick={() => setDialogOpen(true)}
-            disabled={tournament.status !== "draft"}
+            disabled={tournament.status !== "draft" || masterRosterFull}
+            title={masterRosterFull ? "Un Master admite como máximo 8 parejas" : undefined}
           >
             <PlusIcon className="w-4 h-4 mr-1" />
             Agregar equipo
@@ -1286,6 +1321,11 @@ export default function TeamsTab({
                             {teamCategoryPoints(team).toFixed(1)} pts pareja
                           </span>
                         )}
+                        {showMasterAnnualPoints && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-100">
+                            Pareja {formatAnnualPoints(teamCategoryPoints(team))} pts
+                          </span>
+                        )}
                         {needsScheduleConsultation && (
                           <span
                             className={cn(
@@ -1320,7 +1360,15 @@ export default function TeamsTab({
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {fullName(team.player1)} &middot; {fullName(team.player2)}
+                        {fullName(team.player1)}
+                        {showMasterAnnualPoints
+                          ? ` ${formatAnnualPoints(playerPointsMap.get(team.player1.id) ?? 0)} pts`
+                          : ""}
+                        {" · "}
+                        {fullName(team.player2)}
+                        {showMasterAnnualPoints
+                          ? ` ${formatAnnualPoints(playerPointsMap.get(team.player2.id) ?? 0)} pts`
+                          : ""}
                       </span>
                       {team.schedule_notes && (
                         <span className="text-xs text-muted-foreground mt-1 italic">
