@@ -33,8 +33,8 @@ function finished(
 describe("Master", () => {
   it("arma dos zonas de 4 con la serpiente de 8 parejas", () => {
     const [zoneA, zoneB] = assignMastersZones([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(zoneA).toEqual([1, 4, 5, 7]);
-    expect(zoneB).toEqual([2, 3, 6, 8]);
+    expect(zoneA).toEqual([1, 4, 5, 8]);
+    expect(zoneB).toEqual([2, 3, 6, 7]);
   });
 
   it("rechaza una cantidad distinta de 8", () => {

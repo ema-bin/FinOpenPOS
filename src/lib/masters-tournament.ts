@@ -12,9 +12,9 @@ export const MASTERS_TEAM_COUNT = 8;
 export const MASTERS_QUALIFIERS_PER_GROUP = 2;
 export const MASTERS_PLAYOFF_MATCH_COUNT = 3;
 
-/** Misma serpiente que 8 parejas en dos zonas: A = 1,4,5,7 y B = 2,3,6,8 del orden de inscripción. */
-const ZONE_A_INDEXES = [0, 3, 4, 6] as const;
-const ZONE_B_INDEXES = [1, 2, 5, 7] as const;
+/** Serpiente de 8 parejas: A = 1,4,5,8 y B = 2,3,6,7 del orden de inscripción. */
+const ZONE_A_INDEXES = [0, 3, 4, 7] as const;
+const ZONE_B_INDEXES = [1, 2, 5, 6] as const;
 
 export function assignMastersZones(teamIds: readonly number[]): [number[], number[]] {
   if (teamIds.length !== MASTERS_TEAM_COUNT) {
