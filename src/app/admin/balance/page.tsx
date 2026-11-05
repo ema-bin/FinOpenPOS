@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
+import { BalanceReport } from "./balance-report";
 
 type BalanceByPaymentMethod = {
   payment_method_id: number | null;
@@ -285,6 +286,7 @@ export default function BalancePage() {
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["transactions-balance", dateFrom, dateTo],
@@ -496,6 +498,25 @@ export default function BalancePage() {
     setMonthKey(match?.value ?? (from || to ? "custom" : "all"));
   };
 
+  const formatDay = (value: string) => {
+    const [year, month, day] = value.split("-");
+    if (!year || !month || !day) return value;
+    return `${day}/${month}/${year}`;
+  };
+
+  const periodLabel =
+    monthKey === "all"
+      ? "Todo el período"
+      : monthKey === "custom"
+        ? dateFrom && dateTo
+          ? `${formatDay(dateFrom)} al ${formatDay(dateTo)}`
+          : dateFrom
+            ? `Desde ${formatDay(dateFrom)}`
+            : dateTo
+              ? `Hasta ${formatDay(dateTo)}`
+              : "Período personalizado"
+        : monthOptions.find((option) => option.value === monthKey)?.label ?? "Período";
+
   const methodRows = (
     pick: (method: BalanceByPaymentMethod) => number
   ): Array<{ key: string; name: string; amount: number }> =>
@@ -520,6 +541,14 @@ export default function BalancePage() {
               </CardDescription>
             </div>
             <div className="flex gap-2 max-md:flex-col">
+              <Button
+                variant="outline"
+                className="max-md:w-full"
+                onClick={() => setReportOpen(true)}
+                disabled={isLoading}
+              >
+                Ver informe
+              </Button>
               <Button className="max-md:w-full" onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
               <Button variant="outline" className="max-md:w-full" onClick={() => setIsWithdrawalDialogOpen(true)}>
                 Registrar retiro
@@ -873,6 +902,20 @@ export default function BalancePage() {
           )}
         </CardContent>
       </Card>
+
+      <BalanceReport
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        periodLabel={periodLabel}
+        sales={sales}
+        purchases={purchases}
+        withdrawals={withdrawals}
+        adjustmentsTotal={adjustments}
+        accounts={balanceByPaymentMethod}
+        adjustments={adjustmentsList}
+        loadingAdjustments={loadingAdjustments}
+        partners={partners}
+      />
 
       <Dialog open={isAdjustmentDialogOpen} onOpenChange={setIsAdjustmentDialogOpen}>
         <DialogContent>
