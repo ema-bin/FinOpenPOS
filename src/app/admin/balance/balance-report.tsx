@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { PartnerDTO } from "@/services/partners.service";
 import type { TransactionDTO } from "@/services/transactions.service";
+import { buildShareProposal, withdrawalPersonName } from "@/lib/balance-report-shares";
 import { downloadBalanceReportPdf } from "./balance-report-pdf";
 
 export type BalanceReportAccount = {
@@ -39,25 +39,6 @@ function formatReportDate(iso: string): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
 
-function splitInTwo(amount: number): [number, number] {
-  const cents = Math.round(amount * 100);
-  const first = Math.floor(cents / 2);
-  return [first / 100, (cents - first) / 100];
-}
-
-function partLabels(partners: PartnerDTO[]): [string, string] {
-  const named = [...partners].sort((a, b) =>
-    `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "es")
-  );
-  if (named.length === 2) {
-    return [
-      `${named[0].first_name} ${named[0].last_name}`,
-      `${named[1].first_name} ${named[1].last_name}`,
-    ];
-  }
-  return ["Parte 1", "Parte 2"];
-}
-
 function AmountBar({
   amount,
   max,
@@ -86,7 +67,8 @@ export function BalanceReport({
   accounts,
   adjustments,
   loadingAdjustments,
-  partners,
+  withdrawalRows,
+  loadingWithdrawals,
 }: {
   open: boolean;
   onClose: () => void;
@@ -98,7 +80,8 @@ export function BalanceReport({
   accounts: BalanceReportAccount[];
   adjustments: TransactionDTO[];
   loadingAdjustments: boolean;
-  partners: PartnerDTO[];
+  withdrawalRows: TransactionDTO[];
+  loadingWithdrawals: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -119,9 +102,12 @@ export function BalanceReport({
   if (!open) return null;
 
   const sobrante = sales - purchases - withdrawals + adjustmentsTotal;
-  const [partOne, partTwo] = splitInTwo(sobrante);
-  const [labelOne, labelTwo] = partLabels(partners);
-  const canPropose = sobrante > 0.004;
+  const proposal = buildShareProposal({
+    sales,
+    purchases,
+    adjustmentsTotal,
+    withdrawals: withdrawalRows,
+  });
   const methodRows = [...accounts]
     .filter((account) => Math.abs(account.incomes) > 0.004 || Math.abs(account.expenses) > 0.004)
     .sort((a, b) => b.incomes + b.expenses - (a.incomes + a.expenses));
@@ -131,6 +117,9 @@ export function BalanceReport({
   );
   const accountRows = [...accounts].sort((a, b) => b.balance - a.balance);
   const adjustmentRows = [...adjustments].sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id
+  );
+  const sortedWithdrawals = [...withdrawalRows].sort(
     (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id
   );
 
@@ -145,7 +134,7 @@ export function BalanceReport({
         adjustmentsTotal,
         accounts,
         adjustments: adjustmentRows,
-        partners,
+        withdrawalRows: sortedWithdrawals,
       });
       toast.success("Informe descargado");
     } catch (error) {
@@ -181,7 +170,11 @@ export function BalanceReport({
             <p className="text-sm text-muted-foreground">{periodLabel}</p>
           </div>
           <div className="balance-report-actions flex gap-2">
-            <Button type="button" onClick={handleExportPdf} disabled={exporting || loadingAdjustments}>
+            <Button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={exporting || loadingAdjustments || loadingWithdrawals}
+            >
               {exporting ? "Generando..." : "Exportar PDF"}
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -298,6 +291,47 @@ export function BalanceReport({
         </section>
 
         <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Retiros</h2>
+          <p className="text-sm text-muted-foreground">
+            Cada retiro figura con quien lo hizo. En la propuesta se descuenta de la parte de esa persona.
+          </p>
+          {loadingWithdrawals ? (
+            <p className="text-sm text-muted-foreground">Cargando retiros...</p>
+          ) : sortedWithdrawals.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay retiros en este período.</p>
+          ) : (
+            <div className="space-y-2">
+              {sortedWithdrawals.map((withdrawal) => (
+                <div
+                  key={withdrawal.id}
+                  className="flex items-start justify-between gap-3 rounded-xl border p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium">
+                      {withdrawalPersonName(withdrawal.partner, withdrawal.partner_id)}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {formatReportDate(withdrawal.created_at)}
+                      {" · "}
+                      {withdrawal.description || "Sin descripción"}
+                      {" · "}
+                      {withdrawal.payment_method?.name || "Sin método"}
+                    </div>
+                  </div>
+                  <div className="shrink-0 font-semibold tabular-nums text-red-700">
+                    {money(withdrawal.amount)}
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded-xl border bg-red-50 px-3 py-2">
+                <span className="font-medium text-red-900">Total de retiros</span>
+                <span className="font-bold tabular-nums text-red-800">{money(withdrawals)}</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold">Dónde quedó el dinero</h2>
           <p className="text-sm text-muted-foreground">
             En cada cuenta: ventas − compras − retiros + ajustes.
@@ -335,36 +369,40 @@ export function BalanceReport({
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Propuesta de retiro</h2>
-          {canPropose ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                El sobrante se reparte en dos partes iguales. Los retiros ya hechos en el período
-                quedan descontados.
-              </p>
-              <div className="flex h-4 overflow-hidden rounded-full">
-                <div className="w-1/2 bg-emerald-600" />
-                <div className="w-1/2 bg-emerald-300" />
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="text-sm font-medium text-emerald-900">{labelOne}</div>
-                  <div className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">
-                    {money(partOne)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                  <div className="text-sm font-medium text-emerald-900">{labelTwo}</div>
-                  <div className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">
-                    {money(partTwo)}
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
+          <p className="text-sm text-muted-foreground">
+            La mitad sale de ventas − compras + ajustes. A Marina Leffler y a Cintia Leffler se les
+            resta solo lo que cada una ya retiró.
+          </p>
+          {proposal.otherWithdrawn > 0.004 && (
             <p className="text-sm text-muted-foreground">
-              No queda sobrante para retirar en este período.
+              Retiros de otra persona, descontados antes de partir: {money(proposal.otherWithdrawn)}.
             </p>
           )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {proposal.parts.map((part) => (
+              <div key={part.key} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-sm font-medium text-emerald-900">{part.label}</div>
+                <div className="mt-2 space-y-1 text-sm text-emerald-950">
+                  <div className="flex justify-between gap-3">
+                    <span>Mitad</span>
+                    <span className="tabular-nums">{money(part.half)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>Ya retiró</span>
+                    <span className="tabular-nums">{money(part.already)}</span>
+                  </div>
+                </div>
+                <div
+                  className={`mt-3 text-3xl font-bold tabular-nums ${
+                    part.proposed > 0.004 ? "text-emerald-800" : "text-red-700"
+                  }`}
+                >
+                  {money(part.proposed)}
+                </div>
+                <div className="text-xs text-muted-foreground">A retirar</div>
+              </div>
+            ))}
+          </div>
         </section>
       </div>
     </div>
