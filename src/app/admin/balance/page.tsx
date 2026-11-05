@@ -315,17 +315,24 @@ export default function BalancePage() {
   const buildTimestamp = (date: string, endOfDay = false) =>
     date ? `${date}${endOfDay ? "T23:59:59" : "T00:00:00"}` : undefined;
 
-  const { data: partnerWithdrawals = [], isLoading: loadingWithdrawals } = useQuery({
-    queryKey: ["partner-withdrawals", dateFrom, dateTo, partnerFilter],
+  const { data: allPartnerWithdrawals = [], isLoading: loadingWithdrawals } = useQuery({
+    queryKey: ["partner-withdrawals", dateFrom, dateTo],
     queryFn: () =>
       transactionsService.getAll({
         type: "withdrawal",
         from: buildTimestamp(dateFrom),
         to: buildTimestamp(dateTo, true),
-        partnerId: partnerFilter && partnerFilter !== "all" ? Number(partnerFilter) : undefined,
       }),
     staleTime: 1000 * 30,
   });
+
+  const partnerWithdrawals = useMemo(() => {
+    if (!partnerFilter || partnerFilter === "all") return allPartnerWithdrawals;
+    const partnerId = Number(partnerFilter);
+    return allPartnerWithdrawals.filter(
+      (withdrawal) => withdrawal.partner?.id === partnerId || withdrawal.partner_id === partnerId
+    );
+  }, [allPartnerWithdrawals, partnerFilter]);
 
   const { data: adjustmentsList = [], isLoading: loadingAdjustments } = useQuery({
     queryKey: ["adjustments", dateFrom, dateTo],
@@ -914,7 +921,8 @@ export default function BalancePage() {
         accounts={balanceByPaymentMethod}
         adjustments={adjustmentsList}
         loadingAdjustments={loadingAdjustments}
-        partners={partners}
+        withdrawalRows={allPartnerWithdrawals}
+        loadingWithdrawals={loadingWithdrawals}
       />
 
       <Dialog open={isAdjustmentDialogOpen} onOpenChange={setIsAdjustmentDialogOpen}>

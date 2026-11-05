@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
-import type { PartnerDTO } from "@/services/partners.service";
 import type { TransactionDTO } from "@/services/transactions.service";
+import { buildShareProposal, withdrawalPersonName } from "@/lib/balance-report-shares";
 
 type ReportAccount = {
   payment_method_name: string | null;
@@ -19,7 +19,7 @@ type ReportPdfInput = {
   adjustmentsTotal: number;
   accounts: ReportAccount[];
   adjustments: TransactionDTO[];
-  partners: PartnerDTO[];
+  withdrawalRows: TransactionDTO[];
 };
 
 function money(value: number) {
@@ -42,25 +42,6 @@ function formatReportDate(iso: string): string {
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return iso;
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
-}
-
-function splitInTwo(amount: number): [number, number] {
-  const cents = Math.round(amount * 100);
-  const first = Math.floor(cents / 2);
-  return [first / 100, (cents - first) / 100];
-}
-
-function partLabels(partners: PartnerDTO[]): [string, string] {
-  const named = [...partners].sort((a, b) =>
-    `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "es")
-  );
-  if (named.length === 2) {
-    return [
-      `${named[0].first_name} ${named[0].last_name}`,
-      `${named[1].first_name} ${named[1].last_name}`,
-    ];
-  }
-  return ["Parte 1", "Parte 2"];
 }
 
 function fileSlug(label: string) {
@@ -107,8 +88,12 @@ export function downloadBalanceReportPdf(input: ReportPdfInput) {
   };
 
   const sobrante = input.sales - input.purchases - input.withdrawals + input.adjustmentsTotal;
-  const [partOne, partTwo] = splitInTwo(sobrante);
-  const [labelOne, labelTwo] = partLabels(input.partners);
+  const proposal = buildShareProposal({
+    sales: input.sales,
+    purchases: input.purchases,
+    adjustmentsTotal: input.adjustmentsTotal,
+    withdrawals: input.withdrawalRows,
+  });
   const methodRows = [...input.accounts]
     .filter((account) => Math.abs(account.incomes) > 0.004 || Math.abs(account.expenses) > 0.004)
     .sort((a, b) => b.incomes + b.expenses - (a.incomes + a.expenses));
@@ -118,6 +103,9 @@ export function downloadBalanceReportPdf(input: ReportPdfInput) {
   );
   const accountRows = [...input.accounts].sort((a, b) => b.balance - a.balance);
   const adjustmentRows = [...input.adjustments].sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id
+  );
+  const withdrawalRows = [...input.withdrawalRows].sort(
     (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id
   );
 
@@ -248,6 +236,40 @@ export function downloadBalanceReportPdf(input: ReportPdfInput) {
     y += 8;
   }
 
+  heading("Retiros");
+  note("Cada retiro figura con quien lo hizo. En la propuesta se descuenta de la parte de esa persona.");
+  if (withdrawalRows.length === 0) {
+    note("No hay retiros en este período.");
+  } else {
+    withdrawalRows.forEach((withdrawal) => {
+      const who = withdrawalPersonName(withdrawal.partner, withdrawal.partner_id);
+      const description = withdrawal.description || "Sin descripción";
+      const meta = `${formatReportDate(withdrawal.created_at)} · ${who} · ${withdrawal.payment_method?.name || "Sin método"}`;
+      const descriptionLines = doc.splitTextToSize(description, contentWidth - 36) as string[];
+      const metaLines = doc.splitTextToSize(meta, contentWidth) as string[];
+      ensure(descriptionLines.length * 4 + metaLines.length * 4 + 4);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(17, 24, 39);
+      doc.text(descriptionLines, left, y);
+      doc.setTextColor(185, 28, 28);
+      doc.text(money(withdrawal.amount), right, y, { align: "right" });
+      y += descriptionLines.length * 4;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(75, 85, 99);
+      doc.text(metaLines, left, y);
+      y += metaLines.length * 4 + 2;
+    });
+    ensure(8);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(185, 28, 28);
+    doc.text("Total de retiros", left, y);
+    doc.text(money(input.withdrawals), right, y, { align: "right" });
+    y += 8;
+  }
+
   heading("Dónde quedó el dinero");
   note("En cada cuenta: ventas - compras - retiros + ajustes.");
   if (accountRows.length === 0) {
@@ -273,30 +295,34 @@ export function downloadBalanceReportPdf(input: ReportPdfInput) {
   }
 
   heading("Propuesta de retiro");
-  if (sobrante > 0.004) {
-    note("El sobrante se reparte en dos partes iguales. Los retiros ya hechos en el período quedan descontados.");
-    ensure(20);
-    const half = (contentWidth - 4) / 2;
-    const parts = [
-      { label: labelOne, amount: partOne },
-      { label: labelTwo, amount: partTwo },
-    ];
-    parts.forEach((part, index) => {
-      const x = left + index * (half + 4);
-      doc.setFillColor(index === 0 ? 5 : 110, index === 0 ? 150 : 231, index === 0 ? 105 : 183);
-      doc.rect(x, y, half, 3, "F");
-      doc.setFillColor(236, 253, 245);
-      doc.rect(x, y + 3, half, 15, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(6, 78, 59);
-      doc.text(part.label, x + 3, y + 9);
-      doc.setFontSize(12);
-      doc.text(money(part.amount), x + 3, y + 15);
-    });
-  } else {
-    note("No queda sobrante para retirar en este período.");
+  note(
+    "La mitad sale de ventas - compras + ajustes. A Marina Leffler y a Cintia Leffler se les resta solo lo que cada una ya retiró."
+  );
+  if (proposal.otherWithdrawn > 0.004) {
+    note(`Retiros de otra persona, descontados antes de partir: ${money(proposal.otherWithdrawn)}.`);
   }
+  ensure(36);
+  const halfWidth = (contentWidth - 4) / 2;
+  proposal.parts.forEach((part, index) => {
+    const x = left + index * (halfWidth + 4);
+    doc.setFillColor(index === 0 ? 5 : 110, index === 0 ? 150 : 231, index === 0 ? 105 : 183);
+    doc.rect(x, y, halfWidth, 3, "F");
+    doc.setFillColor(236, 253, 245);
+    doc.rect(x, y + 3, halfWidth, 30, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(6, 78, 59);
+    doc.text(part.label, x + 3, y + 9);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(55, 65, 81);
+    doc.text(`Mitad ${money(part.half)}`, x + 3, y + 15);
+    doc.text(`Ya retiró ${money(part.already)}`, x + 3, y + 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(part.proposed > 0.004 ? 4 : 185, part.proposed > 0.004 ? 120 : 28, part.proposed > 0.004 ? 87 : 28);
+    doc.text(money(part.proposed), x + 3, y + 28);
+  });
 
   doc.save(`informe-balance-${fileSlug(input.periodLabel)}.pdf`);
 }
