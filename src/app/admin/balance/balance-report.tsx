@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { PartnerDTO } from "@/services/partners.service";
 import type { TransactionDTO } from "@/services/transactions.service";
+import { downloadBalanceReportPdf } from "./balance-report-pdf";
 
 export type BalanceReportAccount = {
   payment_method_id: number | null;
@@ -112,6 +114,8 @@ export function BalanceReport({
     };
   }, [open, onClose]);
 
+  const [exporting, setExporting] = useState(false);
+
   if (!open) return null;
 
   const sobrante = sales - purchases - withdrawals + adjustmentsTotal;
@@ -129,6 +133,28 @@ export function BalanceReport({
   const adjustmentRows = [...adjustments].sort(
     (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id
   );
+
+  const handleExportPdf = () => {
+    try {
+      setExporting(true);
+      downloadBalanceReportPdf({
+        periodLabel,
+        sales,
+        purchases,
+        withdrawals,
+        adjustmentsTotal,
+        accounts,
+        adjustments: adjustmentRows,
+        partners,
+      });
+      toast.success("Informe descargado");
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo generar el PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="balance-report-sheet fixed inset-0 z-50 overflow-y-auto bg-background">
@@ -155,8 +181,8 @@ export function BalanceReport({
             <p className="text-sm text-muted-foreground">{periodLabel}</p>
           </div>
           <div className="balance-report-actions flex gap-2">
-            <Button type="button" variant="outline" onClick={() => window.print()}>
-              Imprimir
+            <Button type="button" onClick={handleExportPdf} disabled={exporting || loadingAdjustments}>
+              {exporting ? "Generando..." : "Exportar PDF"}
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>
               Cerrar
