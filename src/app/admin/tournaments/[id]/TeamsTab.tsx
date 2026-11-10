@@ -53,7 +53,7 @@ import { TeamScheduleRestrictionsDialog } from "@/components/team-schedule-restr
 import type { PlayerDTO } from "@/models/dto/player";
 import type { TeamDTO, TournamentDTO, GroupsApiResponse, TeamPlayer } from "@/models/dto/tournament";
 import { isMastersFormat } from "@/lib/tournament-format";
-import { MASTERS_TEAM_COUNT } from "@/lib/masters-tournament";
+import { isMastersRosterCount, MASTERS_TEAM_COUNT } from "@/lib/masters-tournament";
 import { tournamentsService, playersService } from "@/services";
 
 // Fetch functions para React Query
@@ -1031,7 +1031,9 @@ export default function TeamsTab({
                     {isMasters && tournament.status === "draft" && !hasGroups ? (
                       activeTeams.length === MASTERS_TEAM_COUNT
                         ? "2 zonas de 4, todos contra todos (12 partidos). Pasan los 2 primeros de cada zona."
-                        : `Master necesita 8 parejas (hay ${activeTeams.length}).`
+                        : activeTeams.length === 6
+                          ? "2 zonas de 3, todos contra todos (cada pareja juega 2 partidos). Pasan los 2 primeros de cada zona."
+                          : `Master necesita 8 parejas, o 6 por excepción (hay ${activeTeams.length}).`
                     ) : calculateGroupsInfo.totalGroups > 0 ? (
                       <>
                         {calculateGroupsInfo.totalGroups} (
@@ -1110,7 +1112,13 @@ export default function TeamsTab({
           <Button
             size="sm"
             onClick={handleCloseRegistrationClick}
-            disabled={tournament.status !== "draft" || activeTeams.length < 3 || closing}
+            disabled={
+              tournament.status !== "draft" ||
+              closing ||
+              (isMasterTournament
+                ? !isMastersRosterCount(activeTeams.length)
+                : activeTeams.length < 3)
+            }
           >
             {closing && (
               <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />

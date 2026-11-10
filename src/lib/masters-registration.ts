@@ -4,16 +4,19 @@ import {
   sortTeamIdsWithZoneHeadFirst,
 } from "@/lib/group-zone-team-order";
 import {
-  MASTERS_TEAM_COUNT,
   assignMastersZones,
+  isMastersRosterCount,
+  mastersRosterError,
   mastersRoundRobinPairs,
 } from "@/lib/masters-tournament";
 
 const ZONE_LETTERS = ["A", "B"] as const;
 
 /**
- * Cierra la inscripción de un Master: 2 zonas de 4 y 6 partidos por zona.
- * No pasa por el armado de zonas del formato de siempre.
+ * Cierra la inscripción de un Master.
+ * 8 parejas: 2 zonas de 4 y 6 partidos por zona.
+ * 6 parejas, por excepción: 2 zonas de 3 y 2 partidos por pareja.
+ * En ambos casos pasan los 2 primeros de cada zona a semis cruzadas.
  */
 export async function closeMastersRegistration(
   supabase: SupabaseClient,
@@ -34,10 +37,10 @@ export async function closeMastersRegistration(
   }
 
   const rows = (teams ?? []) as Array<{ id: number; display_order?: number | null }>;
-  if (rows.length !== MASTERS_TEAM_COUNT) {
+  if (!isMastersRosterCount(rows.length)) {
     return {
       ok: false,
-      error: `Un Master necesita exactamente 8 parejas (hay ${rows.length}).`,
+      error: mastersRosterError(rows.length),
       status: 400,
     };
   }
