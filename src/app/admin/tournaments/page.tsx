@@ -385,12 +385,12 @@ export default function TournamentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="standard">Estándar</SelectItem>
-                  <SelectItem value="master">Master (8 parejas)</SelectItem>
+                  <SelectItem value="master">Master (8 parejas, o 6 por excepción)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
                 {format === "master"
-                  ? "2 zonas de 4, todos contra todos. Clasifican 2 y juegan semis cruzadas."
+                  ? "2 zonas. Con 8 parejas, todos contra todos. Con 6, cada una juega 2 partidos. Clasifican 2 y juegan semis cruzadas."
                   : "El formato de siempre."}
               </p>
             </div>
@@ -663,7 +663,7 @@ export default function TournamentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="standard">Estándar</SelectItem>
-                  <SelectItem value="master">Master (8 parejas)</SelectItem>
+                  <SelectItem value="master">Master (8 parejas, o 6 por excepción)</SelectItem>
                 </SelectContent>
               </Select>
               {tournamentToEdit?.status !== "draft" && (

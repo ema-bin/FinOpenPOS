@@ -9,20 +9,33 @@ import {
 } from "@/lib/tournament-group-standings";
 
 export const MASTERS_TEAM_COUNT = 8;
+/** Excepción: el mismo cuadro, con zonas de 3. Cada pareja juega 2 partidos. */
+export const MASTERS_SHORT_TEAM_COUNT = 6;
 export const MASTERS_QUALIFIERS_PER_GROUP = 2;
 export const MASTERS_PLAYOFF_MATCH_COUNT = 3;
 
-/** Serpiente de 8 parejas: A = 1,4,5,8 y B = 2,3,6,7 del orden de inscripción. */
-const ZONE_A_INDEXES = [0, 3, 4, 7] as const;
-const ZONE_B_INDEXES = [1, 2, 5, 6] as const;
+const MASTERS_ZONE_INDEXES: Record<number, { a: readonly number[]; b: readonly number[] }> = {
+  8: { a: [0, 3, 4, 7], b: [1, 2, 5, 6] },
+  6: { a: [0, 3, 4], b: [1, 2, 5] },
+};
 
+export function isMastersRosterCount(count: number): boolean {
+  return count === MASTERS_TEAM_COUNT || count === MASTERS_SHORT_TEAM_COUNT;
+}
+
+export function mastersRosterError(count: number): string {
+  return `Un Master necesita 8 parejas, o 6 por excepción (hay ${count}).`;
+}
+
+/** Serpiente: 8 parejas A = 1,4,5,8 y B = 2,3,6,7. Con 6, A = 1,4,5 y B = 2,3,6. */
 export function assignMastersZones(teamIds: readonly number[]): [number[], number[]] {
-  if (teamIds.length !== MASTERS_TEAM_COUNT) {
-    throw new Error("Un Master necesita exactamente 8 parejas");
+  const indexes = MASTERS_ZONE_INDEXES[teamIds.length];
+  if (!indexes) {
+    throw new Error(mastersRosterError(teamIds.length));
   }
   return [
-    ZONE_A_INDEXES.map((index) => teamIds[index]),
-    ZONE_B_INDEXES.map((index) => teamIds[index]),
+    indexes.a.map((index) => teamIds[index]),
+    indexes.b.map((index) => teamIds[index]),
   ];
 }
 

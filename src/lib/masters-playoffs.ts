@@ -4,7 +4,9 @@ import { CloseGroupsError } from "@/lib/close-groups-error";
 import {
   buildMastersPlayoffMatches,
   buildMastersStandingsInsertRows,
+  isMastersRosterCount,
   mastersQualifiersForGroup,
+  mastersRosterError,
   projectedMastersPlayoffMatches,
   type MastersQualifier,
 } from "@/lib/masters-tournament";
@@ -54,10 +56,10 @@ export async function loadMastersPlayoffBracket(
     if (teamsError) {
       return { ok: false, error: "No se pudieron leer las parejas", status: 500 };
     }
-    if ((teams ?? []).length !== 8) {
+    if (!isMastersRosterCount((teams ?? []).length)) {
       return {
         ok: false,
-        error: "Un Master necesita exactamente 8 parejas para el cuadro",
+        error: mastersRosterError((teams ?? []).length),
         status: 400,
       };
     }
@@ -105,8 +107,12 @@ export async function loadMastersPlayoffBracket(
     const teamIds = teamRows
       .filter((row) => row.tournament_group_id === group.id)
       .map((row) => row.team_id);
-    if (teamIds.length !== 4) {
-      return { ok: false, error: "Cada zona de un Master tiene 4 parejas", status: 400 };
+    if (teamIds.length !== 4 && teamIds.length !== 3) {
+      return {
+        ok: false,
+        error: "Cada zona de un Master tiene 4 parejas, o 3 en la excepción de 6",
+        status: 400,
+      };
     }
     const groupMatches = matchRows.filter((match) => match.tournament_group_id === group.id);
     qualifiers.push(

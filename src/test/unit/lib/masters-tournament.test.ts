@@ -37,8 +37,24 @@ describe("Master", () => {
     expect(zoneB).toEqual([2, 3, 6, 7]);
   });
 
-  it("rechaza una cantidad distinta de 8", () => {
-    expect(() => assignMastersZones([1, 2, 3])).toThrow(/8 parejas/);
+  it("arma dos zonas de 3 con la misma serpiente cuando hay 6 parejas", () => {
+    const [zoneA, zoneB] = assignMastersZones([1, 2, 3, 4, 5, 6]);
+    expect(zoneA).toEqual([1, 4, 5]);
+    expect(zoneB).toEqual([2, 3, 6]);
+    const pairs = mastersRoundRobinPairs(zoneA);
+    expect(pairs).toEqual([
+      [1, 4],
+      [1, 5],
+      [4, 5],
+    ]);
+    expect(new Set(pairs.flat()).size).toBe(3);
+    for (const teamId of zoneA) {
+      expect(pairs.filter(([left, right]) => left === teamId || right === teamId)).toHaveLength(2);
+    }
+  });
+
+  it("rechaza una cantidad distinta de 8 o 6", () => {
+    expect(() => assignMastersZones([1, 2, 3])).toThrow(/8 parejas, o 6 por excepción/);
   });
 
   it("juega todos contra todos con las dos parejas definidas", () => {
