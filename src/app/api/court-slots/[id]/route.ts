@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
-import { classBlockForSlot } from '@/lib/class-occupancy';
+import { blocksForCourtSlot } from '@/lib/class-occupancy';
 
 type Params = { params: { id: string } };
 
@@ -86,22 +86,28 @@ export async function PATCH(request: Request, { params }: Params) {
     const chargesTurno =
       updatePayload.was_played === true ||
       paymentKeys.some((key) => key in updatePayload && updatePayload[key] != null);
-    if (chargesTurno) {
-      const occupancy = await repos.classes.listOccupancy(current.slot_date);
-      const block = classBlockForSlot(current, occupancy);
-      if (block) {
-        return NextResponse.json(
-          { error: `Esa cancha está ocupada por una clase (${block.label})` },
-          { status: 409 }
-        );
-      }
+    const [classOccupancy, tournamentOccupancy] = await Promise.all([
+      repos.classes.listOccupancy(current.slot_date),
+      repos.tournamentMatches.listCourtOccupancy(current.slot_date),
+    ]);
+    const holds = blocksForCourtSlot(current, classOccupancy, tournamentOccupancy);
+    if (chargesTurno && (holds.class_block || holds.tournament_block)) {
+      const reason = [
+        holds.class_block ? `una clase (${holds.class_block.label})` : null,
+        holds.tournament_block ? `un torneo (${holds.tournament_block.label})` : null,
+      ]
+        .filter(Boolean)
+        .join(" y ");
+      return NextResponse.json(
+        { error: `Esa cancha está ocupada por ${reason}` },
+        { status: 409 }
+      );
     }
 
     const slot = await repos.courtSlots.update(slotId, updatePayload);
-    const occupancy = await repos.classes.listOccupancy(slot.slot_date);
     return NextResponse.json({
       ...slot,
-      class_block: classBlockForSlot(slot, occupancy),
+      ...blocksForCourtSlot(slot, classOccupancy, tournamentOccupancy),
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

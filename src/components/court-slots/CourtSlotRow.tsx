@@ -42,10 +42,36 @@ function formatSlotDate(slotDate: string) {
   return format(date, "EEEE dd/MM/yyyy", { locale: es }).toUpperCase();
 }
 
-function slotTone(classBlock: CourtSlotDTO["class_block"], hasChanges: boolean) {
+function slotTone(
+  classBlock: CourtSlotDTO["class_block"],
+  tournamentBlock: CourtSlotDTO["tournament_block"],
+  hasChanges: boolean
+) {
+  if (classBlock && tournamentBlock) return "bg-violet-50 dark:bg-violet-950/30";
   if (classBlock) return "bg-sky-50 dark:bg-sky-950/30";
+  if (tournamentBlock) return "bg-amber-50 dark:bg-amber-950/30";
   if (hasChanges) return "bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-l-yellow-500";
   return "";
+}
+
+function OccupancyNote({
+  classBlock,
+  tournamentBlock,
+}: {
+  classBlock: CourtSlotDTO["class_block"];
+  tournamentBlock: CourtSlotDTO["tournament_block"];
+}) {
+  if (!classBlock && !tournamentBlock) return null;
+  return (
+    <div className="space-y-1 text-sm font-medium">
+      {classBlock ? (
+        <p className="text-sky-950 dark:text-sky-100">Clase · {classBlock.label}</p>
+      ) : null}
+      {tournamentBlock ? (
+        <p className="text-amber-950 dark:text-amber-100">Torneo · {tournamentBlock.label}</p>
+      ) : null}
+    </div>
+  );
 }
 
 export function CourtSlotCard({
@@ -58,9 +84,11 @@ export function CourtSlotCard({
   isSaving,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
+  const tournamentBlock = slot.tournament_block;
+  const occupied = Boolean(classBlock || tournamentBlock);
 
   return (
-    <div className={`rounded-lg border p-3 ${slotTone(classBlock, hasChanges)}`}>
+    <div className={`rounded-lg border p-3 ${slotTone(classBlock, tournamentBlock, hasChanges)}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <span
@@ -76,7 +104,7 @@ export function CourtSlotCard({
         <label className="flex shrink-0 items-center gap-2 text-sm">
           <Checkbox
             checked={slot.was_played}
-            disabled={Boolean(classBlock)}
+            disabled={occupied}
             onCheckedChange={(checked) =>
               onUpdate(slot.id, { was_played: Boolean(checked) })
             }
@@ -85,10 +113,10 @@ export function CourtSlotCard({
         </label>
       </div>
 
-      {classBlock ? (
-        <p className="mt-3 text-sm font-medium text-sky-950 dark:text-sky-100">
-          Clase · {classBlock.label}
-        </p>
+      {occupied ? (
+        <div className="mt-3">
+          <OccupancyNote classBlock={classBlock} tournamentBlock={tournamentBlock} />
+        </div>
       ) : (
         <div className="mt-3 grid grid-cols-1 gap-2">
           {([
@@ -141,15 +169,17 @@ export function CourtSlotRow({
   isSaving,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
+  const tournamentBlock = slot.tournament_block;
+  const occupied = Boolean(classBlock || tournamentBlock);
   return (
     <TableRow 
       key={slot.id}
-      className={slotTone(classBlock, hasChanges)}
+      className={slotTone(classBlock, tournamentBlock, hasChanges)}
     >
       <TableCell className="text-center">
         <Checkbox
           checked={slot.was_played}
-          disabled={Boolean(classBlock)}
+          disabled={occupied}
           onCheckedChange={(checked) =>
             onUpdate(slot.id, {
               was_played: Boolean(checked),
@@ -171,9 +201,9 @@ export function CourtSlotRow({
         {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
       </TableCell>
 
-      {classBlock ? (
-        <TableCell colSpan={4} className="text-sm font-medium text-sky-950 dark:text-sky-100">
-          Clase · {classBlock.label}
+      {occupied ? (
+        <TableCell colSpan={4}>
+          <OccupancyNote classBlock={classBlock} tournamentBlock={tournamentBlock} />
         </TableCell>
       ) : (
       <>

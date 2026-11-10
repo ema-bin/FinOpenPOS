@@ -1049,6 +1049,87 @@ export class TournamentMatchesRepository extends BaseRepository {
 
     return data as TournamentMatch;
   }
+
+  /** Partidos con cancha y horario ese día. Los cancelados no ocupan el turno. */
+  async listCourtOccupancy(date: string): Promise<
+    Array<{
+      courtId: number;
+      startTime: string;
+      endTime: string;
+      status: string;
+      label: string;
+    }>
+  > {
+    const { data, error } = await this.supabase
+      .from("tournament_matches")
+      .select(
+        `
+        court_id, start_time, end_time, status,
+        tournament:tournament_id (name),
+        team1:team1_id (
+          display_name,
+          player1:player1_id (last_name),
+          player2:player2_id (last_name)
+        ),
+        team2:team2_id (
+          display_name,
+          player1:player1_id (last_name),
+          player2:player2_id (last_name)
+        )
+      `
+      )
+      .eq("match_date", date)
+      .neq("status", "cancelled")
+      .not("court_id", "is", null)
+      .not("start_time", "is", null)
+      .not("end_time", "is", null);
+
+    if (error) {
+      throw new Error(`Failed to fetch tournament occupancy: ${error.message}`);
+    }
+
+    return (data ?? []).flatMap((row) => {
+      const courtId = Number(row.court_id);
+      const startTime = String(row.start_time ?? "");
+      const endTime = String(row.end_time ?? "");
+      if (!Number.isFinite(courtId) || !startTime || !endTime) return [];
+      const tournament = firstOf(row.tournament as { name: string | null } | { name: string | null }[] | null);
+      const pair = (team: unknown) => teamLabel(team);
+      const teams = [pair(row.team1), pair(row.team2)].filter(Boolean).join(" vs ");
+      const label = [tournament?.name?.trim(), teams].filter(Boolean).join(" · ") || "Partido";
+      return [
+        {
+          courtId,
+          startTime,
+          endTime,
+          status: "scheduled",
+          label,
+        },
+      ];
+    });
+  }
+}
+
+function firstOf<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function teamLabel(team: unknown): string {
+  const row = firstOf(
+    team as
+      | {
+          display_name?: string | null;
+          player1?: { last_name?: string | null } | { last_name?: string | null }[] | null;
+          player2?: { last_name?: string | null } | { last_name?: string | null }[] | null;
+        }
+      | null
+  );
+  if (!row) return "";
+  if (row.display_name?.trim()) return row.display_name.trim();
+  const left = firstOf(row.player1)?.last_name?.trim();
+  const right = firstOf(row.player2)?.last_name?.trim();
+  return [left, right].filter(Boolean).join(" / ");
 }
 
 export class TournamentPlayoffsRepository extends BaseRepository {
