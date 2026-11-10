@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planMonthlyCharges } from "@/lib/class-monthly-charge";
-import { classBlockForSlot } from "@/lib/class-occupancy";
+import { blocksForCourtSlot, classBlockForSlot } from "@/lib/class-occupancy";
 import { classFitsInDay, enrollmentOnClassDay, freeClassSpots, rangesOverlap, snapClassStart, weekdayOf } from "@/lib/class-time";
 
 describe("cruce de horarios", () => {
@@ -53,6 +53,33 @@ describe("cruce de horarios", () => {
       ]
     );
     expect(block).toEqual({ label: "Seba" });
+  });
+
+  it("un partido de torneo ocupa el turno de esa cancha y no el de otra", () => {
+    const holds = blocksForCourtSlot(
+      { court_id: 2, start_time: "18:00:00", end_time: "19:30:00" },
+      [],
+      [
+        {
+          courtId: 2,
+          startTime: "18:30:00",
+          endTime: "19:30:00",
+          status: "scheduled",
+          label: "Master · Pérez / Gómez vs Díaz / Ruiz",
+        },
+        {
+          courtId: 1,
+          startTime: "18:30:00",
+          endTime: "19:30:00",
+          status: "scheduled",
+          label: "Otra cancha",
+        },
+      ]
+    );
+    expect(holds.class_block).toBeNull();
+    expect(holds.tournament_block).toEqual({
+      label: "Master · Pérez / Gómez vs Díaz / Ruiz",
+    });
   });
 
   it("una clase libre muestra 5 lugares y una llena muestra 0", () => {

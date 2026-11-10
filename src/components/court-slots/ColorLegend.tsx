@@ -20,6 +20,17 @@ export function ColorLegend({
 }: ColorLegendProps) {
   return (
     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-foreground">Ocupado:</span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-sm bg-sky-200" />
+          Clase
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded-sm bg-amber-200" />
+          Torneo
+        </span>
+      </div>
       {courts.length > 0 && (
         <div className="flex items-center gap-2">
           <span className="font-semibold text-foreground">Canchas:</span>

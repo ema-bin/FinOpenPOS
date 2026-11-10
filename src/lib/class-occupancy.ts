@@ -10,6 +10,20 @@ export type OccupancySession = {
 
 export type ClassBlock = { label: string };
 
+export function blocksForCourtSlot(
+  slot: { court_id: number; start_time: string; end_time: string },
+  classSessions: OccupancySession[],
+  tournamentSessions: OccupancySession[]
+): {
+  class_block: ClassBlock | null;
+  tournament_block: ClassBlock | null;
+} {
+  return {
+    class_block: classBlockForSlot(slot, classSessions),
+    tournament_block: classBlockForSlot(slot, tournamentSessions),
+  };
+}
+
 export function classBlockForSlot(
   slot: { court_id: number; start_time: string; end_time: string },
   sessions: OccupancySession[]

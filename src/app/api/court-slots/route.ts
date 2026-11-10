@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { classBlockForSlot } from "@/lib/class-occupancy";
+import { blocksForCourtSlot } from "@/lib/class-occupancy";
 
 export async function GET(request: Request) {
   try {
@@ -23,11 +23,14 @@ export async function GET(request: Request) {
     }
 
     const slots = await repos.courtSlots.findByDate(slotDate);
-    const occupancy = await repos.classes.listOccupancy(slotDate);
+    const [classOccupancy, tournamentOccupancy] = await Promise.all([
+      repos.classes.listOccupancy(slotDate),
+      repos.tournamentMatches.listCourtOccupancy(slotDate),
+    ]);
     return NextResponse.json(
       slots.map((slot) => ({
         ...slot,
-        class_block: classBlockForSlot(slot, occupancy),
+        ...blocksForCourtSlot(slot, classOccupancy, tournamentOccupancy),
       }))
     );
   } catch (error) {
