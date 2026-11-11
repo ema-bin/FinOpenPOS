@@ -9,7 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PERMISSIONS, permissionsByGroup, type Permission } from "@/lib/auth/permissions";
+import {
+  PERMISSIONS,
+  permissionsByGroup,
+  type AccessLevel,
+  type Permission,
+  type PermissionGrant,
+} from "@/lib/auth/permissions";
 
 type Role = {
   id: number;
@@ -17,8 +23,10 @@ type Role = {
   is_system: boolean;
   description: string | null;
   user_count: number;
-  permissions: Permission[];
+  permissions: PermissionGrant[];
 };
+
+type GrantChoice = AccessLevel | "none";
 
 type RolesResponse = { actorRoleId: number | null; roles: Role[] };
 
@@ -29,11 +37,16 @@ async function fetchRoles(): Promise<RolesResponse> {
   return data;
 }
 
-const samePermissions = (a: readonly string[], b: readonly string[]) => {
+const sameGrants = (a: readonly PermissionGrant[], b: readonly PermissionGrant[]) => {
   if (a.length !== b.length) return false;
-  const set = new Set(a);
-  return b.every((permission) => set.has(permission));
+  return a.every((grant) =>
+    b.some((other) => other.permission === grant.permission && other.access === grant.access)
+  );
 };
+
+function choiceOf(grants: readonly PermissionGrant[], permission: Permission): GrantChoice {
+  return grants.find((grant) => grant.permission === permission)?.access ?? "none";
+}
 
 export default function RolesPage() {
   const queryClient = useQueryClient();
@@ -44,7 +57,7 @@ export default function RolesPage() {
 
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const [name, setName] = useState("");
-  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [permissions, setPermissions] = useState<PermissionGrant[]>([]);
 
   const selected = data?.roles.find((role) => role.id === selectedId) ?? null;
   const isNew = selectedId === "new";
@@ -66,7 +79,7 @@ export default function RolesPage() {
     ? name.trim().length > 0 || permissions.length > 0
     : selected != null &&
       (name.trim() !== selected.name ||
-        (!selected.is_system && !samePermissions(permissions, selected.permissions)));
+        (!selected.is_system && !sameGrants(permissions, selected.permissions)));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -106,10 +119,14 @@ export default function RolesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggle = (permission: Permission, checked: boolean) => {
-    setPermissions((current) =>
-      checked ? [...current, permission] : current.filter((item) => item !== permission)
-    );
+  const setChoice = (permission: Permission, choice: GrantChoice) => {
+    setPermissions((current) => {
+      const rest = current.filter((grant) => grant.permission !== permission);
+      if (choice === "none") return rest;
+      const mode = PERMISSIONS[permission].mode;
+      const access: AccessLevel = mode === "both" ? choice : mode;
+      return [...rest, { permission, access }];
+    });
   };
 
   if (isLoading) {
@@ -160,8 +177,8 @@ export default function RolesPage() {
         <CardHeader>
           <CardTitle>{isNew ? "Nuevo rol" : selected ? selected.name : "Elegí un rol"}</CardTitle>
           <CardDescription>
-            Los permisos se agrupan por sección. El rol Admin tiene siempre todos y no se puede
-            borrar.
+            En cada sección se puede dar solo lectura o también escritura. La escritura incluye
+            ver la sección. El rol Admin tiene siempre todos y no se puede borrar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,20 +212,38 @@ export default function RolesPage() {
                   {groups.map((group) => (
                     <div key={group.group} className="space-y-2">
                       <div className="text-sm font-medium">{group.group}</div>
-                      {group.permissions.map((permission) => (
-                        <label
-                          key={permission}
-                          htmlFor={`perm-${permission}`}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <Checkbox
-                            id={`perm-${permission}`}
-                            checked={permissions.includes(permission)}
-                            onCheckedChange={(checked) => toggle(permission, checked === true)}
-                          />
-                          {PERMISSIONS[permission].label}
-                        </label>
-                      ))}
+                      {group.permissions.map((permission) => {
+                        const meta = PERMISSIONS[permission];
+                        const choice = choiceOf(permissions, permission);
+                        return (
+                          <div key={permission} className="flex items-center justify-between gap-2">
+                            <Label htmlFor={`perm-${permission}`} className="text-sm font-normal">
+                              {meta.label}
+                            </Label>
+                            {meta.mode === "both" ? (
+                              <select
+                                id={`perm-${permission}`}
+                                className="h-8 rounded-md border bg-background px-2 text-sm"
+                                value={choice}
+                                onChange={(e) => setChoice(permission, e.target.value as GrantChoice)}
+                              >
+                                <option value="none">Sin acceso</option>
+                                <option value="read">Lectura</option>
+                                <option value="write">Escritura</option>
+                              </select>
+                            ) : (
+                              <Checkbox
+                                id={`perm-${permission}`}
+                                checked={choice === meta.mode}
+                                onCheckedChange={(checked) =>
+                                  setChoice(permission, checked === true ? meta.mode : "none")
+                                }
+                                aria-label={meta.label}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>

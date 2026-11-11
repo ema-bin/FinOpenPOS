@@ -2,29 +2,48 @@
  * Catálogo de permisos. Cada permiso corresponde a controles en código
  * (middleware de páginas/APIs y UI), por eso no se crean desde la app:
  * desde la app se arman roles combinando estos permisos.
+ *
+ * mode:
+ * - both: el rol elige lectura o escritura. La escritura incluye la lectura.
+ * - read: solo se puede mirar (no hay una acción de escritura asociada).
+ * - write: es una acción. Tener el permiso es poder hacerla.
  */
 export const PERMISSIONS = {
-  "dashboard.view": { label: "Ver dashboard", group: "General" },
-  "sales.operate": { label: "Cuentas abiertas y venta rápida", group: "Ventas" },
-  "sales.cancel_discount": { label: "Cancelar cuentas y aplicar descuentos", group: "Ventas" },
-  "sales.reports": { label: "Ver ventas, estadísticas y ranking de clientes", group: "Ventas" },
-  "closures.daily": { label: "Cierre de caja diario", group: "Finanzas" },
-  "closures.monthly": { label: "Cierre mensual", group: "Finanzas" },
-  "balance.manage": { label: "Balance, retiros, ajustes y socios", group: "Finanzas" },
-  "purchases.manage": { label: "Compras y proveedores", group: "Compras" },
-  "products.manage": { label: "Productos, categorías y stock", group: "Compras" },
-  "courts.operate": { label: "Turnos de canchas", group: "Canchas" },
-  "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas" },
-  "classes.manage": { label: "Clases", group: "Clases" },
-  "tournaments.manage": { label: "Torneos", group: "Torneos" },
-  "players.manage": { label: "Pantalla de clientes (editar y borrar)", group: "Clientes" },
-  "advertisements.manage": { label: "Publicidades", group: "Publicidades" },
-  "users.manage": { label: "Usuarios y roles", group: "Administración" },
-} as const satisfies Record<string, { label: string; group: string }>;
+  "dashboard.view": { label: "Ver dashboard", group: "General", mode: "read" },
+  "sales.operate": { label: "Cuentas abiertas y venta rápida", group: "Ventas", mode: "both" },
+  "sales.cancel_discount": { label: "Cancelar cuentas y aplicar descuentos", group: "Ventas", mode: "write" },
+  "sales.reports": { label: "Ver ventas, estadísticas y ranking de clientes", group: "Ventas", mode: "read" },
+  "closures.daily": { label: "Cierre de caja diario", group: "Finanzas", mode: "both" },
+  "closures.monthly": { label: "Cierre mensual", group: "Finanzas", mode: "both" },
+  "balance.manage": { label: "Balance, retiros, ajustes y socios", group: "Finanzas", mode: "both" },
+  "purchases.manage": { label: "Compras y proveedores", group: "Compras", mode: "both" },
+  "products.manage": { label: "Productos, categorías y stock", group: "Compras", mode: "both" },
+  "courts.operate": { label: "Turnos de canchas", group: "Canchas", mode: "both" },
+  "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas", mode: "write" },
+  "classes.manage": { label: "Clases", group: "Clases", mode: "both" },
+  "tournaments.manage": { label: "Torneos", group: "Torneos", mode: "both" },
+  "players.manage": { label: "Pantalla de clientes (editar y borrar)", group: "Clientes", mode: "both" },
+  "advertisements.manage": { label: "Publicidades", group: "Publicidades", mode: "both" },
+  "users.manage": { label: "Usuarios y roles", group: "Administración", mode: "both" },
+} as const satisfies Record<string, { label: string; group: string; mode: "read" | "write" | "both" }>;
 
 export type Permission = keyof typeof PERMISSIONS;
 
+export type AccessLevel = "read" | "write";
+
+export type PermissionGrant = { permission: Permission; access: AccessLevel };
+
+/** read = solo lectura. write = lectura y escritura. */
+export type EffectiveAccess = {
+  read: Permission[];
+  write: Permission[];
+};
+
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
+
+export const EMPTY_ACCESS: EffectiveAccess = { read: [], write: [] };
+
+export const FULL_ACCESS: EffectiveAccess = { read: [], write: [...ALL_PERMISSIONS] };
 
 export function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(PERMISSIONS, value);
@@ -41,20 +60,84 @@ export function permissionsByGroup(): Array<{ group: string; permissions: Permis
 }
 
 /**
- * Permisos efectivos de un usuario a partir de su rol.
- * El rol de sistema (Admin) tiene siempre todos, incluidos permisos agregados después.
- * Valores desconocidos guardados en la DB se ignoran.
+ * Nivel que se guarda. Un permiso de solo lectura no puede quedar en escritura,
+ * y una acción (solo escritura) no puede quedar en lectura.
+ * Si no viene nivel, se asume escritura: así siguen los roles ya cargados.
+ */
+export function normalizeAccess(
+  permission: Permission,
+  access: string | null | undefined
+): AccessLevel {
+  const mode = PERMISSIONS[permission].mode;
+  if (mode === "read") return "read";
+  if (mode === "write") return "write";
+  return access === "read" ? "read" : "write";
+}
+
+export function resolveEffectiveAccess(
+  role: {
+    is_system: boolean;
+    grants: readonly { permission: string; access?: string | null }[];
+  } | null
+): EffectiveAccess {
+  if (!role) return { read: [], write: [] };
+  if (role.is_system) return { read: [], write: [...ALL_PERMISSIONS] };
+
+  const read: Permission[] = [];
+  const write: Permission[] = [];
+  for (const grant of role.grants) {
+    if (!isPermission(grant.permission)) continue;
+    const access = normalizeAccess(grant.permission, grant.access);
+    if (access === "write") write.push(grant.permission);
+    else read.push(grant.permission);
+  }
+  return { read, write };
+}
+
+/**
+ * Lista de permisos con escritura. La usan los tests y el rol de sistema.
+ * Un array de permisos, sin nivel, significa escritura.
  */
 export function resolveEffectivePermissions(
   role: { is_system: boolean; permissions: readonly string[] } | null
 ): Permission[] {
   if (!role) return [];
   if (role.is_system) return [...ALL_PERMISSIONS];
-  return ALL_PERMISSIONS.filter((p) => role.permissions.includes(p));
+  return resolveEffectiveAccess({
+    is_system: false,
+    grants: role.permissions.map((permission) => ({ permission, access: "write" })),
+  }).write;
 }
 
-export function can(permissions: readonly Permission[], permission: Permission): boolean {
-  return permissions.includes(permission);
+function isEffectiveAccess(
+  access: EffectiveAccess | readonly string[]
+): access is EffectiveAccess {
+  return !Array.isArray(access);
+}
+
+export function allows(
+  access: EffectiveAccess | readonly string[] | null | undefined,
+  permission: Permission,
+  level: AccessLevel
+): boolean {
+  if (!access) return false;
+  if (!isEffectiveAccess(access)) return access.includes(permission);
+  if (access.write.includes(permission)) return true;
+  return level === "read" && access.read.includes(permission);
+}
+
+export function can(
+  access: EffectiveAccess | readonly Permission[],
+  permission: Permission
+): boolean {
+  return allows(access, permission, "write");
+}
+
+export function canRead(
+  access: EffectiveAccess | readonly Permission[],
+  permission: Permission
+): boolean {
+  return allows(access, permission, "read");
 }
 
 export function canAny(permissions: readonly Permission[], required: readonly Permission[]): boolean {

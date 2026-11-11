@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { CookieOptions } from "@supabase/ssr";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { ALL_PERMISSIONS, type Permission } from "@/lib/auth/permissions";
+import { FULL_ACCESS, type EffectiveAccess } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
 import { decideApiAccess } from "@/lib/auth/route-permissions";
 import {
@@ -22,14 +22,14 @@ import {
 async function permissionsForSession(
   supabase: SupabaseClient,
   session: Session
-): Promise<Permission[]> {
+): Promise<EffectiveAccess> {
   const fromToken = permissionsFromClaims(decodeJwtPayload(session.access_token));
   if (fromToken !== null) return fromToken;
 
   const fromDb = await loadRolePermissions(supabase, session.user.id);
   if (fromDb === null) {
     console.error("No se pudieron leer los permisos; se permite el acceso para no bloquear.");
-    return [...ALL_PERMISSIONS];
+    return FULL_ACCESS;
   }
   return fromDb;
 }
@@ -88,7 +88,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname.startsWith("/api")) {
-    const permissions = user && session ? await permissionsForSession(supabase, session) : []
+    const permissions = user && session ? await permissionsForSession(supabase, session) : { read: [], write: [] }
     const decision = decideApiAccess(pathname, request.method, Boolean(user), permissions)
     if (decision === "allow") return supabaseResponse
     const status = decision === "unauthorized" ? 401 : 403

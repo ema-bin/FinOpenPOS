@@ -10,7 +10,7 @@ type RouteParams = { params: { id: string } };
 type RoleRow = {
   id: number;
   is_system: boolean;
-  role_permissions: { permission: string }[] | null;
+  role_permissions: { permission: string; access?: string | null }[] | null;
 };
 
 export async function PATCH(request: Request, { params }: RouteParams) {
@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const service = createServiceClient();
     const [rolesResult, assignmentsResult] = await Promise.all([
-      service.from("roles").select("id, is_system, role_permissions(permission)"),
+      service.from("roles").select("id, is_system, role_permissions(permission, access)"),
       service.from("user_roles").select("user_id, role_id"),
     ]);
 
@@ -55,7 +55,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       currentIsSystem: currentRoleId != null && systemRoleIds.has(currentRoleId),
       systemAdminCount: assignments.filter((row) => systemRoleIds.has(row.role_id)).length,
       nextIsSystem: nextRole.is_system,
-      nextPermissions: (nextRole.role_permissions ?? []).map((p) => p.permission),
+      nextPermissions: (nextRole.role_permissions ?? [])
+        .filter((grant) => grant.access !== "read")
+        .map((grant) => grant.permission),
     });
     if (!decision.ok) {
       return NextResponse.json({ error: decision.error }, { status: 400 });

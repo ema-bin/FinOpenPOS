@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
+import { PERMISSIONS, type PermissionGrant } from "@/lib/auth/permissions";
 import { generateTemporaryPassword } from "@/lib/auth/create-user-input";
 
 type Role = {
@@ -39,7 +39,7 @@ type Role = {
   name: string;
   is_system: boolean;
   description: string | null;
-  permissions: Permission[];
+  permissions: PermissionGrant[];
 };
 
 type AccessUser = {
@@ -66,7 +66,13 @@ async function fetchAccess(): Promise<AccessResponse> {
 function roleSummary(role: Role): string {
   if (role.is_system) return "Acceso total";
   if (role.permissions.length === 0) return "Sin permisos";
-  return role.permissions.map((permission) => PERMISSIONS[permission].label).join(" · ");
+  return role.permissions
+    .map((grant) => {
+      const meta = PERMISSIONS[grant.permission];
+      if (meta.mode !== "both") return meta.label;
+      return `${meta.label} (${grant.access === "read" ? "lectura" : "escritura"})`;
+    })
+    .join(" · ");
 }
 
 export default function UsersPage() {

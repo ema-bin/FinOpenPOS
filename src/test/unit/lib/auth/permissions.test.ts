@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_PERMISSIONS,
   PERMISSIONS,
+  allows,
   can,
   canAny,
+  canRead,
   isPermission,
+  normalizeAccess,
   permissionsByGroup,
+  resolveEffectiveAccess,
   resolveEffectivePermissions,
 } from "@/lib/auth/permissions";
 
@@ -49,6 +53,31 @@ describe("resolveEffectivePermissions", () => {
         permissions: ["courts.operate", "legacy.permission", "tournaments.manage"],
       })
     ).toEqual(["courts.operate", "tournaments.manage"]);
+  });
+});
+
+describe("lectura y escritura", () => {
+  it("un permiso de solo lectura no puede guardarse como escritura", () => {
+    expect(normalizeAccess("dashboard.view", "write")).toBe("read");
+    expect(normalizeAccess("sales.reports", undefined)).toBe("read");
+    expect(normalizeAccess("sales.cancel_discount", "read")).toBe("write");
+    expect(normalizeAccess("sales.operate", "read")).toBe("read");
+    expect(normalizeAccess("sales.operate", undefined)).toBe("write");
+  });
+
+  it("la escritura incluye la lectura y la lectura no alcanza para modificar", () => {
+    const access = resolveEffectiveAccess({
+      is_system: false,
+      grants: [
+        { permission: "sales.operate", access: "read" },
+        { permission: "courts.operate", access: "write" },
+      ],
+    });
+    expect(canRead(access, "sales.operate")).toBe(true);
+    expect(can(access, "sales.operate")).toBe(false);
+    expect(can(access, "courts.operate")).toBe(true);
+    expect(canRead(access, "courts.operate")).toBe(true);
+    expect(allows(["courts.operate"], "courts.operate", "read")).toBe(true);
   });
 });
 

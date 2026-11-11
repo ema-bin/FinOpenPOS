@@ -32,11 +32,11 @@ import { usePermissions } from "@/components/permissions-provider";
 
 export default function Page() {
   const router = useRouter();
-  const { can, loading: permsLoading } = usePermissions();
-  const showSales = !permsLoading && can("sales.operate");
-  const showSalesReports = showSales && can("sales.reports");
-  const showCourts = !permsLoading && can("courts.operate");
-  const showTournaments = !permsLoading && can("tournaments.manage");
+  const { canRead, loading: permsLoading } = usePermissions();
+  const showSales = !permsLoading && canRead("sales.operate");
+  const showSalesReports = showSales && canRead("sales.reports");
+  const showCourts = !permsLoading && canRead("courts.operate");
+  const showTournaments = !permsLoading && canRead("tournaments.manage");
 
   // Queries para datos del dashboard
   const { data: salesData, isLoading: loadingSales } = useQuery({
@@ -284,7 +284,7 @@ export default function Page() {
       {/* Sección Secundaria: Funciones Esporádicas */}
       <div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {can("players.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/players")}>
+          {canRead("players.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/players")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <UsersIcon className="h-4 w-4 text-muted-foreground" />
@@ -298,7 +298,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("products.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
+          {canRead("products.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <PackageIcon className="h-4 w-4 text-muted-foreground" />
@@ -312,7 +312,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("purchases.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
+          {canRead("purchases.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <TruckIcon className="h-4 w-4 text-muted-foreground" />
@@ -325,7 +325,7 @@ export default function Page() {
               </CardDescription>
             </CardContent>
           </Card>}
-          {can("balance.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/balance")}>
+          {canRead("balance.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/balance")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <DollarSignIcon className="h-4 w-4 text-muted-foreground" />
@@ -339,7 +339,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("closures.daily") && <Card
+          {canRead("closures.daily") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/daily-sales-closure")}
           >
@@ -356,7 +356,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("closures.monthly") && <Card
+          {canRead("closures.monthly") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/monthly-sales-closure")}
           >
@@ -373,7 +373,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("advertisements.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/advertisements")}>
+          {canRead("advertisements.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/advertisements")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-muted-foreground" />
@@ -387,7 +387,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/users")}>
+          {canRead("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/users")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <ShieldIcon className="h-4 w-4 text-muted-foreground" />
@@ -401,7 +401,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {can("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/roles")}>
+          {canRead("users.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/roles")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <KeyRoundIcon className="h-4 w-4 text-muted-foreground" />

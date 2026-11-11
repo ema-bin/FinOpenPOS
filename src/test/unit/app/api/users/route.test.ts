@@ -95,7 +95,7 @@ describe("/api/users", () => {
     expect(json.currentUserId).toBe("admin");
     expect(json.users.map((u: { email: string }) => u.email)).toEqual(["a@x.com", "b@x.com"]);
     expect(json.users[1]).toMatchObject({ email: "b@x.com", name: "Beto", role_id: 3 });
-    expect(json.roles[1].permissions).toEqual(["sales.operate"]);
+    expect(json.roles[1].permissions).toEqual([{ permission: "sales.operate", access: "write" }]);
   });
 
   it("PATCH 400 si el admin se saca el rol a sí mismo siendo el único", async () => {

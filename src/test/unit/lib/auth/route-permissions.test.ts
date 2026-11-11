@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveEffectivePermissions, type Permission } from "@/lib/auth/permissions";
+import { resolveEffectiveAccess, type EffectiveAccess, type Permission } from "@/lib/auth/permissions";
 import {
   API_RULES,
   firstAllowedPage,
@@ -29,26 +29,32 @@ function toRoutePath(file: string): string {
 
 const sampleConcretePath = (pattern: string) => pattern.replace(/\[[^\]]+\]/g, "123");
 
-const ADMIN_CANCHAS = resolveEffectivePermissions({
-  is_system: false,
-  permissions: ["dashboard.view", "courts.operate", "courts.pricing", "tournaments.manage"],
-});
-const CAJERO = resolveEffectivePermissions({
-  is_system: false,
-  permissions: [
-    "dashboard.view",
-    "courts.operate",
-    "tournaments.manage",
-    "sales.operate",
-    "sales.cancel_discount",
-    "sales.reports",
-  ],
-});
-const ADMIN = resolveEffectivePermissions({ is_system: true, permissions: [] });
+function grants(permissions: readonly Permission[], isSystem = false): EffectiveAccess {
+  return resolveEffectiveAccess({
+    is_system: isSystem,
+    grants: permissions.map((permission) => ({ permission, access: "write" })),
+  });
+}
 
-const canApi = (perms: Permission[], pathname: string, method: string) =>
+const ADMIN_CANCHAS = grants([
+  "dashboard.view",
+  "courts.operate",
+  "courts.pricing",
+  "tournaments.manage",
+]);
+const CAJERO = grants([
+  "dashboard.view",
+  "courts.operate",
+  "tournaments.manage",
+  "sales.operate",
+  "sales.cancel_discount",
+  "sales.reports",
+]);
+const ADMIN = grants([], true);
+
+const canApi = (perms: EffectiveAccess | readonly Permission[], pathname: string, method: string) =>
   isAllowed(resolveApiRequirement(pathname, method), perms);
-const canPage = (perms: Permission[], pathname: string) =>
+const canPage = (perms: EffectiveAccess | readonly Permission[], pathname: string) =>
   isAllowed(resolvePageRequirement(pathname), perms);
 
 describe("cobertura del mapa de APIs", () => {
@@ -166,6 +172,17 @@ describe("páginas por rol", () => {
   it("páginas /admin no mapeadas quedan solo para Admin", () => {
     expect(canPage(CAJERO, "/admin/nueva-seccion")).toBe(false);
     expect(canPage(ADMIN, "/admin/nueva-seccion")).toBe(true);
+  });
+
+  it("solo lectura abre la sección y el GET, y no deja modificar", () => {
+    const soloLectura = resolveEffectiveAccess({
+      is_system: false,
+      grants: [{ permission: "sales.operate", access: "read" }],
+    });
+    expect(canPage(soloLectura, "/admin/orders")).toBe(true);
+    expect(canApi(soloLectura, "/api/orders", "GET")).toBe(true);
+    expect(canApi(soloLectura, "/api/orders", "POST")).toBe(false);
+    expect(canApi(soloLectura, "/api/orders/1", "PATCH")).toBe(false);
   });
 
   it("firstAllowedPage elige la primera sección permitida", () => {

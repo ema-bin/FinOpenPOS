@@ -81,7 +81,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
-  const { can, loading: permsLoading } = usePermissions();
+  const { canRead, loading: permsLoading } = usePermissions();
 
   useEffect(() => {
     setMounted(true);
@@ -181,7 +181,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </div>
         {menuOpen && (
           <nav className="flex flex-col gap-1 border-t bg-background px-2 py-2 md:hidden">
-            {NAV_ITEMS.filter((item) => permsLoading || can(item.permission)).map((item) => {
+            {NAV_ITEMS.filter((item) => permsLoading || canRead(item.permission)).map((item) => {
               const active =
                 mounted &&
                 (item.exact ? pathname === item.href : pathname.startsWith(item.href));
@@ -204,7 +204,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Barra de navegación principal */}
         <nav className="hidden h-12 items-center gap-1 border-t bg-muted/40 px-4 md:flex">
-          {NAV_ITEMS.filter((item) => permsLoading || can(item.permission)).map((item) => {
+          {NAV_ITEMS.filter((item) => permsLoading || canRead(item.permission)).map((item) => {
             const active =
               mounted &&
               (item.exact ? pathname === item.href : pathname.startsWith(item.href));

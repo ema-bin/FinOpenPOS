@@ -81,8 +81,8 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { can, loading: permsLoading } = usePermissions();
-  const showReports = !permsLoading && can("sales.reports");
+  const { canRead, loading: permsLoading } = usePermissions();
+  const showReports = !permsLoading && canRead("sales.reports");
 
   // Leer el tab desde query params
   const tabFromQuery = searchParams.get("tab");
