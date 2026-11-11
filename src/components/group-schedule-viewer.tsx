@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2Icon, ArrowLeftRightIcon, CheckIcon, XIcon, UndoIcon, UsersIcon, FolderIcon, AlertTriangleIcon } from "lucide-react";
 import { formatDate, formatTime, formatTimeRange } from "@/lib/date-utils";
 import { toHHMM } from "@/lib/build-schedule-days-from-slots";
+import { cannotPlayAnySlot, slotIdsAtDateTime } from "@/lib/schedule-restriction-slots";
 import { parseLocalDate } from "@/lib/court-slots-utils";
 import type { MatchDTO, TeamDTO, GroupDTO, TournamentGroupSlotSummary } from "@/models/dto/tournament";
 import type { CourtDTO } from "@/models/dto/court";
@@ -46,6 +47,11 @@ interface GroupScheduleViewerProps {
   onScheduleUpdated?: () => void | Promise<void>;
   /** Slots del torneo para detectar si un partido viola restricción horaria de algún equipo */
   tournamentGroupSlots?: TournamentGroupSlotSummary[];
+  /**
+   * Slots de todos los torneos, sin colapsar por horario.
+   * En la revisión conjunta cada torneo tiene su propio id de slot para el mismo día y hora.
+   */
+  restrictionSlots?: TournamentGroupSlotSummary[];
   /**
    * Canchas de la corrida de grupos guardadas en el torneo (cerrar inscripción / regenerar).
    * Sin esto, solo se infieren canchas ya asignadas a partidos y puede faltar una cancha sin uso.
@@ -237,6 +243,7 @@ export function GroupScheduleViewer({
   tournamentId,
   onScheduleUpdated,
   tournamentGroupSlots = [],
+  restrictionSlots,
   groupScheduleCourtIds = [],
   globalMode = false,
   tournamentNameByGroupId,
@@ -779,15 +786,13 @@ export function GroupScheduleViewer({
       number,
       { team1: boolean; team2: boolean; round2TeamsCantPlay?: TeamDTO[] }
     >();
-    if (!tournamentGroupSlots?.length) return violation;
-    const slotByDateTime = new Map<string, number>();
-    tournamentGroupSlots.forEach((s) => {
-      slotByDateTime.set(`${s.slot_date}\t${s.start_time}`, s.id);
-    });
+    const slotsForRestrictions =
+      restrictionSlots && restrictionSlots.length > 0 ? restrictionSlots : tournamentGroupSlots;
+    if (!slotsForRestrictions?.length) return violation;
     scheduledMatches.forEach((match) => {
       if (!match.match_date || !match.start_time) return;
-      const slotId = slotByDateTime.get(`${match.match_date}\t${match.start_time}`);
-      if (slotId === undefined) return;
+      const slotIds = slotIdsAtDateTime(slotsForRestrictions, match.match_date, match.start_time);
+      if (slotIds.length === 0) return;
 
       const gid = match.tournament_group_id;
       if (
@@ -796,7 +801,7 @@ export function GroupScheduleViewer({
       ) {
         const four = fourTeamsByGroupId.get(gid);
         if (four && four.length === 4) {
-          const cantPlay = four.filter((t) => t.restricted_slot_ids?.includes(slotId));
+          const cantPlay = four.filter((t) => cannotPlayAnySlot(t.restricted_slot_ids, slotIds));
           if (cantPlay.length > 0) {
             violation.set(match.id, {
               team1: false,
@@ -806,22 +811,22 @@ export function GroupScheduleViewer({
           }
           return;
         }
-        const t1Restricted = match.team1?.restricted_slot_ids?.includes(slotId) ?? false;
-        const t2Restricted = match.team2?.restricted_slot_ids?.includes(slotId) ?? false;
+        const t1Restricted = cannotPlayAnySlot(match.team1?.restricted_slot_ids, slotIds);
+        const t2Restricted = cannotPlayAnySlot(match.team2?.restricted_slot_ids, slotIds);
         if (t1Restricted || t2Restricted) {
           violation.set(match.id, { team1: t1Restricted, team2: t2Restricted });
         }
         return;
       }
 
-      const t1Restricted = match.team1?.restricted_slot_ids?.includes(slotId) ?? false;
-      const t2Restricted = match.team2?.restricted_slot_ids?.includes(slotId) ?? false;
+      const t1Restricted = cannotPlayAnySlot(match.team1?.restricted_slot_ids, slotIds);
+      const t2Restricted = cannotPlayAnySlot(match.team2?.restricted_slot_ids, slotIds);
       if (t1Restricted || t2Restricted) {
         violation.set(match.id, { team1: t1Restricted, team2: t2Restricted });
       }
     });
     return violation;
-  }, [scheduledMatches, tournamentGroupSlots, fourTeamsByGroupId]);
+  }, [scheduledMatches, tournamentGroupSlots, restrictionSlots, fourTeamsByGroupId]);
 
   // Calcular si algún equipo del partido juega en días diferentes
   const matchMultiDayInfo = useMemo(() => {
@@ -1005,7 +1010,11 @@ export function GroupScheduleViewer({
       const groupName = match.tournament_group_id
         ? groupMap.get(match.tournament_group_id)?.name
         : null;
-      const slotLabel = `${dateLabel} · ${timeLabel}${groupName ? ` · ${groupName}` : ""}`;
+      const tournamentName =
+        globalMode && match.tournament_group_id
+          ? tournamentNameByGroupId?.get(match.tournament_group_id)
+          : null;
+      const slotLabel = [dateLabel, timeLabel, tournamentName, groupName].filter(Boolean).join(" · ");
 
       if (violation.round2TeamsCantPlay?.length) {
         const names = violation.round2TeamsCantPlay.map((t) => teamShortLabel(t)).join(", ");
@@ -1026,7 +1035,7 @@ export function GroupScheduleViewer({
       hasIssues: lines.length > 0,
       lines,
     };
-  }, [scheduledMatches, matchSlotViolation, groupMap]);
+  }, [scheduledMatches, matchSlotViolation, groupMap, globalMode, tournamentNameByGroupId]);
 
 
   const handleSelectRow = (rowKey: string) => {

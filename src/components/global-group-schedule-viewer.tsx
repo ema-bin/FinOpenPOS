@@ -28,6 +28,7 @@ function mergeTournamentPreviewData(tournaments: GroupSchedulePreviewTournament[
   const allGroups: GroupDTO[] = [];
   const allMatches: MatchDTO[] = [];
   const slotWindows = new Map<string, TournamentGroupSlotSummary>();
+  const restrictionSlots: TournamentGroupSlotSummary[] = [];
   const courtIds = new Set<number>();
 
   for (const t of tournaments) {
@@ -38,12 +39,11 @@ function mergeTournamentPreviewData(tournaments: GroupSchedulePreviewTournament[
     allMatches.push(...t.matches);
 
     for (const slot of t.tournamentGroupSlots ?? []) {
+      const normalized = { ...slot, end_time: slot.end_time ?? "" };
+      restrictionSlots.push(normalized);
       const key = `${String(slot.slot_date).trim().slice(0, 10)}\t${toHHMM(slot.start_time)}\t${toHHMM(slot.end_time ?? "")}`;
       if (!slotWindows.has(key)) {
-        slotWindows.set(key, {
-          ...slot,
-          end_time: slot.end_time ?? "",
-        });
+        slotWindows.set(key, normalized);
       }
     }
 
@@ -59,6 +59,7 @@ function mergeTournamentPreviewData(tournaments: GroupSchedulePreviewTournament[
     groups: allGroups,
     matches: allMatches,
     tournamentGroupSlots: Array.from(slotWindows.values()),
+    restrictionSlots,
     groupScheduleCourtIds: Array.from(courtIds).sort((a, b) => a - b),
     tournamentNameByGroupId,
   };
@@ -147,6 +148,7 @@ export function GlobalGroupScheduleViewer({
       tournamentNameByGroupId={merged.tournamentNameByGroupId}
       onScheduleUpdated={onScheduleUpdated}
       tournamentGroupSlots={merged.tournamentGroupSlots}
+      restrictionSlots={merged.restrictionSlots}
       groupScheduleCourtIds={merged.groupScheduleCourtIds}
     />
   );
