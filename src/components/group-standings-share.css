@@ -86,10 +86,14 @@
 .share-group-standings-title-block .share-capture-title {
   margin: 0 !important;
   padding: 0;
-  font-size: var(--st-title) !important;
+  font-size: var(--share-title-fit, var(--st-title)) !important;
   line-height: 1.08;
   letter-spacing: 0.03em;
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  position: static;
+  z-index: auto;
 }
 
 .share-group-standings-title-block .share-capture-title--single {
@@ -372,7 +376,7 @@
 
 /* Prioridad sobre share-capture-common y schedule CSS */
 .share-group-standings-root.share-portrait-capture .share-group-standings-title-block .share-capture-title {
-  font-size: var(--st-title) !important;
+  font-size: var(--share-title-fit, var(--st-title)) !important;
   margin-bottom: 0 !important;
 }
 
