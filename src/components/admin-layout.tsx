@@ -18,6 +18,7 @@ import {
   ShoppingCartIcon,
   PackageIcon,
   CalendarIcon,
+  TicketIcon,
   TrophyIcon,
   ShieldIcon,
   KeyRoundIcon,
@@ -43,6 +44,7 @@ const NAV_ITEMS: {
   { href: "/admin/orders", label: "Ventas", icon: ShoppingCartIcon, permission: "sales.operate" },
   { href: "/admin/purchases", label: "Compras", icon: PackageIcon, permission: "purchases.manage" },
   { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
+  { href: "/admin/slot-packs", label: "Packs", icon: TicketIcon, permission: "courts.operate" },
   { href: "/admin/classes", label: "Clases", icon: GraduationCapIcon, permission: "classes.manage" },
   { href: "/admin/tournaments", label: "Torneos", icon: TrophyIcon, permission: "tournaments.manage" },
   { href: "/admin/users", label: "Usuarios", icon: ShieldIcon, permission: "users.manage" },
@@ -61,6 +63,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/purchases-history": "Compras", // Redirigir a compras
   "/admin/suppliers": "Proveedores",
   "/admin/court-slots": "Turnos de canchas",
+  "/admin/slot-packs": "Packs de turnos",
   "/admin/classes": "Clases",
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",

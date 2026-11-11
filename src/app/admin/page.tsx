@@ -204,6 +204,14 @@ export default function Page() {
                   Ver turnos
                   <ArrowRightIcon className="ml-2 h-4 w-4" />
                 </Button>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => router.push("/admin/slot-packs")}
+                >
+                  Ver packs
+                  <ArrowRightIcon className="ml-2 h-4 w-4" />
+                </Button>
               </>
             ) : null}
           </CardContent>

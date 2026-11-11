@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
 import { blocksForCourtSlot } from '@/lib/class-occupancy';
+import { slotCreditHttpError } from '@/lib/slot-credit-rpc';
 
 type Params = { params: { id: string } };
 
@@ -55,6 +56,10 @@ export async function PATCH(request: Request, { params }: Params) {
       "player3_note",
       "player4_payment_method_id",
       "player4_note",
+      "player1_id",
+      "player2_id",
+      "player3_id",
+      "player4_id",
     ] as const;
 
     const updatePayload: Record<string, any> = {};
@@ -114,10 +119,7 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error("PATCH /court-slots/[id] error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
-      { status: 500 }
-    );
+    return slotCreditHttpError(error, "Internal server error");
   }
 }
 
@@ -137,9 +139,6 @@ export async function DELETE(_request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('DELETE /court-slots/[id] error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return slotCreditHttpError(error, 'Internal server error');
   }
 }

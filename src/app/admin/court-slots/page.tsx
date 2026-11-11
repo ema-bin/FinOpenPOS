@@ -21,9 +21,12 @@ import { CourtSlotTable } from "@/components/court-slots/CourtSlotTable";
 import { DaySummary } from "@/components/court-slots/DaySummary";
 import { CourtPricingDialog } from "@/components/court-slots/CourtPricingDialog";
 import type { CourtSlotDTO } from "@/models/dto/court";
-import type { CourtSlotDB } from "@/models/db/court";
 import { useQuery } from "@tanstack/react-query";
 import { usePermissions } from "@/components/permissions-provider";
+import { playersService, slotCreditsService } from "@/services";
+import { creditSaveError, seatsFromSlot } from "@/lib/slot-credits";
+import type { SlotChanges } from "@/components/court-slots/SeatEditors";
+import Link from "next/link";
 
 export default function CourtSlotsPage() {
   const { can, loading: permsLoading } = usePermissions();
@@ -39,23 +42,6 @@ export default function CourtSlotsPage() {
 
   const [dayNotes, setDayNotes] = useState<string>("");
   const [isEditingDayNotes, setIsEditingDayNotes] = useState(false);
-
-  // Estado local para cambios pendientes por slot
-  type SlotChanges = Partial<
-    Pick<
-      CourtSlotDB,
-      | "was_played"
-      | "notes"
-      | "player1_payment_method_id"
-      | "player1_note"
-      | "player2_payment_method_id"
-      | "player2_note"
-      | "player3_payment_method_id"
-      | "player3_note"
-      | "player4_payment_method_id"
-      | "player4_note"
-    >
-  >;
 
   const [pendingChanges, setPendingChanges] = useState<
     Map<number, SlotChanges>
@@ -84,6 +70,12 @@ export default function CourtSlotsPage() {
       return response.json();
     },
     staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: players = [] } = useQuery({
+    queryKey: ["players", "onlyActive"],
+    queryFn: () => playersService.getAll("active"),
+    staleTime: 1000 * 60,
   });
 
   // Limpiar cambios pendientes cuando cambia la fecha
@@ -126,6 +118,14 @@ export default function CourtSlotsPage() {
         updated.player2_payment_method = null;
         updated.player3_payment_method = null;
         updated.player4_payment_method = null;
+        updated.player1_id = null;
+        updated.player2_id = null;
+        updated.player3_id = null;
+        updated.player4_id = null;
+        updated.player1 = null;
+        updated.player2 = null;
+        updated.player3 = null;
+        updated.player4 = null;
       } else {
         // Solo aplicar cambios de métodos de pago si el turno fue jugado
         if ('player1_payment_method_id' in changes && changes.player1_payment_method_id !== undefined) {
@@ -148,12 +148,63 @@ export default function CourtSlotsPage() {
             ? paymentMethods.find((pm) => pm.id === changes.player4_payment_method_id) || null
             : null;
         }
+        const applyPlayer = (
+          key: "player1_id" | "player2_id" | "player3_id" | "player4_id",
+          field: "player1" | "player2" | "player3" | "player4"
+        ) => {
+          if (!(key in changes) || changes[key] === undefined) return;
+          const playerId = changes[key] ?? null;
+          updated[key] = playerId;
+          const player = players.find((item) => item.id === playerId);
+          updated[field] = player
+            ? { id: player.id, first_name: player.first_name, last_name: player.last_name }
+            : null;
+        };
+        applyPlayer("player1_id", "player1");
+        applyPlayer("player2_id", "player2");
+        applyPlayer("player3_id", "player3");
+        applyPlayer("player4_id", "player4");
       }
       return updated;
     });
-  }, [slots, pendingChanges, paymentMethods]);
+  }, [slots, pendingChanges, paymentMethods, players]);
 
-  // Hook de reporte
+  const creditPlayerIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const slot of localSlots) {
+      for (const id of [slot.player1_id, slot.player2_id, slot.player3_id, slot.player4_id]) {
+        if (id) ids.add(id);
+      }
+    }
+    return Array.from(ids).sort((a, b) => a - b);
+  }, [localSlots]);
+
+  const { data: balanceRows = [], isSuccess: balancesLoaded, isError: balancesFailed } = useQuery({
+    queryKey: ["slot-credits", creditPlayerIds.join(",")],
+    queryFn: () => slotCreditsService.balances(creditPlayerIds),
+    enabled: creditPlayerIds.length > 0,
+  });
+
+  const balances = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const row of balanceRows) map.set(row.player_id, row.balance);
+    return map;
+  }, [balanceRows]);
+
+  const playerNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const player of players) {
+      map.set(player.id, `${player.first_name} ${player.last_name}`.trim());
+    }
+    for (const slot of localSlots) {
+      for (const player of [slot.player1, slot.player2, slot.player3, slot.player4]) {
+        if (player && !map.has(player.id)) {
+          map.set(player.id, `${player.first_name} ${player.last_name}`.trim());
+        }
+      }
+    }
+    return map;
+  }, [players, localSlots]);
   const { dayReport, totalRevenue, playedByCourtType, unpaidByCourtType } = useDayReport(
     localSlots,
     paymentMethods
@@ -215,6 +266,10 @@ export default function CourtSlotsPage() {
           player2_payment_method_id: null,
           player3_payment_method_id: null,
           player4_payment_method_id: null,
+          player1_id: null,
+          player2_id: null,
+          player3_id: null,
+          player4_id: null,
         });
       } else {
         newMap.set(slotId, { ...existing, ...patch });
@@ -229,6 +284,28 @@ export default function CourtSlotsPage() {
     const changes = pendingChanges.get(slotId);
     if (!changes || Object.keys(changes).length === 0) {
       return;
+    }
+
+    const local = localSlots.find((slot) => slot.id === slotId);
+    const saved = slots.find((slot) => slot.id === slotId);
+    if (local && saved) {
+      if (creditPlayerIds.length > 0 && !balancesLoaded && !balancesFailed) {
+        toast.error("Todavía se está cargando el saldo.");
+        return;
+      }
+      const message = creditSaveError({
+        wasPlayed: local.was_played,
+        seats: seatsFromSlot(local),
+        savedWasPlayed: saved.was_played,
+        savedSeats: seatsFromSlot(saved),
+        methods: paymentMethods,
+        balances: balancesLoaded ? balances : null,
+        playerNames,
+      });
+      if (message) {
+        toast.error(message);
+        return;
+      }
     }
 
     updateSlotMutation.mutate(
@@ -293,8 +370,11 @@ export default function CourtSlotsPage() {
       <CardHeader className="p-0 space-y-1">
         <CardTitle>Turnos de canchas</CardTitle>
         <CardDescription>
-          Generá los turnos diarios para las canchas y registrá el método de
-          pago de cada jugador.
+          Generá los turnos diarios y registrá el pago de cada puesto. Con QR,
+          elegí el jugador para descontar un crédito.{" "}
+          <Link href="/admin/slot-packs" className="text-primary underline">
+            Packs de turnos
+          </Link>
         </CardDescription>
       </CardHeader>
 
@@ -343,6 +423,8 @@ export default function CourtSlotsPage() {
             <CourtSlotTable
               slots={localSlots}
               paymentMethods={paymentMethods}
+              players={players}
+              balances={balances}
               onSlotUpdate={updateSlotField}
               onSaveSlot={handleSaveSlot}
               onCancelSlot={handleCancelSlot}

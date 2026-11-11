@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
 import { getPricePerPlayer, formatTime, getCourtType } from "@/lib/court-slots-utils";
+import { methodConsumesCredit } from "@/lib/slot-credits";
 import { useCourtPricing } from "./useCourtPricing";
 
 export function useDayReport(
@@ -129,9 +130,7 @@ export function useDayReport(
         const pm = paymentMethods.find((p) => p.id === pmId);
         const name = pm?.name ?? `Método #${pmId}`;
 
-        const isPrepaidQR = pm?.name
-          ? pm.name.toUpperCase().includes("QR")
-          : false;
+        const isPrepaidCredit = pm ? methodConsumesCredit(pm) : false;
 
         const existing = paymentsMap.get(pmId) ?? {
           name,
@@ -141,7 +140,7 @@ export function useDayReport(
 
         existing.uses += 1;
 
-        if (slot.was_played && pricePerPlayer > 0 && !isPrepaidQR) {
+        if (slot.was_played && pricePerPlayer > 0 && !isPrepaidCredit) {
           existing.totalAmount += pricePerPlayer;
         }
 

@@ -5,7 +5,9 @@ import { PaymentMethodDB, PaymentScope } from "../db/payment-method";
 export interface PaymentMethodDTO extends Omit<PaymentMethodDB, "user_uid"> {}
 
 // Nested payment method DTO for use in other entities
-export type PaymentMethodNestedDTO = Pick<PaymentMethodDTO, "id" | "name">;
+export type PaymentMethodNestedDTO = Pick<PaymentMethodDTO, "id" | "name"> & {
+  consumes_slot_credit?: boolean;
+};
 
 // Re-export scope type
 export type { PaymentScope };

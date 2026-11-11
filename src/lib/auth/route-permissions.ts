@@ -48,6 +48,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/suppliers", requirement: read("purchases.manage") },
   { prefix: "/admin/products", requirement: read("products.manage") },
   { prefix: "/admin/court-slots", requirement: read("courts.operate") },
+  { prefix: "/admin/slot-packs", requirement: read("courts.operate") },
   { prefix: "/admin/classes", requirement: read("classes.manage") },
   { prefix: "/admin/tournaments", requirement: read("tournaments.manage") },
   { prefix: "/admin/players", requirement: read("players.manage") },
@@ -104,6 +105,7 @@ const PLAYER_SOURCES = [
   "sales.operate",
   "tournaments.manage",
   "classes.manage",
+  "courts.operate",
 ] as const;
 const PAYMENT_SOURCES = [
   "sales.operate",
@@ -216,6 +218,10 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),
+  "/api/slot-packs": { GET: read("courts.operate"), POST: write("courts.operate") },
+  "/api/slot-credits": { GET: read("courts.operate") },
+  "/api/slot-credits/movements": { GET: read("courts.operate") },
+  "/api/slot-credits/adjustments": { POST: write("courts.operate") },
   "/api/courts": { GET: read(...COURT_SOURCES), POST: write("courts.pricing") },
   "/api/courts/[id]": {
     GET: read(...COURT_SOURCES),

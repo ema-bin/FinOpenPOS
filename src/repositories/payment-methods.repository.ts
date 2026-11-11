@@ -9,7 +9,7 @@ export class PaymentMethodsRepository extends BaseRepository {
   async findAll(options: FindPaymentMethodsOptions = {}): Promise<PaymentMethodDB[]> {
     let query = this.supabase
       .from("payment_methods")
-      .select("id, name, scope, is_active, created_at");
+      .select("id, name, scope, is_active, consumes_slot_credit, created_at");
 
     if (options.scope === "CLASSES") {
       query = query.eq("scope", "CLASSES");
@@ -38,7 +38,7 @@ export class PaymentMethodsRepository extends BaseRepository {
   async findById(paymentMethodId: number): Promise<PaymentMethodDB | null> {
     const { data, error } = await this.supabase
       .from("payment_methods")
-      .select("id, name, scope, is_active, created_at")
+      .select("id, name, scope, is_active, consumes_slot_credit, created_at")
       .eq("id", paymentMethodId)
       .single();
 
@@ -62,9 +62,10 @@ export class PaymentMethodsRepository extends BaseRepository {
         name: input.name,
         scope: input.scope,
         is_active: input.is_active ?? true,
+        consumes_slot_credit: /qr/i.test(input.name),
         user_uid: this.userId,
       })
-      .select("id, name, scope, is_active, created_at")
+      .select("id, name, scope, is_active, consumes_slot_credit, created_at")
       .single();
 
     if (error) {
@@ -81,11 +82,16 @@ export class PaymentMethodsRepository extends BaseRepository {
     paymentMethodId: number,
     updates: Partial<Omit<PaymentMethodDB, "id" | "user_uid" | "created_at">>
   ): Promise<PaymentMethodDB> {
+    const next = { ...updates };
+    if (typeof next.name === "string" && /qr/i.test(next.name)) {
+      next.consumes_slot_credit = true;
+    }
+
     const { data, error } = await this.supabase
       .from("payment_methods")
-      .update(updates)
+      .update(next)
       .eq("id", paymentMethodId)
-      .select("id, name, scope, is_active, created_at")
+      .select("id, name, scope, is_active, consumes_slot_credit, created_at")
       .single();
 
     if (error) {

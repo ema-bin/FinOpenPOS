@@ -18,6 +18,8 @@ export function useCourtSlotsMutations(
     onSuccess: () => {
       toast.success("Turnos generados correctamente.");
       queryClient.invalidateQueries({ queryKey: ["court-slots", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["slot-credits"] });
+      queryClient.invalidateQueries({ queryKey: ["slot-packs"] });
     },
     onError: (error) => {
       toast.error(
@@ -34,11 +36,12 @@ export function useCourtSlotsMutations(
       return courtSlotsService.update(params.slotId, params.patch);
     },
     onSuccess: (updated) => {
-      // Actualizar cache de React Query
       queryClient.setQueryData<any[]>(
         ["court-slots", selectedDate],
         (old) => old?.map((s) => (s.id === updated.id ? updated : s)) ?? []
       );
+      queryClient.invalidateQueries({ queryKey: ["slot-credits"] });
+      queryClient.invalidateQueries({ queryKey: ["slot-packs"] });
     },
   });
 
