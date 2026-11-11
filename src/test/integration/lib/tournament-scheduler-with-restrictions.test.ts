@@ -375,6 +375,44 @@ describe("scheduleGroupMatchesWithRestrictions (lib)", () => {
     assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4]);
   });
 
+  it("programa un Master de 6 parejas: dos zonas de 3 con match_order", async () => {
+    const zone = (groupId: number, teams: [number, number, number]) =>
+      mastersRoundRobinPairs(teams).map(([team1_id, team2_id], index) => ({
+        ...BASE,
+        tournament_group_id: groupId,
+        team1_id,
+        team2_id,
+        match_order: index + 1,
+      }));
+    const matches = [...zone(532, [1, 2, 3]), ...zone(533, [4, 5, 6])];
+    const logs: string[] = [];
+    const result = await scheduleGroupMatchesWithRestrictions(
+      matches,
+      [],
+      60,
+      [1, 2],
+      undefined,
+      undefined,
+      (message) => logs.push(message),
+      ["10:00", "12:00", "14:00", "16:00"].map((start, index) => ({
+        id: index + 1,
+        slot_date: "2026-06-05",
+        start_time: start,
+        end_time: `${String(Number(start.slice(0, 2)) + 1).padStart(2, "0")}:00`,
+      })),
+      new Map()
+    );
+
+    expect(logs.some((message) => message.includes("Ignorando grupo"))).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.assignments).toHaveLength(6);
+    const keys = result.assignments.map(
+      (assignment) => `${assignment.date}|${assignment.startTime}|${assignment.courtId}`
+    );
+    expect(new Set(keys).size).toBe(6);
+    assertKnownOpponentsHaveRest(matches, result.assignments, [1, 2, 3, 4, 5, 6]);
+  });
+
   it("el algoritmo sin restricciones también asigna la zona todos contra todos", async () => {
     const matches = roundRobinZoneMatches(8, [1, 2, 3, 4]);
     const result = await scheduleGroupMatchesBeamSearch(

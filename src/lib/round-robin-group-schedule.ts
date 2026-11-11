@@ -18,14 +18,15 @@ export type RoundRobinSlot = {
 type RoundRobinMatch = {
   team1_id: number | null;
   team2_id: number | null;
+  match_order?: number | null;
 };
 
-/**
- * Zona todos contra todos: 6 partidos, 4 parejas, las dos ya definidas.
- * Una zona de 4 del formato estándar tiene 4 partidos, así que no entra acá.
- */
-export function isRoundRobinZoneMatches(matches: RoundRobinMatch[]): boolean {
-  if (matches.length !== 6) return false;
+function isCompleteRoundRobin(
+  matches: RoundRobinMatch[],
+  teamCount: number,
+  matchesPerTeam: number
+): boolean {
+  if (matches.length !== (teamCount * matchesPerTeam) / 2) return false;
   const counts = new Map<number, number>();
   for (const match of matches) {
     if (match.team1_id == null || match.team2_id == null || match.team1_id === match.team2_id) {
@@ -34,11 +35,22 @@ export function isRoundRobinZoneMatches(matches: RoundRobinMatch[]): boolean {
     counts.set(match.team1_id, (counts.get(match.team1_id) ?? 0) + 1);
     counts.set(match.team2_id, (counts.get(match.team2_id) ?? 0) + 1);
   }
-  if (counts.size !== 4) return false;
+  if (counts.size !== teamCount) return false;
   for (const count of Array.from(counts.values())) {
-    if (count !== 3) return false;
+    if (count !== matchesPerTeam) return false;
   }
   return true;
+}
+
+/**
+ * Zona todos contra todos, con las dos parejas definidas.
+ * 4 parejas: 6 partidos. Master de 6: 3 partidos y match_order.
+ * La zona de 3 del formato estándar no tiene match_order, y la zona de 4 tiene 4 partidos.
+ */
+export function isRoundRobinZoneMatches(matches: RoundRobinMatch[]): boolean {
+  if (isCompleteRoundRobin(matches, 4, 3)) return true;
+  const hasOrder = matches.some((match) => match.match_order != null);
+  return hasOrder && isCompleteRoundRobin(matches, 3, 2);
 }
 
 function dayKey(date: string): string {
