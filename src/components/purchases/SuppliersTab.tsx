@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { usePermissions } from "@/components/permissions-provider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -48,6 +49,8 @@ import type { SupplierDTO, SupplierStatus } from "@/models/dto/supplier";
 import { suppliersService } from "@/services";
 
 export function SuppliersTab() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("purchases.manage");
   const [suppliers, setSuppliers] = useState<SupplierDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -243,10 +246,12 @@ export function SuppliersTab() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Nuevo proveedor
-          </Button>
+          {canWrite ? (
+            <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nuevo proveedor
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -271,6 +276,7 @@ export function SuppliersTab() {
                     <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{supplier.notes}</p>
                   ) : null}
                 </div>
+                {canWrite ? (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button size="icon" variant="ghost" onClick={() => openEditDialog(supplier)}>
                     <FilePenIcon className="h-4 w-4" />
@@ -288,6 +294,7 @@ export function SuppliersTab() {
                     <span className="sr-only">Eliminar</span>
                   </Button>
                 </div>
+                ) : null}
               </div>
             </div>
           ))}
@@ -324,6 +331,7 @@ export function SuppliersTab() {
                     {supplier.status === "active" ? "Activo" : "Inactivo"}
                   </TableCell>
                   <TableCell>
+                    {canWrite ? (
                     <div className="flex items-center gap-2">
                       <Button
                         size="icon"
@@ -345,6 +353,7 @@ export function SuppliersTab() {
                         <span className="sr-only">Eliminar</span>
                       </Button>
                     </div>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

@@ -23,8 +23,12 @@ import { CourtPricingDialog } from "@/components/court-slots/CourtPricingDialog"
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { CourtSlotDB } from "@/models/db/court";
 import { useQuery } from "@tanstack/react-query";
+import { usePermissions } from "@/components/permissions-provider";
 
 export default function CourtSlotsPage() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canEditPricing = !permsLoading && can("courts.pricing");
+  const canEditSlots = !permsLoading && can("courts.operate");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -304,6 +308,7 @@ export default function CourtSlotsPage() {
               onGenerate={handleGenerateDay}
               isGenerating={generateMutation.isPending}
               isRefreshing={fetchingSlots}
+              canGenerate={canEditSlots}
             />
 
             <DayNotesEditor
@@ -315,16 +320,19 @@ export default function CourtSlotsPage() {
               onNotesChange={setDayNotes}
               isSaving={saveDayNotesMutation.isPending}
               isLoading={loadingDayNotes}
+              readOnly={!canEditSlots}
             />
 
-            <div className="flex gap-2 flex-wrap">
-              {courts.map((court: { id: number; name: string }) => (
-                <CourtPricingDialog
-                  key={court.id}
-                  court={court}
-                />
-              ))}
-            </div>
+            {canEditPricing && (
+              <div className="flex gap-2 flex-wrap">
+                {courts.map((court: { id: number; name: string }) => (
+                  <CourtPricingDialog
+                    key={court.id}
+                    court={court}
+                  />
+                ))}
+              </div>
+            )}
 
             <ColorLegend
               paymentMethods={paymentMethods}
@@ -341,6 +349,7 @@ export default function CourtSlotsPage() {
               pendingChanges={pendingChanges}
               isSaving={updateSlotMutation.isPending}
               isLoading={loadingSlots && slots.length === 0}
+              readOnly={!canEditSlots}
             />
           </div>
 

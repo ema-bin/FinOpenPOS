@@ -10,6 +10,9 @@ class MonthlySalesClosuresService {
     const params = yearMonth ? `?month=${encodeURIComponent(yearMonth)}` : "";
     const response = await fetch(`${this.baseUrl}/preview${params}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se pudo cargar el preview del cierre mensual");
     }
@@ -26,6 +29,9 @@ class MonthlySalesClosuresService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se pudo registrar el cierre mensual");
     }
@@ -35,6 +41,9 @@ class MonthlySalesClosuresService {
   async list(limit = 24): Promise<MonthlySalesClosureDTO[]> {
     const response = await fetch(`${this.baseUrl}?limit=${limit}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("No se pudo cargar el historial de cierres mensuales");
     }
     return response.json();
@@ -43,6 +52,9 @@ class MonthlySalesClosuresService {
   async getByMonth(yearMonth: string): Promise<MonthlySalesClosureDTO> {
     const response = await fetch(`${this.baseUrl}/${yearMonth}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se encontró el cierre mensual");
     }

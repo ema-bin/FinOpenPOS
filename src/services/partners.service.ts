@@ -20,6 +20,9 @@ class PartnersService {
     const url = onlyActive ? `${this.baseUrl}?onlyActive=true` : this.baseUrl;
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error('Failed to fetch partners');
     }
     return response.json();

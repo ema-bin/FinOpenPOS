@@ -35,6 +35,7 @@ import {
 } from "@/lib/class-time";
 import type { ClassSchedule } from "@/models/db/class";
 import { PlayerSearch, type PlayerHit } from "./PlayerSearch";
+import { usePermissions } from "@/components/permissions-provider";
 
 type CourtOption = { id: number; name: string };
 
@@ -81,6 +82,8 @@ function placeByLane(schedules: ClassSchedule[]): Array<{ schedule: ClassSchedul
 
 export function CalendarTab() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("classes.manage");
   const [courtFilter, setCourtFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState<DraftSlot | null>(null);
@@ -235,7 +238,7 @@ export function CalendarTab() {
                 schedules={visible.filter((schedule) => schedule.weekday === mobileDay)}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                onCreate={(startTime) => setDraft({ weekday: mobileDay, startTime })}
+                onCreate={canWrite ? (startTime) => setDraft({ weekday: mobileDay, startTime }) : undefined}
               />
             </div>
           </div>
@@ -265,7 +268,7 @@ export function CalendarTab() {
                 schedules={visible.filter((schedule) => schedule.weekday === weekday)}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                onCreate={(startTime) => setDraft({ weekday, startTime })}
+                onCreate={canWrite ? (startTime) => setDraft({ weekday, startTime }) : undefined}
               />
             ))}
           </div>
@@ -292,6 +295,7 @@ export function CalendarTab() {
             removeMutation.mutate(selected.id);
           }}
           removing={removeMutation.isPending}
+          readOnly={!canWrite}
         />
       </div>
 
@@ -320,7 +324,7 @@ function DayColumn({
   schedules: ClassSchedule[];
   selectedId: number | null;
   onSelect: (id: number) => void;
-  onCreate: (startTime: string) => void;
+  onCreate?: (startTime: string) => void;
 }) {
   const placed = placeByLane(schedules);
   return (
@@ -328,7 +332,7 @@ function DayColumn({
       className="relative cursor-pointer border-l border-t"
       style={{ height: GRID_HEIGHT }}
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest("button")) return;
+        if (!onCreate || (event.target as HTMLElement).closest("button")) return;
         const rect = event.currentTarget.getBoundingClientRect();
         const y = Math.min(rect.height, Math.max(0, event.clientY - rect.top));
         const minutes = CLASS_GRID_START_MINUTES + (y / HOUR_PX) * 60;
@@ -394,6 +398,7 @@ function ClassDetail({
   onRemove,
   onRemoveClass,
   removing,
+  readOnly = false,
 }: {
   schedule: ClassSchedule | null;
   courts: CourtOption[];
@@ -409,6 +414,7 @@ function ClassDetail({
   onRemove: (enrollmentId: number) => void;
   onRemoveClass: () => void;
   removing: boolean;
+  readOnly?: boolean;
 }) {
   const savedWeekday = schedule ? String(schedule.weekday) : "";
   const savedTime = schedule ? formatTimeShort(schedule.start_time) : "";
@@ -504,19 +510,21 @@ function ClassDetail({
           </SelectContent>
         </Select>
       </div>
-      <Button
-        disabled={!dirty || !timeOk || !weekday || !professorId || !courtId || saving}
-        onClick={() =>
-          onSave({
-            weekday: Number(weekday),
-            startTime,
-            professorId: Number(professorId),
-            courtId: Number(courtId),
-          })
-        }
-      >
-        Guardar
-      </Button>
+      {readOnly ? null : (
+        <Button
+          disabled={!dirty || !timeOk || !weekday || !professorId || !courtId || saving}
+          onClick={() =>
+            onSave({
+              weekday: Number(weekday),
+              startTime,
+              professorId: Number(professorId),
+              courtId: Number(courtId),
+            })
+          }
+        >
+          Guardar
+        </Button>
+      )}
       <div>
         <p className="text-xs uppercase text-muted-foreground">Jugadores</p>
         {schedule.enrollments.length === 0 ? (
@@ -531,16 +539,18 @@ function ClassDetail({
                     ? `${enrollment.player.last_name}, ${enrollment.player.first_name}`
                     : "Jugador"}
                 </span>
-                <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => onRemove(enrollment.id)}>
-                  Quitar
-                </Button>
+                {readOnly ? null : (
+                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => onRemove(enrollment.id)}>
+                    Quitar
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
       <p>Libres: {free} libres</p>
-      {!full && (
+      {!full && !readOnly && (
         <PlayerSearch
           excludeIds={schedule.enrollments.map((enrollment) => enrollment.player_id)}
           onPick={(player) => onAdd(player.id)}
@@ -548,9 +558,11 @@ function ClassDetail({
         />
       )}
       {full && <p className="text-muted-foreground">Cupo completo.</p>}
-      <Button variant="outline" disabled={removing} onClick={onRemoveClass}>
-        Quitar clase
-      </Button>
+      {readOnly ? null : (
+        <Button variant="outline" disabled={removing} onClick={onRemoveClass}>
+          Quitar clase
+        </Button>
+      )}
     </aside>
   );
 }

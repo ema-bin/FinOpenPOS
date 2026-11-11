@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePermissions } from "@/components/permissions-provider";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -56,6 +57,8 @@ import { PaymentMethodSelector } from "@/components/payment-method-selector/Paym
 
 export function PurchasesHistoryTab() {
   const router = useRouter();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("purchases.manage");
   const queryClient = useQueryClient();
   const [purchases, setPurchases] = useState<PurchaseDTO[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierNestedDTO[]>([]);
@@ -195,16 +198,18 @@ export function PurchasesHistoryTab() {
               métodos de pago.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2 max-md:flex-col">
-            <Button variant="outline" className="max-md:w-full" onClick={() => setQuickPurchaseOpen(true)}>
-              <ZapIcon className="w-4 h-4 mr-2" />
-              Compra rápida
-            </Button>
-            <Button className="max-md:w-full" onClick={() => router.push("/admin/purchases/new")}>
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Nueva compra
-            </Button>
-          </div>
+          {canWrite ? (
+            <div className="flex flex-wrap gap-2 max-md:flex-col">
+              <Button variant="outline" className="max-md:w-full" onClick={() => setQuickPurchaseOpen(true)}>
+                <ZapIcon className="w-4 h-4 mr-2" />
+                Compra rápida
+              </Button>
+              <Button className="max-md:w-full" onClick={() => router.push("/admin/purchases/new")}>
+                <PlusIcon className="w-4 h-4 mr-2" />
+                Nueva compra
+              </Button>
+            </div>
+          ) : null}
         </div>
       </CardHeader>
 

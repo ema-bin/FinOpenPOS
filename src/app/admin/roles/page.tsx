@@ -6,10 +6,16 @@ import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PERMISSIONS, permissionsByGroup, type Permission } from "@/lib/auth/permissions";
+import {
+  PERMISSIONS,
+  permissionsByGroup,
+  type AccessLevel,
+  type Permission,
+  type PermissionGrant,
+} from "@/lib/auth/permissions";
+import { usePermissions } from "@/components/permissions-provider";
 
 type Role = {
   id: number;
@@ -17,8 +23,10 @@ type Role = {
   is_system: boolean;
   description: string | null;
   user_count: number;
-  permissions: Permission[];
+  permissions: PermissionGrant[];
 };
+
+type GrantChoice = AccessLevel | "none";
 
 type RolesResponse = { actorRoleId: number | null; roles: Role[] };
 
@@ -29,14 +37,21 @@ async function fetchRoles(): Promise<RolesResponse> {
   return data;
 }
 
-const samePermissions = (a: readonly string[], b: readonly string[]) => {
+const sameGrants = (a: readonly PermissionGrant[], b: readonly PermissionGrant[]) => {
   if (a.length !== b.length) return false;
-  const set = new Set(a);
-  return b.every((permission) => set.has(permission));
+  return a.every((grant) =>
+    b.some((other) => other.permission === grant.permission && other.access === grant.access)
+  );
 };
+
+function choiceOf(grants: readonly PermissionGrant[], permission: Permission): GrantChoice {
+  return grants.find((grant) => grant.permission === permission)?.access ?? "none";
+}
 
 export default function RolesPage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("users.manage");
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["roles-access"],
     queryFn: fetchRoles,
@@ -44,7 +59,7 @@ export default function RolesPage() {
 
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const [name, setName] = useState("");
-  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [permissions, setPermissions] = useState<PermissionGrant[]>([]);
 
   const selected = data?.roles.find((role) => role.id === selectedId) ?? null;
   const isNew = selectedId === "new";
@@ -66,7 +81,7 @@ export default function RolesPage() {
     ? name.trim().length > 0 || permissions.length > 0
     : selected != null &&
       (name.trim() !== selected.name ||
-        (!selected.is_system && !samePermissions(permissions, selected.permissions)));
+        (!selected.is_system && !sameGrants(permissions, selected.permissions)));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -106,10 +121,12 @@ export default function RolesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggle = (permission: Permission, checked: boolean) => {
-    setPermissions((current) =>
-      checked ? [...current, permission] : current.filter((item) => item !== permission)
-    );
+  const setChoice = (permission: Permission, choice: GrantChoice) => {
+    setPermissions((current) => {
+      const rest = current.filter((grant) => grant.permission !== permission);
+      if (choice === "none") return rest;
+      return [...rest, { permission, access: choice }];
+    });
   };
 
   if (isLoading) {
@@ -150,9 +167,11 @@ export default function RolesPage() {
               <span className="text-xs text-muted-foreground">{role.user_count}</span>
             </Button>
           ))}
-          <Button type="button" variant={isNew ? "secondary" : "outline"} onClick={startNew}>
-            Nuevo rol
-          </Button>
+          {canWrite ? (
+            <Button type="button" variant={isNew ? "secondary" : "outline"} onClick={startNew}>
+              Nuevo rol
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -160,8 +179,8 @@ export default function RolesPage() {
         <CardHeader>
           <CardTitle>{isNew ? "Nuevo rol" : selected ? selected.name : "Elegí un rol"}</CardTitle>
           <CardDescription>
-            Los permisos se agrupan por sección. El rol Admin tiene siempre todos y no se puede
-            borrar.
+            En cada sección se puede dar solo lectura o también escritura. La escritura incluye
+            ver la sección. El rol Admin tiene siempre todos y no se puede borrar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -181,6 +200,7 @@ export default function RolesPage() {
                   id="role-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  disabled={!canWrite}
                   maxLength={60}
                   required
                 />
@@ -195,25 +215,34 @@ export default function RolesPage() {
                   {groups.map((group) => (
                     <div key={group.group} className="space-y-2">
                       <div className="text-sm font-medium">{group.group}</div>
-                      {group.permissions.map((permission) => (
-                        <label
-                          key={permission}
-                          htmlFor={`perm-${permission}`}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <Checkbox
-                            id={`perm-${permission}`}
-                            checked={permissions.includes(permission)}
-                            onCheckedChange={(checked) => toggle(permission, checked === true)}
-                          />
-                          {PERMISSIONS[permission].label}
-                        </label>
-                      ))}
+                      {group.permissions.map((permission) => {
+                        const meta = PERMISSIONS[permission];
+                        const choice = choiceOf(permissions, permission);
+                        return (
+                          <div key={permission} className="flex items-center justify-between gap-2">
+                            <Label htmlFor={`perm-${permission}`} className="text-sm font-normal">
+                              {meta.label}
+                            </Label>
+                            <select
+                              id={`perm-${permission}`}
+                              className="h-8 rounded-md border bg-background px-2 text-sm"
+                              value={choice}
+                              disabled={!canWrite}
+                              onChange={(e) => setChoice(permission, e.target.value as GrantChoice)}
+                            >
+                              <option value="none">Sin acceso</option>
+                              <option value="read">Lectura</option>
+                              <option value="write">Escritura</option>
+                            </select>
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
               )}
 
+              {canWrite ? (
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={!dirty || save.isPending || !name.trim()}>
                   {save.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -242,6 +271,7 @@ export default function RolesPage() {
                   </Button>
                 ) : null}
               </div>
+              ) : null}
             </form>
           )}
         </CardContent>

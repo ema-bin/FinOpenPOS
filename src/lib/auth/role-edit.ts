@@ -1,8 +1,27 @@
-import { isPermission, type Permission } from "@/lib/auth/permissions";
+import {
+  isPermission,
+  normalizeAccess,
+  type AccessLevel,
+  type PermissionGrant,
+} from "@/lib/auth/permissions";
 
 export const ROLE_NAME_MAX_LENGTH = 60;
 
-export type RoleWrite = { name?: string; permissions?: Permission[] };
+export type RoleWrite = { name?: string; permissions?: PermissionGrant[] };
+
+function parseGrant(raw: unknown): PermissionGrant | null {
+  if (typeof raw === "string") {
+    return isPermission(raw) ? { permission: raw, access: normalizeAccess(raw, "write") } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const permission = (raw as { permission?: unknown }).permission;
+  if (!isPermission(permission)) return null;
+  const access = (raw as { access?: unknown }).access;
+  return {
+    permission,
+    access: normalizeAccess(permission, typeof access === "string" ? access : "write"),
+  };
+}
 
 export type RoleEditResult = { ok: true } | { ok: false; error: string };
 
@@ -29,10 +48,15 @@ export function parseRoleWrite(
     if (!Array.isArray(rawPermissions)) {
       return { ok: false, error: "Los permisos son inválidos" };
     }
-    if (rawPermissions.some((permission) => !isPermission(permission))) {
-      return { ok: false, error: "Hay permisos que no existen" };
+    const grants: PermissionGrant[] = [];
+    for (const raw of rawPermissions) {
+      const grant = parseGrant(raw);
+      if (!grant) return { ok: false, error: "Hay permisos que no existen" };
+      const existing = grants.findIndex((item) => item.permission === grant.permission);
+      if (existing >= 0) grants[existing] = grant;
+      else grants.push(grant);
     }
-    value.permissions = Array.from(new Set(rawPermissions.filter(isPermission)));
+    value.permissions = grants;
   }
 
   if (options.partial && value.name === undefined && value.permissions === undefined) {
@@ -48,7 +72,7 @@ export function validateRoleUpdate(input: {
   permissionsSent: boolean;
   actorRoleId: number | null;
   roleId: number;
-  nextPermissions: readonly string[];
+  nextPermissions: readonly { permission: string; access: AccessLevel }[];
 }): RoleEditResult {
   if (input.isSystem && input.permissionsSent) {
     return {
@@ -60,7 +84,9 @@ export function validateRoleUpdate(input: {
     input.permissionsSent &&
     !input.isSystem &&
     input.actorRoleId === input.roleId &&
-    !input.nextPermissions.includes("users.manage")
+    !input.nextPermissions.some(
+      (grant) => grant.permission === "users.manage" && grant.access === "write"
+    )
   ) {
     return { ok: false, error: "No podés quitarte el permiso de administrar usuarios." };
   }

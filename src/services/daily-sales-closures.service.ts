@@ -34,6 +34,9 @@ export const dailySalesClosuresService = {
     const params = businessDate ? `?date=${encodeURIComponent(businessDate)}` : "";
     const response = await fetch(`${baseUrl}/preview${params}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se pudo cargar el preview del cierre");
     }
@@ -50,6 +53,9 @@ export const dailySalesClosuresService = {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se pudo registrar el cierre");
     }
@@ -59,6 +65,9 @@ export const dailySalesClosuresService = {
   async list(limit = 30): Promise<DailySalesClosureDTO[]> {
     const response = await fetch(`${baseUrl}?limit=${limit}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("No se pudo cargar el historial de cierres");
     }
     return response.json();
@@ -67,6 +76,9 @@ export const dailySalesClosuresService = {
   async getByDate(businessDate: string): Promise<DailySalesClosureDTO> {
     const response = await fetch(`${baseUrl}/${businessDate}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || "No se encontró el cierre");
     }

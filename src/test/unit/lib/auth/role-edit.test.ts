@@ -10,7 +10,34 @@ describe("parseRoleWrite", () => {
   it("creación exige nombre y acepta permisos", () => {
     expect(
       parseRoleWrite({ name: " Barra ", permissions: ["sales.operate", "sales.operate"] }, { partial: false })
-    ).toEqual({ ok: true, value: { name: "Barra", permissions: ["sales.operate"] } });
+    ).toEqual({
+      ok: true,
+      value: { name: "Barra", permissions: [{ permission: "sales.operate", access: "write" }] },
+    });
+  });
+
+  it("guarda lectura también en cancelar y descontar", () => {
+    expect(
+      parseRoleWrite(
+        {
+          name: "Mirar",
+          permissions: [
+            { permission: "sales.operate", access: "read" },
+            { permission: "sales.cancel_discount", access: "read" },
+          ],
+        },
+        { partial: false }
+      )
+    ).toEqual({
+      ok: true,
+      value: {
+        name: "Mirar",
+        permissions: [
+          { permission: "sales.operate", access: "read" },
+          { permission: "sales.cancel_discount", access: "read" },
+        ],
+      },
+    });
   });
 
   it("rechaza un permiso que no existe", () => {
@@ -33,7 +60,7 @@ describe("validateRoleUpdate", () => {
         permissionsSent: true,
         actorRoleId: 1,
         roleId: 1,
-        nextPermissions: ["sales.operate"],
+        nextPermissions: [{ permission: "sales.operate", access: "write" }],
       }).ok
     ).toBe(false);
   });
@@ -69,7 +96,19 @@ describe("validateRoleUpdate", () => {
         permissionsSent: true,
         actorRoleId: 4,
         roleId: 4,
-        nextPermissions: ["sales.operate"],
+        nextPermissions: [{ permission: "sales.operate", access: "write" }],
+      }).ok
+    ).toBe(false);
+  });
+
+  it("users.manage en solo lectura no alcanza para administrar tu propio rol", () => {
+    expect(
+      validateRoleUpdate({
+        isSystem: false,
+        permissionsSent: true,
+        actorRoleId: 4,
+        roleId: 4,
+        nextPermissions: [{ permission: "users.manage", access: "read" }],
       }).ok
     ).toBe(false);
   });

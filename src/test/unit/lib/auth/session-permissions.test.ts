@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ALL_PERMISSIONS } from "@/lib/auth/permissions";
+import { ALL_PERMISSIONS, EMPTY_ACCESS } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
 import {
   NO_ACCESS_PATH,
@@ -47,23 +47,37 @@ describe("decodeJwtPayload / permissionsFromClaims", () => {
   it("rol de sistema tiene todos los permisos", () => {
     expect(
       permissionsFromClaims({ app_role_id: 1, app_is_system: true, app_permissions: [] })
-    ).toEqual(ALL_PERMISSIONS);
+    ).toEqual({ read: [], write: ALL_PERMISSIONS });
   });
 
   it("sin rol asignado no tiene permisos", () => {
     expect(
       permissionsFromClaims({ app_role_id: null, app_is_system: false, app_permissions: [] })
-    ).toEqual([]);
+    ).toEqual(EMPTY_ACCESS);
   });
 
-  it("un rol normal usa su lista e ignora permisos desconocidos", () => {
+  it("un token viejo trata app_permissions como escritura e ignora valores desconocidos", () => {
     expect(
       permissionsFromClaims({
         app_role_id: 3,
         app_is_system: false,
         app_permissions: ["courts.operate", "no-existe"],
       })
-    ).toEqual(["courts.operate"]);
+    ).toEqual({ read: [], write: ["courts.operate"] });
+  });
+
+  it("separa lectura y escritura", () => {
+    expect(
+      permissionsFromClaims({
+        app_role_id: 3,
+        app_is_system: false,
+        app_permissions: ["courts.operate", "dashboard.view"],
+        app_read_permissions: ["sales.operate"],
+      })
+    ).toEqual({
+      read: ["sales.operate"],
+      write: ["courts.operate", "dashboard.view"],
+    });
   });
 });
 
@@ -107,7 +121,7 @@ describe("loadRolePermissions", () => {
       }),
       "user-1"
     );
-    expect(perms).toEqual(ALL_PERMISSIONS);
+    expect(perms).toEqual({ read: [], write: ALL_PERMISSIONS });
   });
 
   it("rol normal", async () => {
@@ -123,13 +137,13 @@ describe("loadRolePermissions", () => {
       }),
       "user-1"
     );
-    expect(perms).toEqual(["courts.operate"]);
+    expect(perms).toEqual({ read: [], write: ["courts.operate"] });
   });
 
   it("sin fila no tiene rol", async () => {
     expect(
       await loadRolePermissions(clientReturning({ data: null, error: null }), "user-1")
-    ).toEqual([]);
+    ).toEqual(EMPTY_ACCESS);
   });
 
   it("un error de consulta devuelve null para que el caller no bloquee", async () => {

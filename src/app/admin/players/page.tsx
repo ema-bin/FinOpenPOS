@@ -385,10 +385,12 @@ export default function PlayersPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Button size="sm" className="max-md:w-full" onClick={() => setShowNewPlayerDialog(true)}>
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Nuevo Cliente
-          </Button>
+          {canManagePlayers && (
+            <Button size="sm" className="max-md:w-full" onClick={() => setShowNewPlayerDialog(true)}>
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nuevo Cliente
+            </Button>
+          )}
         </div>
       </CardHeader>
 

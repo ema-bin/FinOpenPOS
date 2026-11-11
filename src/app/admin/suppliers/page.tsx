@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { usePermissions } from "@/components/permissions-provider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -49,6 +50,8 @@ import type { SupplierDTO, SupplierStatus } from "@/models/dto/supplier";
 import { suppliersService } from "@/services";
 
 export default function SuppliersPage() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("purchases.manage");
   const [suppliers, setSuppliers] = useState<SupplierDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -244,10 +247,12 @@ export default function SuppliersPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Nuevo proveedor
-          </Button>
+          {canWrite ? (
+            <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nuevo proveedor
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -266,6 +271,7 @@ export default function SuppliersPage() {
                 <div className="mt-1 text-sm">{supplier.phone ?? "Sin teléfono"}</div>
                 <div className="text-xs text-muted-foreground">{supplier.contact_email ?? "Sin email"}</div>
               </div>
+              {canWrite ? (
               <div className="flex shrink-0">
                 <Button size="icon" variant="ghost" onClick={() => openEditDialog(supplier)}>
                   <FilePenIcon className="h-4 w-4" />
@@ -283,6 +289,7 @@ export default function SuppliersPage() {
                   <span className="sr-only">Eliminar</span>
                 </Button>
               </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -314,6 +321,7 @@ export default function SuppliersPage() {
                     {supplier.status === "active" ? "Activo" : "Inactivo"}
                   </TableCell>
                   <TableCell>
+                    {canWrite ? (
                     <div className="flex items-center gap-2">
                       <Button
                         size="icon"
@@ -335,6 +343,7 @@ export default function SuppliersPage() {
                         <span className="sr-only">Eliminar</span>
                       </Button>
                     </div>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

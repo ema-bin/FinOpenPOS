@@ -14,9 +14,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { classesService, formatPesos } from "@/services/classes.service";
+import { usePermissions } from "@/components/permissions-provider";
 
 export function ProfessorsTab() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("classes.manage");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState("");
@@ -106,6 +109,7 @@ export function ProfessorsTab() {
 
   return (
     <div className="space-y-4">
+      {canWrite ? (
       <Card>
         <CardHeader>
           <CardTitle>Nuevo profesor</CardTitle>
@@ -133,6 +137,7 @@ export function ProfessorsTab() {
           </Button>
         </CardContent>
       </Card>
+      ) : null}
 
       {query.isLoading && <p className="text-sm text-muted-foreground">Cargando...</p>}
 
@@ -188,6 +193,7 @@ export function ProfessorsTab() {
                     {!professor.is_active ? " · inactivo" : ""}
                   </p>
                 </div>
+                {canWrite ? (
                 <div className="flex shrink-0 gap-2">
                   <Button
                     variant="outline"
@@ -210,6 +216,7 @@ export function ProfessorsTab() {
                     {professor.is_active ? "Desactivar" : "Activar"}
                   </Button>
                 </div>
+                ) : null}
               </>
             )}
           </CardHeader>
@@ -224,17 +231,20 @@ export function ProfessorsTab() {
                       {rate.weekly_count} {rate.weekly_count === 1 ? "clase" : "clases"} por semana ·{" "}
                       {formatPesos(rate.monthly_amount)}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteRateMutation.mutate(rate.id)}
-                    >
-                      Quitar
-                    </Button>
+                    {canWrite ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteRateMutation.mutate(rate.id)}
+                      >
+                        Quitar
+                      </Button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             )}
+            {canWrite ? (
             <div className="grid gap-2 md:grid-cols-[120px_160px_auto]">
               <Input
                 type="number"
@@ -268,6 +278,7 @@ export function ProfessorsTab() {
                 Guardar tarifa
               </Button>
             </div>
+            ) : null}
           </CardContent>
         </Card>
       ))}

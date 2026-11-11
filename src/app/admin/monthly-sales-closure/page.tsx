@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2Icon, LockIcon } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/components/permissions-provider";
 import { monthlySalesClosuresService } from "@/services/monthly-sales-closures.service";
 import { formatDate } from "@/lib/date-utils";
 import { formatYearMonthLabel, getCurrentYearMonth } from "@/lib/month-period";
@@ -387,6 +388,8 @@ function DetailTables({
 
 export default function MonthlySalesClosurePage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("closures.monthly");
   const defaultMonth = useMemo(() => getCurrentYearMonth(), []);
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [notes, setNotes] = useState("");
@@ -520,7 +523,7 @@ export default function MonthlySalesClosurePage() {
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Corregir cierre mensual</Button>
+                  {canWrite ? <Button onClick={() => setConfirmOpen(true)}>Corregir cierre mensual</Button> : null}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -540,7 +543,7 @@ export default function MonthlySalesClosurePage() {
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Cerrar mes</Button>
+                  {canWrite ? <Button onClick={() => setConfirmOpen(true)}>Cerrar mes</Button> : null}
                 </div>
               )}
 

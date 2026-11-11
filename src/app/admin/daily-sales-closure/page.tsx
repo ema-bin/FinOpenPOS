@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2Icon, LockIcon, CalendarRangeIcon } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/components/permissions-provider";
 import { dailySalesClosuresService } from "@/services/daily-sales-closures.service";
 import { getCurrentBusinessDate, getPreviousBusinessDate, formatBusinessDayLabel, enumerateBusinessDates } from "@/lib/business-day";
 import type { DailySalesClosureDTO, DailySalesClosurePreviewDTO } from "@/models/dto/daily-sales-closure";
@@ -291,6 +292,8 @@ function ClosureDetailTables({
 
 export default function DailySalesClosurePage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("closures.daily");
   const defaultDate = useMemo(() => getCurrentBusinessDate(), []);
   const defaultRangeTo = useMemo(() => getPreviousBusinessDate(), []);
   const defaultRangeFrom = useMemo(() => {
@@ -521,7 +524,7 @@ export default function DailySalesClosurePage() {
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Corregir cierre</Button>
+                  {canWrite ? <Button onClick={() => setConfirmOpen(true)}>Corregir cierre</Button> : null}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -535,7 +538,7 @@ export default function DailySalesClosurePage() {
                       rows={2}
                     />
                   </div>
-                  <Button onClick={() => setConfirmOpen(true)}>Cerrar día</Button>
+                  {canWrite ? <Button onClick={() => setConfirmOpen(true)}>Cerrar día</Button> : null}
                 </div>
               )}
 
@@ -630,7 +633,7 @@ export default function DailySalesClosurePage() {
             </Label>
           </div>
 
-          <Button
+          {canWrite ? <Button
             onClick={() => {
               setRangeFinished(false);
               setRangeResult(null);
@@ -646,7 +649,7 @@ export default function DailySalesClosurePage() {
             ) : (
               "Generar cierres del rango"
             )}
-          </Button>
+          </Button> : null}
 
           {rangeResult ? (
             <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-2">

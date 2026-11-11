@@ -43,6 +43,9 @@ class TransactionsService {
     if (params?.type) searchParams.set("type", params.type);
     const response = await fetch(`${this.baseUrl}/balance?${searchParams.toString()}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch balance");
     }
     return response.json();
@@ -55,6 +58,9 @@ class TransactionsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to create adjustment");
     }
     return response.json();
@@ -69,6 +75,9 @@ class TransactionsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to create withdrawal");
     }
     return response.json();
@@ -81,6 +90,9 @@ class TransactionsService {
       body: JSON.stringify({ withdrawalDate }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "No se pudo cambiar la fecha del retiro");
     }
@@ -94,6 +106,9 @@ class TransactionsService {
       body: JSON.stringify({ adjustmentDate }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "No se pudo cambiar la fecha del ajuste");
     }
@@ -121,6 +136,9 @@ class TransactionsService {
     const url = params.toString() ? `${this.baseUrl}?${params.toString()}` : this.baseUrl;
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar las transacciones");
     }
     return response.json();

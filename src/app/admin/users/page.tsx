@@ -31,7 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
+import { PERMISSIONS, type PermissionGrant } from "@/lib/auth/permissions";
+import { usePermissions } from "@/components/permissions-provider";
 import { generateTemporaryPassword } from "@/lib/auth/create-user-input";
 
 type Role = {
@@ -39,7 +40,7 @@ type Role = {
   name: string;
   is_system: boolean;
   description: string | null;
-  permissions: Permission[];
+  permissions: PermissionGrant[];
 };
 
 type AccessUser = {
@@ -66,11 +67,18 @@ async function fetchAccess(): Promise<AccessResponse> {
 function roleSummary(role: Role): string {
   if (role.is_system) return "Acceso total";
   if (role.permissions.length === 0) return "Sin permisos";
-  return role.permissions.map((permission) => PERMISSIONS[permission].label).join(" · ");
+  return role.permissions
+    .map((grant) => {
+      const meta = PERMISSIONS[grant.permission];
+      return `${meta.label} (${grant.access === "read" ? "lectura" : "escritura"})`;
+    })
+    .join(" · ");
 }
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("users.manage");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -181,6 +189,7 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {canWrite ? (
       <Card>
         <CardHeader>
           <CardTitle>Nuevo usuario</CardTitle>
@@ -254,6 +263,7 @@ export default function UsersPage() {
           </form>
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -284,7 +294,7 @@ export default function UsersPage() {
                     onValueChange={(value) =>
                       setRole.mutate({ userId: user.id, roleId: Number(value) })
                     }
-                    disabled={pending}
+                    disabled={!canWrite || pending}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Sin rol" />
@@ -297,6 +307,7 @@ export default function UsersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {canWrite ? (
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -318,6 +329,7 @@ export default function UsersPage() {
                       Blanquear
                     </Button>
                   </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -358,7 +370,7 @@ export default function UsersPage() {
                         onValueChange={(value) =>
                           setRole.mutate({ userId: user.id, roleId: Number(value) })
                         }
-                        disabled={pending}
+                        disabled={!canWrite || pending}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Sin rol" />
@@ -373,6 +385,7 @@ export default function UsersPage() {
                       </Select>
                     </TableCell>
                     <TableCell className="text-right">
+                      {canWrite ? (
                       <div className="flex justify-end gap-2">
                         <Button
                           type="button"
@@ -392,6 +405,7 @@ export default function UsersPage() {
                           Blanquear
                         </Button>
                       </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 );

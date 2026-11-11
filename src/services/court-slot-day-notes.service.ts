@@ -16,6 +16,9 @@ class CourtSlotDayNotesService {
   async getByDate(date: string): Promise<CourtSlotDayNoteDTO | null> {
     const response = await fetch(`${this.baseUrl}?date=${date}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       if (response.status === 404) {
         return null;
       }
@@ -33,6 +36,9 @@ class CourtSlotDayNotesService {
       body: JSON.stringify({ date, notes }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error saving day notes");
     }
     return response.json();

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requirePermission } from "@/lib/auth/require-permission";
-import { isPermission } from "@/lib/auth/permissions";
+import { isPermission, normalizeAccess, type PermissionGrant } from "@/lib/auth/permissions";
 import { parseRoleWrite } from "@/lib/auth/role-edit";
 
 type RoleRow = {
@@ -11,8 +11,17 @@ type RoleRow = {
   name: string;
   is_system: boolean;
   description: string | null;
-  role_permissions: { permission: string }[] | null;
+  role_permissions: { permission: string; access?: string | null }[] | null;
 };
+
+function grantsOf(rows: { permission: string; access?: string | null }[] | null): PermissionGrant[] {
+  const grants: PermissionGrant[] = [];
+  for (const row of rows ?? []) {
+    if (!isPermission(row.permission)) continue;
+    grants.push({ permission: row.permission, access: normalizeAccess(row.permission, row.access) });
+  }
+  return grants;
+}
 
 function isUniqueViolation(error: { code?: string; message?: string }) {
   return error.code === "23505" || /duplicate|unique/i.test(error.message ?? "");
@@ -20,14 +29,14 @@ function isUniqueViolation(error: { code?: string; message?: string }) {
 
 export async function GET() {
   try {
-    const auth = await requirePermission("users.manage");
+    const auth = await requirePermission("users.manage", "read");
     if (!auth.ok) return auth.response;
 
     const service = createServiceClient();
     const [rolesResult, assignmentsResult, actorResult] = await Promise.all([
       service
         .from("roles")
-        .select("id, name, is_system, description, role_permissions(permission)")
+        .select("id, name, is_system, description, role_permissions(permission, access)")
         .order("id"),
       service.from("user_roles").select("user_id, role_id"),
       service.from("user_roles").select("role_id").eq("user_id", auth.userId).maybeSingle(),
@@ -51,7 +60,7 @@ export async function GET() {
       is_system: role.is_system,
       description: role.description,
       user_count: counts.get(role.id) ?? 0,
-      permissions: (role.role_permissions ?? []).map((p) => p.permission).filter(isPermission),
+      permissions: grantsOf(role.role_permissions),
     }));
 
     return NextResponse.json({
@@ -93,7 +102,11 @@ export async function POST(request: Request) {
     const permissions = parsed.value.permissions ?? [];
     if (permissions.length > 0) {
       const { error: permError } = await service.from("role_permissions").insert(
-        permissions.map((permission) => ({ role_id: created.id, permission }))
+        permissions.map((grant) => ({
+          role_id: created.id,
+          permission: grant.permission,
+          access: grant.access,
+        }))
       );
       if (permError) {
         await service.from("roles").delete().eq("id", created.id);

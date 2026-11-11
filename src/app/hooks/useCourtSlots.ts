@@ -3,13 +3,14 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CourtSlotDTO } from "@/models/dto/court";
+import { apiError } from "@/lib/api-error";
 
 // Re-export for backward compatibility
 export type { CourtSlotDTO as CourtSlot };
 
 async function fetchCourtSlots(date: string): Promise<CourtSlotDTO[]> {
   const res = await fetch(`/api/court-slots?date=${date}`);
-  if (!res.ok) throw new Error("Failed to fetch court slots");
+  if (!res.ok) throw await apiError(res, "Failed to fetch court slots");
   return res.json();
 }
 
@@ -30,7 +31,7 @@ export function useUpdateCourtSlot() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params.patch),
       });
-      if (!res.ok) throw new Error("Error updating slot");
+      if (!res.ok) throw await apiError(res, "Error updating slot");
       return res.json() as Promise<CourtSlotDTO>;
     },
     // ✅ Optimistic update (opcional pero buenísimo)

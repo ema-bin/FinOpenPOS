@@ -28,6 +28,9 @@ class AdvertisementsService {
     params.set("status", status);
     const response = await fetch(`${this.baseUrl}?${params.toString()}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error loading advertisements");
     }
     return response.json();
@@ -36,6 +39,9 @@ class AdvertisementsService {
   async getById(id: number): Promise<AdvertisementDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Advertisement not found");
     }
     return response.json();
@@ -49,6 +55,9 @@ class AdvertisementsService {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error creating advertisement");
     }
@@ -64,6 +73,9 @@ class AdvertisementsService {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error updating advertisement");
     }
@@ -77,6 +89,9 @@ class AdvertisementsService {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error deactivating advertisement");
     }

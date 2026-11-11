@@ -35,6 +35,9 @@ class OrdersService {
         : this.baseUrl;
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar las cuentas");
     }
     return response.json();
@@ -43,6 +46,9 @@ class OrdersService {
   async getById(id: number): Promise<OrderDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar la cuenta");
     }
     return response.json();
@@ -57,6 +63,9 @@ class OrdersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || errorData.message || "Error al crear la cuenta";
       const error = new Error(errorMessage);
@@ -76,6 +85,9 @@ class OrdersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating order");
     }
     return response.json();
@@ -90,6 +102,9 @@ class OrdersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error adding item to order");
     }
     return response.json();
@@ -104,6 +119,9 @@ class OrdersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating order item");
     }
     return response.json();
@@ -114,6 +132,9 @@ class OrdersService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error removing order item");
     }
     return response.json();
@@ -124,6 +145,9 @@ class OrdersService {
       method: "POST",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error cancelling order");
     }
     return response.json();
@@ -138,6 +162,9 @@ class OrdersService {
       body: JSON.stringify({ paymentMethodId: paymentMethodId }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error paying order");
     }
@@ -174,6 +201,9 @@ class OrdersService {
       }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error processing quick sale");
     }
@@ -201,6 +231,9 @@ class OrdersService {
 
     const response = await fetch(`${this.baseUrl}/statistics?${searchParams.toString()}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar las estadísticas");
     }
     return response.json();
@@ -221,6 +254,9 @@ class OrdersService {
 
     const response = await fetch(`${this.baseUrl}/client-ranking?${searchParams.toString()}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar el ranking de clientes");
     }
     return response.json();

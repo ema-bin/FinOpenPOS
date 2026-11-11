@@ -20,6 +20,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_single_system
 CREATE TABLE IF NOT EXISTS role_permissions (
     role_id     BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission  TEXT NOT NULL,
+    -- read = solo ver la sección. write = ver y modificar. La escritura incluye la lectura.
+    access      TEXT NOT NULL DEFAULT 'write' CHECK (access IN ('read', 'write')),
     PRIMARY KEY (role_id, permission)
 );
 
@@ -104,7 +106,8 @@ DECLARE
     claims      JSONB := event->'claims';
     v_role_id   BIGINT;
     v_is_system BOOLEAN;
-    v_perms     TEXT[];
+    v_write     TEXT[];
+    v_read      TEXT[];
 BEGIN
     SELECT r.id, r.is_system
     INTO v_role_id, v_is_system
@@ -116,15 +119,19 @@ BEGIN
         claims := jsonb_set(claims, '{app_role_id}', 'null'::JSONB);
         claims := jsonb_set(claims, '{app_is_system}', 'false'::JSONB);
         claims := jsonb_set(claims, '{app_permissions}', '[]'::JSONB);
+        claims := jsonb_set(claims, '{app_read_permissions}', '[]'::JSONB);
     ELSE
-        SELECT COALESCE(array_agg(permission), '{}')
-        INTO v_perms
+        SELECT
+            COALESCE(array_agg(permission) FILTER (WHERE access = 'write'), '{}'),
+            COALESCE(array_agg(permission) FILTER (WHERE access = 'read'), '{}')
+        INTO v_write, v_read
         FROM public.role_permissions
         WHERE role_id = v_role_id;
 
         claims := jsonb_set(claims, '{app_role_id}', to_jsonb(v_role_id));
         claims := jsonb_set(claims, '{app_is_system}', to_jsonb(v_is_system));
-        claims := jsonb_set(claims, '{app_permissions}', to_jsonb(v_perms));
+        claims := jsonb_set(claims, '{app_permissions}', to_jsonb(v_write));
+        claims := jsonb_set(claims, '{app_read_permissions}', to_jsonb(v_read));
     END IF;
 
     RETURN jsonb_set(event, '{claims}', claims);

@@ -65,7 +65,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
       if (parsed.value.permissions.length > 0) {
         const { error: insertError } = await service.from("role_permissions").insert(
-          parsed.value.permissions.map((permission) => ({ role_id: roleId, permission }))
+          parsed.value.permissions.map((grant) => ({
+            role_id: roleId,
+            permission: grant.permission,
+            access: grant.access,
+          }))
         );
         if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
       }

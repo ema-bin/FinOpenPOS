@@ -79,6 +79,7 @@ export default function QuickSalePage() {
   const queryClient = useQueryClient();
   const { can, loading: permsLoading } = usePermissions();
   const canDiscount = !permsLoading && can("sales.cancel_discount");
+  const canOperate = !permsLoading && can("sales.operate");
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [productFilter, setProductFilter] = useState("");
@@ -359,7 +360,7 @@ export default function QuickSalePage() {
                 products={filteredProducts}
                 onProductSelect={handleAddProduct}
                 loadingProducts={loadingProducts}
-                isEditable={!isProcessing}
+                isEditable={canOperate && !isProcessing}
                 showMoreProductsSelect={false}
               />
             </div>
@@ -369,7 +370,7 @@ export default function QuickSalePage() {
                 <OrderConsumptionPanel
                   items={orderItems}
                   isLoading={isLoading}
-                  isEditable={!isProcessing}
+                  isEditable={canOperate && !isProcessing}
                   onUpdateQuantity={(item, newQuantity) => {
                     if (!item.product) return;
                     handleUpdateQuantity(item.product.id, newQuantity - item.quantity);
@@ -395,19 +396,23 @@ export default function QuickSalePage() {
                   onDiscountPercentageChange={setDiscountPercentage}
                   onDiscountAmountChange={setDiscountAmount}
                   isDiscountSectionEnabled={canDiscount}
-                  isEditable={!isProcessing}
+                  isEditable={canOperate && !isProcessing}
                   paymentMethods={paymentMethods}
                   selectedPaymentMethodId={selectedPaymentMethodId}
                   onPaymentMethodSelect={(id) => setSelectedPaymentMethodId(id)}
                   loadingPaymentMethods={loadingPaymentMethods}
-                  onProcess={handleProcessSale}
+                  onProcess={canOperate ? handleProcessSale : undefined}
                   processing={isProcessing}
-                  onClear={() => {
-                    setCart([]);
-                    setSelectedPaymentMethodId("none");
-                    setDiscountPercentage(null);
-                    setDiscountAmount(null);
-                  }}
+                  onClear={
+                    canOperate
+                      ? () => {
+                          setCart([]);
+                          setSelectedPaymentMethodId("none");
+                          setDiscountPercentage(null);
+                          setDiscountAmount(null);
+                        }
+                      : undefined
+                  }
                   processButtonLabel={isProcessing ? "Procesando..." : "Procesar venta"}
                   clearButtonLabel="Limpiar"
                 />

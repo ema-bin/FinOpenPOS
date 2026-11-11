@@ -70,7 +70,7 @@ describe("/api/roles", () => {
     expect(json.roles[0]).toMatchObject({
       name: "Cajero",
       user_count: 2,
-      permissions: ["sales.operate"],
+      permissions: [{ permission: "sales.operate", access: "write" }],
     });
   });
 

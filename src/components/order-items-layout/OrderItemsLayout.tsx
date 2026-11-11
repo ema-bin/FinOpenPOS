@@ -72,6 +72,8 @@ interface OrderConsumptionPanelProps {
   title?: string;
   description?: string;
   emptyMessage?: string;
+  /** Texto del cartel cuando no se puede modificar. null lo oculta. */
+  lockedLabel?: string | null;
 }
 
 export function OrderConsumptionPanel({
@@ -86,7 +88,9 @@ export function OrderConsumptionPanel({
   title = "Consumos",
   description = "Agregá productos y ajustá cantidades.",
   emptyMessage = "No hay productos.",
+  lockedLabel,
 }: OrderConsumptionPanelProps) {
+  const lockText = lockedLabel === undefined ? "Cerrado" : lockedLabel;
   return (
     <Card className={!isEditable ? "opacity-75" : ""}>
       <CardHeader>
@@ -100,11 +104,11 @@ export function OrderConsumptionPanel({
               Cambios pendientes
             </Badge>
           )}
-          {!isEditable && (
+          {!isEditable && lockText ? (
             <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300">
-              Cerrado
+              {lockText}
             </Badge>
-          )}
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -120,37 +124,40 @@ export function OrderConsumptionPanel({
                   <div className="min-w-0 font-medium break-words">
                     {item.product?.name ?? "Producto"}
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={!isEditable}
-                    onClick={() => onRemoveItem(item)}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                    <span className="sr-only">Eliminar</span>
-                  </Button>
+                  {isEditable ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => onRemoveItem(item)}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                      <span className="sr-only">Eliminar</span>
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-7 w-7"
-                      disabled={!isEditable}
-                      onClick={() => onUpdateQuantity(item, item.quantity - 1)}
-                    >
-                      <MinusIcon className="h-3 w-3" />
-                    </Button>
+                    {isEditable ? (
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-7 w-7"
+                        onClick={() => onUpdateQuantity(item, item.quantity - 1)}
+                      >
+                        <MinusIcon className="h-3 w-3" />
+                      </Button>
+                    ) : null}
                     <span className="w-8 text-center">{item.quantity}</span>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-7 w-7"
-                      disabled={!isEditable}
-                      onClick={() => onUpdateQuantity(item, item.quantity + 1)}
-                    >
-                      <PlusIcon className="h-3 w-3" />
-                    </Button>
+                    {isEditable ? (
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-7 w-7"
+                        onClick={() => onUpdateQuantity(item, item.quantity + 1)}
+                      >
+                        <PlusIcon className="h-3 w-3" />
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="text-right text-sm">
                     <div className="text-muted-foreground">${item.unit_price.toFixed(2)}</div>
@@ -215,27 +222,29 @@ export function OrderConsumptionPanel({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          disabled={!isEditable}
-                          onClick={() => onUpdateQuantity(item, item.quantity - 1)}
-                        >
-                          <MinusIcon className="w-3 h-3" />
-                        </Button>
+                        {isEditable ? (
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() => onUpdateQuantity(item, item.quantity - 1)}
+                          >
+                            <MinusIcon className="w-3 h-3" />
+                          </Button>
+                        ) : null}
                         <span className="w-8 text-center">
                           {item.quantity}
                         </span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          disabled={!isEditable}
-                          onClick={() => onUpdateQuantity(item, item.quantity + 1)}
-                        >
-                          <PlusIcon className="w-3 h-3" />
-                        </Button>
+                        {isEditable ? (
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() => onUpdateQuantity(item, item.quantity + 1)}
+                          >
+                            <PlusIcon className="w-3 h-3" />
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>${item.unit_price.toFixed(2)}</TableCell>
@@ -243,15 +252,16 @@ export function OrderConsumptionPanel({
                       ${(item.unit_price * item.quantity).toFixed(2)}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={!isEditable}
-                        onClick={() => onRemoveItem(item)}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        <span className="sr-only">Eliminar</span>
-                      </Button>
+                      {isEditable ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onRemoveItem(item)}
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                          <span className="sr-only">Eliminar</span>
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))
@@ -261,7 +271,7 @@ export function OrderConsumptionPanel({
         </div>
       </CardContent>
       <CardFooter className="flex flex-col gap-4 border-t pt-4">
-        {hasPendingChanges && onSaveChanges && (
+        {hasPendingChanges && onSaveChanges && isEditable && (
           <Button
             size="lg"
             className="w-full h-12 text-base font-semibold"
@@ -703,13 +713,14 @@ export function OrderSummaryPanel({
           </div>
         )}
 
-        <PaymentMethodSelector
-          paymentMethods={paymentMethods}
-          selectedPaymentMethodId={selectedPaymentMethodId === "none" ? "none" : selectedPaymentMethodId}
-          onSelect={onPaymentMethodSelect}
-          disabled={!isEditable}
-          isLoading={loadingPaymentMethods}
-        />
+        {isEditable ? (
+          <PaymentMethodSelector
+            paymentMethods={paymentMethods}
+            selectedPaymentMethodId={selectedPaymentMethodId === "none" ? "none" : selectedPaymentMethodId}
+            onSelect={onPaymentMethodSelect}
+            isLoading={loadingPaymentMethods}
+          />
+        ) : null}
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
         {onProcess && (

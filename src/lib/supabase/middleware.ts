@@ -2,9 +2,10 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { CookieOptions } from "@supabase/ssr";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { ALL_PERMISSIONS, type Permission } from "@/lib/auth/permissions";
+import { FULL_ACCESS, type EffectiveAccess } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
 import { decideApiAccess } from "@/lib/auth/route-permissions";
+import { PERMISSION_DENIED_MESSAGE } from "@/lib/api-error";
 import {
   decodeJwtPayload,
   permissionsFromClaims,
@@ -22,14 +23,14 @@ import {
 async function permissionsForSession(
   supabase: SupabaseClient,
   session: Session
-): Promise<Permission[]> {
+): Promise<EffectiveAccess> {
   const fromToken = permissionsFromClaims(decodeJwtPayload(session.access_token));
   if (fromToken !== null) return fromToken;
 
   const fromDb = await loadRolePermissions(supabase, session.user.id);
   if (fromDb === null) {
     console.error("No se pudieron leer los permisos; se permite el acceso para no bloquear.");
-    return [...ALL_PERMISSIONS];
+    return FULL_ACCESS;
   }
   return fromDb;
 }
@@ -88,11 +89,11 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname.startsWith("/api")) {
-    const permissions = user && session ? await permissionsForSession(supabase, session) : []
+    const permissions = user && session ? await permissionsForSession(supabase, session) : { read: [], write: [] }
     const decision = decideApiAccess(pathname, request.method, Boolean(user), permissions)
     if (decision === "allow") return supabaseResponse
     const status = decision === "unauthorized" ? 401 : 403
-    const error = decision === "unauthorized" ? "Unauthorized" : "No tenés permiso para esto."
+    const error = decision === "unauthorized" ? "Unauthorized" : PERMISSION_DENIED_MESSAGE
     return withSessionCookies(NextResponse.json({ error }, { status }), supabaseResponse)
   }
 

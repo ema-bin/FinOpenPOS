@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requirePermission } from "@/lib/auth/require-permission";
-import { isPermission } from "@/lib/auth/permissions";
+import { isPermission, normalizeAccess, type PermissionGrant } from "@/lib/auth/permissions";
 import { parseCreateUserInput } from "@/lib/auth/create-user-input";
 
 type RoleRow = {
@@ -11,8 +11,17 @@ type RoleRow = {
   name: string;
   is_system: boolean;
   description: string | null;
-  role_permissions: { permission: string }[] | null;
+  role_permissions: { permission: string; access?: string | null }[] | null;
 };
+
+function grantsOf(rows: { permission: string; access?: string | null }[] | null): PermissionGrant[] {
+  const grants: PermissionGrant[] = [];
+  for (const row of rows ?? []) {
+    if (!isPermission(row.permission)) continue;
+    grants.push({ permission: row.permission, access: normalizeAccess(row.permission, row.access) });
+  }
+  return grants;
+}
 
 /** GoTrue devuelve banned_until; esta versión de los tipos de Auth no lo declara. */
 function isAuthUserActive(user: object): boolean {
@@ -24,7 +33,7 @@ function isAuthUserActive(user: object): boolean {
 
 export async function GET() {
   try {
-    const auth = await requirePermission("users.manage");
+    const auth = await requirePermission("users.manage", "read");
     if (!auth.ok) return auth.response;
 
     const service = createServiceClient();
@@ -32,7 +41,7 @@ export async function GET() {
       service.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       service
         .from("roles")
-        .select("id, name, is_system, description, role_permissions(permission)")
+        .select("id, name, is_system, description, role_permissions(permission, access)")
         .order("id"),
       service.from("user_roles").select("user_id, role_id"),
     ]);
@@ -69,7 +78,7 @@ export async function GET() {
       name: role.name,
       is_system: role.is_system,
       description: role.description,
-      permissions: (role.role_permissions ?? []).map((p) => p.permission).filter(isPermission),
+      permissions: grantsOf(role.role_permissions),
     }));
 
     return NextResponse.json({ currentUserId: auth.userId, users, roles });

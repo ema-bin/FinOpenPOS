@@ -37,6 +37,7 @@ interface CourtSlotTableProps {
   pendingChanges: Map<number, SlotChanges>;
   isSaving: boolean;
   isLoading: boolean;
+  readOnly?: boolean;
 }
 
 export function CourtSlotTable({
@@ -48,6 +49,7 @@ export function CourtSlotTable({
   pendingChanges,
   isSaving,
   isLoading,
+  readOnly = false,
 }: CourtSlotTableProps) {
   if (isLoading) {
     return (
@@ -130,6 +132,7 @@ export function CourtSlotTable({
             onCancel={() => onCancelSlot(slot.id)}
             hasChanges={hasChanges}
             isSaving={isSaving}
+            readOnly={readOnly}
           />
         );
       })}
@@ -163,6 +166,7 @@ export function CourtSlotTable({
                 onCancel={() => onCancelSlot(slot.id)}
                 hasChanges={hasChanges}
                 isSaving={isSaving}
+                readOnly={readOnly}
               />
             );
           })}
