@@ -163,6 +163,7 @@ describe("páginas por rol", () => {
   it("Admin Canchas: canchas y torneos", () => {
     expect(canPage(ADMIN_CANCHAS, "/admin")).toBe(true);
     expect(canPage(ADMIN_CANCHAS, "/admin/court-slots")).toBe(true);
+    expect(canPage(ADMIN_CANCHAS, "/admin/slot-packs")).toBe(false);
     expect(canPage(ADMIN_CANCHAS, "/admin/tournaments/10")).toBe(true);
     expect(canPage(ADMIN_CANCHAS, "/admin/orders")).toBe(false);
     expect(canPage(ADMIN_CANCHAS, "/admin/players")).toBe(false);
@@ -255,6 +256,36 @@ describe("APIs por rol", () => {
       expect(canApi(perms, "/api/purchases", "GET")).toBe(false);
       expect(canApi(perms, "/api/products", "POST")).toBe(false);
     }
+  });
+
+  it("packs tiene permisos propios y el QR de la cancha sigue en turnos", () => {
+    const definir = resolveEffectiveAccess({
+      is_system: false,
+      grants: [{ permission: "packs.define", access: "read" }],
+    });
+    const vender = resolveEffectiveAccess({
+      is_system: false,
+      grants: [{ permission: "packs.sell", access: "write" }],
+    });
+    const creditos = resolveEffectiveAccess({
+      is_system: false,
+      grants: [{ permission: "packs.credits", access: "read" }],
+    });
+    expect(canPage(definir, "/admin/slot-packs")).toBe(true);
+    expect(canApi(definir, "/api/slot-pack-definitions", "GET")).toBe(true);
+    expect(canApi(definir, "/api/slot-pack-definitions", "POST")).toBe(false);
+    expect(canApi(vender, "/api/slot-packs", "POST")).toBe(true);
+    expect(canApi(vender, "/api/slot-pack-definitions", "GET")).toBe(true);
+    expect(canApi(vender, "/api/slot-pack-definitions/4", "PATCH")).toBe(false);
+    expect(canApi(vender, "/api/players", "GET")).toBe(true);
+    expect(canApi(creditos, "/api/slot-packs", "GET")).toBe(true);
+    expect(canApi(creditos, "/api/slot-credits/movements", "GET")).toBe(true);
+    expect(canApi(creditos, "/api/slot-credits/adjustments", "POST")).toBe(false);
+    expect(canApi(ADMIN_CANCHAS, "/api/slot-credits", "GET")).toBe(true);
+    expect(canApi(ADMIN_CANCHAS, "/api/slot-packs", "GET")).toBe(false);
+    expect(canApi(ADMIN_CANCHAS, "/api/slot-pack-definitions", "POST")).toBe(false);
+    expect(canApi(ADMIN_CANCHAS, "/api/court-slots/261", "PATCH")).toBe(true);
+    expect(firstAllowedPage(grants(["packs.credits"]))).toBe("/admin/slot-packs");
   });
 
   it("endpoints compartidos de lectura habilitados para quien los necesita", () => {

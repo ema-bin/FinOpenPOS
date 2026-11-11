@@ -36,6 +36,9 @@ export default function Page() {
   const showSales = !permsLoading && canRead("sales.operate");
   const showSalesReports = showSales && canRead("sales.reports");
   const showCourts = !permsLoading && canRead("courts.operate");
+  const showPacks =
+    !permsLoading &&
+    (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
   const showTournaments = !permsLoading && canRead("tournaments.manage");
 
   // Queries para datos del dashboard
@@ -204,14 +207,16 @@ export default function Page() {
                   Ver turnos
                   <ArrowRightIcon className="ml-2 h-4 w-4" />
                 </Button>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => router.push("/admin/slot-packs")}
-                >
-                  Ver packs
-                  <ArrowRightIcon className="ml-2 h-4 w-4" />
-                </Button>
+                {showPacks ? (
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => router.push("/admin/slot-packs")}
+                  >
+                    Ver packs
+                    <ArrowRightIcon className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : null}
               </>
             ) : null}
           </CardContent>

@@ -29,9 +29,12 @@ import type { SlotChanges } from "@/components/court-slots/SeatEditors";
 import Link from "next/link";
 
 export default function CourtSlotsPage() {
-  const { can, loading: permsLoading } = usePermissions();
+  const { can, canRead, loading: permsLoading } = usePermissions();
   const canEditPricing = !permsLoading && can("courts.pricing");
   const canEditSlots = !permsLoading && can("courts.operate");
+  const canSeePacks =
+    !permsLoading &&
+    (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -394,10 +397,15 @@ export default function CourtSlotsPage() {
         <CardTitle>Turnos de canchas</CardTitle>
         <CardDescription>
           Generá los turnos diarios y registrá el pago de cada puesto. Con QR,
-          elegí el jugador para descontar un crédito.{" "}
-          <Link href="/admin/slot-packs" className="text-primary underline">
-            Packs de turnos
-          </Link>
+          elegí el jugador para descontar un crédito.
+          {canSeePacks ? (
+            <>
+              {" "}
+              <Link href="/admin/slot-packs" className="text-primary underline">
+                Packs de turnos
+              </Link>
+            </>
+          ) : null}
         </CardDescription>
       </CardHeader>
 

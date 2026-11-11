@@ -7,8 +7,15 @@ import { SellPackTab } from "@/components/slot-packs/SellPackTab";
 import { PlayerCreditsTab } from "@/components/slot-packs/PlayerCreditsTab";
 
 export default function SlotPacksPage() {
-  const { can, loading: permsLoading } = usePermissions();
-  const canWrite = !permsLoading && can("courts.operate");
+  const { can, canRead, loading: permsLoading } = usePermissions();
+  const showDefine = canRead("packs.define");
+  const showSell = canRead("packs.sell");
+  const showCredits = canRead("packs.credits");
+  const canWriteDefine = !permsLoading && can("packs.define");
+  const canWriteSell = !permsLoading && can("packs.sell");
+  const canWriteCredits = !permsLoading && can("packs.credits");
+  const defaultTab = showDefine ? "definitions" : showSell ? "sell" : "credits";
+  const visibleTabs = [showDefine, showSell, showCredits].filter(Boolean).length;
 
   return (
     <div className="space-y-4">
@@ -18,28 +25,50 @@ export default function SlotPacksPage() {
           Definí los packs, vendelos a un jugador y consultá los créditos que le quedan.
         </p>
       </div>
-      <Tabs defaultValue="definitions">
-        <TabsList className="max-md:grid max-md:h-auto max-md:w-full max-md:grid-cols-3">
-          <TabsTrigger className="max-md:px-2" value="definitions">
-            Packs
-          </TabsTrigger>
-          <TabsTrigger className="max-md:px-2" value="sell">
-            Vender
-          </TabsTrigger>
-          <TabsTrigger className="max-md:px-2" value="credits">
-            Créditos
-          </TabsTrigger>
+      {permsLoading ? null : (
+      <Tabs defaultValue={defaultTab}>
+        <TabsList
+          className={`max-md:grid max-md:h-auto max-md:w-full ${
+            visibleTabs <= 1
+              ? "max-md:grid-cols-1"
+              : visibleTabs === 2
+                ? "max-md:grid-cols-2"
+                : "max-md:grid-cols-3"
+          }`}
+        >
+          {showDefine ? (
+            <TabsTrigger className="max-md:px-2" value="definitions">
+              Packs
+            </TabsTrigger>
+          ) : null}
+          {showSell ? (
+            <TabsTrigger className="max-md:px-2" value="sell">
+              Vender
+            </TabsTrigger>
+          ) : null}
+          {showCredits ? (
+            <TabsTrigger className="max-md:px-2" value="credits">
+              Créditos
+            </TabsTrigger>
+          ) : null}
         </TabsList>
-        <TabsContent value="definitions" className="mt-4">
-          <PackDefinitionsTab canWrite={canWrite} />
-        </TabsContent>
-        <TabsContent value="sell" className="mt-4">
-          <SellPackTab canWrite={canWrite} />
-        </TabsContent>
-        <TabsContent value="credits" className="mt-4">
-          <PlayerCreditsTab canWrite={canWrite} />
-        </TabsContent>
+        {showDefine ? (
+          <TabsContent value="definitions" className="mt-4">
+            <PackDefinitionsTab canWrite={canWriteDefine} />
+          </TabsContent>
+        ) : null}
+        {showSell ? (
+          <TabsContent value="sell" className="mt-4">
+            <SellPackTab canWrite={canWriteSell} />
+          </TabsContent>
+        ) : null}
+        {showCredits ? (
+          <TabsContent value="credits" className="mt-4">
+            <PlayerCreditsTab canWrite={canWriteCredits} />
+          </TabsContent>
+        ) : null}
       </Tabs>
+      )}
     </div>
   );
 }

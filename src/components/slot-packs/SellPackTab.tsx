@@ -76,7 +76,7 @@ export function SellPackTab({ canWrite }: { canWrite: boolean }) {
   if (!canWrite) {
     return (
       <p className="text-sm text-muted-foreground">
-        Para vender un pack hace falta escritura en Turnos de canchas.
+        No tenés permiso para vender packs.
       </p>
     );
   }

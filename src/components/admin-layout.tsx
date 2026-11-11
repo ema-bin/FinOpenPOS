@@ -37,19 +37,32 @@ const NAV_ITEMS: {
   href: string;
   label: string;
   icon: LucideIcon;
-  permission: Permission;
+  permission: Permission | readonly Permission[];
   exact?: boolean;
 }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboardIcon, permission: "dashboard.view", exact: true },
   { href: "/admin/orders", label: "Ventas", icon: ShoppingCartIcon, permission: "sales.operate" },
   { href: "/admin/purchases", label: "Compras", icon: PackageIcon, permission: "purchases.manage" },
   { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
-  { href: "/admin/slot-packs", label: "Packs", icon: TicketIcon, permission: "courts.operate" },
+  {
+    href: "/admin/slot-packs",
+    label: "Packs",
+    icon: TicketIcon,
+    permission: ["packs.define", "packs.sell", "packs.credits"],
+  },
   { href: "/admin/classes", label: "Clases", icon: GraduationCapIcon, permission: "classes.manage" },
   { href: "/admin/tournaments", label: "Torneos", icon: TrophyIcon, permission: "tournaments.manage" },
   { href: "/admin/users", label: "Usuarios", icon: ShieldIcon, permission: "users.manage" },
   { href: "/admin/roles", label: "Roles", icon: KeyRoundIcon, permission: "users.manage" },
 ];
+
+function canSeeNav(
+  permission: Permission | readonly Permission[],
+  canRead: (permission: Permission) => boolean
+) {
+  const required = typeof permission === "string" ? [permission] : permission;
+  return required.some((item) => canRead(item));
+}
 
 const pageNames: { [key: string]: string } = {
   "/admin": "Dashboard",
@@ -184,7 +197,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </div>
         {menuOpen && (
           <nav className="flex flex-col gap-1 border-t bg-background px-2 py-2 md:hidden">
-            {NAV_ITEMS.filter((item) => permsLoading || canRead(item.permission)).map((item) => {
+            {NAV_ITEMS.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
               const active =
                 mounted &&
                 (item.exact ? pathname === item.href : pathname.startsWith(item.href));
@@ -207,7 +220,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Barra de navegación principal */}
         <nav className="hidden h-12 items-center gap-1 border-t bg-muted/40 px-4 md:flex">
-          {NAV_ITEMS.filter((item) => permsLoading || canRead(item.permission)).map((item) => {
+          {NAV_ITEMS.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
             const active =
               mounted &&
               (item.exact ? pathname === item.href : pathname.startsWith(item.href));
