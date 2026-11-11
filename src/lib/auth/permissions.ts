@@ -3,23 +3,21 @@
  * (middleware de páginas/APIs y UI), por eso no se crean desde la app:
  * desde la app se arman roles combinando estos permisos.
  *
- * mode:
- * - both: el rol elige lectura o escritura. La escritura incluye la lectura.
- * - read: solo se puede mirar (no hay una acción de escritura asociada).
- * - write: es una acción. Tener el permiso es poder hacerla.
+ * Cada permiso se asigna como lectura o escritura. La escritura incluye la lectura.
+ * Ver una sección o un GET pide lectura. Crear, editar, borrar o cobrar pide escritura.
  */
 export const PERMISSIONS = {
-  "dashboard.view": { label: "Ver dashboard", group: "General", mode: "read" },
+  "dashboard.view": { label: "Ver dashboard", group: "General", mode: "both" },
   "sales.operate": { label: "Cuentas abiertas y venta rápida", group: "Ventas", mode: "both" },
-  "sales.cancel_discount": { label: "Cancelar cuentas y aplicar descuentos", group: "Ventas", mode: "write" },
-  "sales.reports": { label: "Ver ventas, estadísticas y ranking de clientes", group: "Ventas", mode: "read" },
+  "sales.cancel_discount": { label: "Cancelar cuentas y aplicar descuentos", group: "Ventas", mode: "both" },
+  "sales.reports": { label: "Ver ventas, estadísticas y ranking de clientes", group: "Ventas", mode: "both" },
   "closures.daily": { label: "Cierre de caja diario", group: "Finanzas", mode: "both" },
   "closures.monthly": { label: "Cierre mensual", group: "Finanzas", mode: "both" },
   "balance.manage": { label: "Balance, retiros, ajustes y socios", group: "Finanzas", mode: "both" },
   "purchases.manage": { label: "Compras y proveedores", group: "Compras", mode: "both" },
   "products.manage": { label: "Productos, categorías y stock", group: "Compras", mode: "both" },
   "courts.operate": { label: "Turnos de canchas", group: "Canchas", mode: "both" },
-  "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas", mode: "write" },
+  "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas", mode: "both" },
   "classes.manage": { label: "Clases", group: "Clases", mode: "both" },
   "tournaments.manage": { label: "Torneos", group: "Torneos", mode: "both" },
   "players.manage": { label: "Pantalla de clientes (editar y borrar)", group: "Clientes", mode: "both" },
@@ -60,9 +58,7 @@ export function permissionsByGroup(): Array<{ group: string; permissions: Permis
 }
 
 /**
- * Nivel que se guarda. Un permiso de solo lectura no puede quedar en escritura,
- * y una acción (solo escritura) no puede quedar en lectura.
- * Si no viene nivel, se asume escritura: así siguen los roles ya cargados.
+ * Nivel que se guarda. Si no viene nivel, se asume escritura: así siguen los roles ya cargados.
  */
 export function normalizeAccess(
   permission: Permission,

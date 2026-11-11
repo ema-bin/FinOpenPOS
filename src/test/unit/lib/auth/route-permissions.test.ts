@@ -83,6 +83,16 @@ describe("cobertura del mapa de APIs", () => {
     }
   );
 
+  it("ver pide lectura y modificar pide escritura", () => {
+    for (const [routePath, methods] of Object.entries(API_RULES)) {
+      for (const [method, requirement] of Object.entries(methods)) {
+        if (!requirement || requirement.kind !== "anyOf") continue;
+        const expected = method === "GET" ? "read" : "write";
+        expect(requirement.access, `${method} ${routePath}`).toBe(expected);
+      }
+    }
+  });
+
   it("no hay reglas para rutas que ya no existen", () => {
     const existing = new Set(routeFiles.map(toRoutePath));
     const stale = Object.keys(API_RULES).filter((p) => !existing.has(p));

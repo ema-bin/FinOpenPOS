@@ -66,7 +66,7 @@ describe("decodeJwtPayload / permissionsFromClaims", () => {
     ).toEqual({ read: [], write: ["courts.operate"] });
   });
 
-  it("separa lectura y escritura, y un permiso de solo consulta no queda como escritura", () => {
+  it("separa lectura y escritura", () => {
     expect(
       permissionsFromClaims({
         app_role_id: 3,
@@ -75,8 +75,8 @@ describe("decodeJwtPayload / permissionsFromClaims", () => {
         app_read_permissions: ["sales.operate"],
       })
     ).toEqual({
-      read: ["dashboard.view", "sales.operate"],
-      write: ["courts.operate"],
+      read: ["sales.operate"],
+      write: ["courts.operate", "dashboard.view"],
     });
   });
 });

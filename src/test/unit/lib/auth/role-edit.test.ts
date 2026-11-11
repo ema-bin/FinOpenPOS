@@ -16,7 +16,7 @@ describe("parseRoleWrite", () => {
     });
   });
 
-  it("guarda lectura y no deja bajar a lectura un permiso que es solo una acción", () => {
+  it("guarda lectura también en cancelar y descontar", () => {
     expect(
       parseRoleWrite(
         {
@@ -34,7 +34,7 @@ describe("parseRoleWrite", () => {
         name: "Mirar",
         permissions: [
           { permission: "sales.operate", access: "read" },
-          { permission: "sales.cancel_discount", access: "write" },
+          { permission: "sales.cancel_discount", access: "read" },
         ],
       },
     });

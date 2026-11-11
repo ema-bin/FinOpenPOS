@@ -57,10 +57,10 @@ describe("resolveEffectivePermissions", () => {
 });
 
 describe("lectura y escritura", () => {
-  it("un permiso de solo lectura no puede guardarse como escritura", () => {
-    expect(normalizeAccess("dashboard.view", "write")).toBe("read");
-    expect(normalizeAccess("sales.reports", undefined)).toBe("read");
-    expect(normalizeAccess("sales.cancel_discount", "read")).toBe("write");
+  it("respeta lectura o escritura, y sin nivel queda en escritura", () => {
+    expect(normalizeAccess("dashboard.view", "write")).toBe("write");
+    expect(normalizeAccess("sales.reports", "read")).toBe("read");
+    expect(normalizeAccess("sales.cancel_discount", "read")).toBe("read");
     expect(normalizeAccess("sales.operate", "read")).toBe("read");
     expect(normalizeAccess("sales.operate", undefined)).toBe("write");
   });

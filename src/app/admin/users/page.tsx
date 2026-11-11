@@ -69,7 +69,6 @@ function roleSummary(role: Role): string {
   return role.permissions
     .map((grant) => {
       const meta = PERMISSIONS[grant.permission];
-      if (meta.mode !== "both") return meta.label;
       return `${meta.label} (${grant.access === "read" ? "lectura" : "escritura"})`;
     })
     .join(" · ");

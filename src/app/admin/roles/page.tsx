@@ -6,7 +6,6 @@ import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -123,9 +122,7 @@ export default function RolesPage() {
     setPermissions((current) => {
       const rest = current.filter((grant) => grant.permission !== permission);
       if (choice === "none") return rest;
-      const mode = PERMISSIONS[permission].mode;
-      const access: AccessLevel = mode === "both" ? choice : mode;
-      return [...rest, { permission, access }];
+      return [...rest, { permission, access: choice }];
     });
   };
 
@@ -220,27 +217,16 @@ export default function RolesPage() {
                             <Label htmlFor={`perm-${permission}`} className="text-sm font-normal">
                               {meta.label}
                             </Label>
-                            {meta.mode === "both" ? (
-                              <select
-                                id={`perm-${permission}`}
-                                className="h-8 rounded-md border bg-background px-2 text-sm"
-                                value={choice}
-                                onChange={(e) => setChoice(permission, e.target.value as GrantChoice)}
-                              >
-                                <option value="none">Sin acceso</option>
-                                <option value="read">Lectura</option>
-                                <option value="write">Escritura</option>
-                              </select>
-                            ) : (
-                              <Checkbox
-                                id={`perm-${permission}`}
-                                checked={choice === meta.mode}
-                                onCheckedChange={(checked) =>
-                                  setChoice(permission, checked === true ? meta.mode : "none")
-                                }
-                                aria-label={meta.label}
-                              />
-                            )}
+                            <select
+                              id={`perm-${permission}`}
+                              className="h-8 rounded-md border bg-background px-2 text-sm"
+                              value={choice}
+                              onChange={(e) => setChoice(permission, e.target.value as GrantChoice)}
+                            >
+                              <option value="none">Sin acceso</option>
+                              <option value="read">Lectura</option>
+                              <option value="write">Escritura</option>
+                            </select>
                           </div>
                         );
                       })}

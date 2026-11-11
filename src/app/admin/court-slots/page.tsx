@@ -23,8 +23,11 @@ import { CourtPricingDialog } from "@/components/court-slots/CourtPricingDialog"
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { CourtSlotDB } from "@/models/db/court";
 import { useQuery } from "@tanstack/react-query";
+import { usePermissions } from "@/components/permissions-provider";
 
 export default function CourtSlotsPage() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canEditPricing = !permsLoading && can("courts.pricing");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -317,14 +320,16 @@ export default function CourtSlotsPage() {
               isLoading={loadingDayNotes}
             />
 
-            <div className="flex gap-2 flex-wrap">
-              {courts.map((court: { id: number; name: string }) => (
-                <CourtPricingDialog
-                  key={court.id}
-                  court={court}
-                />
-              ))}
-            </div>
+            {canEditPricing && (
+              <div className="flex gap-2 flex-wrap">
+                {courts.map((court: { id: number; name: string }) => (
+                  <CourtPricingDialog
+                    key={court.id}
+                    court={court}
+                  />
+                ))}
+              </div>
+            )}
 
             <ColorLegend
               paymentMethods={paymentMethods}
