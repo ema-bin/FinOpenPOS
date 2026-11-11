@@ -81,8 +81,9 @@ export default function OrdersPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { canRead, loading: permsLoading } = usePermissions();
+  const { can, canRead, loading: permsLoading } = usePermissions();
   const showReports = !permsLoading && canRead("sales.reports");
+  const canOperate = !permsLoading && can("sales.operate");
 
   // Leer el tab desde query params
   const tabFromQuery = searchParams.get("tab");
@@ -786,20 +787,22 @@ export default function OrdersPage() {
                 <CardTitle className="text-xl font-semibold">
                   Cuentas abiertas
                 </CardTitle>
-                <div className="flex gap-2 max-md:flex-col">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => router.push("/admin/quick-sale")}
-                  >
-                    <ShoppingCartIcon className="w-4 h-4 mr-2" />
-                    Venta rápida
-                  </Button>
-                  <Button size="sm" onClick={() => setIsNewOrderDialogOpen(true)}>
-                    <PlusIcon className="w-4 h-4 mr-2" />
-                    Abrir cuenta
-                  </Button>
-                </div>
+                {canOperate ? (
+                  <div className="flex gap-2 max-md:flex-col">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push("/admin/quick-sale")}
+                    >
+                      <ShoppingCartIcon className="w-4 h-4 mr-2" />
+                      Venta rápida
+                    </Button>
+                    <Button size="sm" onClick={() => setIsNewOrderDialogOpen(true)}>
+                      <PlusIcon className="w-4 h-4 mr-2" />
+                      Abrir cuenta
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-4">

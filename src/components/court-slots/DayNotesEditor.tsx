@@ -12,6 +12,7 @@ interface DayNotesEditorProps {
   onNotesChange: (notes: string) => void;
   isSaving: boolean;
   isLoading: boolean;
+  readOnly?: boolean;
 }
 
 export function DayNotesEditor({
@@ -23,6 +24,7 @@ export function DayNotesEditor({
   onNotesChange,
   isSaving,
   isLoading,
+  readOnly = false,
 }: DayNotesEditorProps) {
   return (
     <div className="border rounded-lg p-4 bg-muted/30 space-y-2">
@@ -31,7 +33,7 @@ export function DayNotesEditor({
           <FileTextIcon className="w-4 h-4" />
           Notas del día
         </Label>
-        {!isEditing && (
+        {!isEditing && !readOnly && (
           <Button
             variant="ghost"
             size="sm"

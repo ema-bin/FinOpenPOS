@@ -61,12 +61,9 @@ export function permissionsByGroup(): Array<{ group: string; permissions: Permis
  * Nivel que se guarda. Si no viene nivel, se asume escritura: así siguen los roles ya cargados.
  */
 export function normalizeAccess(
-  permission: Permission,
+  _permission: Permission,
   access: string | null | undefined
 ): AccessLevel {
-  const mode = PERMISSIONS[permission].mode;
-  if (mode === "read") return "read";
-  if (mode === "write") return "write";
   return access === "read" ? "read" : "write";
 }
 

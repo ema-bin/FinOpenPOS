@@ -34,6 +34,9 @@ class StockMovementsService {
 
     const response = await fetch(`${this.baseUrl}/statistics?${searchParams.toString()}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al cargar las estadísticas de stock");
     }
     return response.json();
@@ -53,6 +56,9 @@ class StockMovementsService {
       }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error al crear el ajuste de stock");
     }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircleIcon } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/components/permissions-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,8 @@ function payChoices(
 
 export function ChargesTab() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("classes.manage");
   const [month, setMonth] = useState(currentMonth);
   const [missing, setMissing] = useState<MissingClassRateView[]>([]);
   const [paying, setPaying] = useState<ClassCharge | null>(null);
@@ -235,9 +238,11 @@ export function ChargesTab() {
             placeholder="Nombre o apellido"
           />
         </label>
-        <Button onClick={() => generateMutation.mutate()} disabled={!month || generateMutation.isPending}>
-          Armar deudas
-        </Button>
+        {canWrite ? (
+          <Button onClick={() => generateMutation.mutate()} disabled={!month || generateMutation.isPending}>
+            Armar deudas
+          </Button>
+        ) : null}
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -372,7 +377,7 @@ export function ChargesTab() {
                       <Badge variant={pending ? "expense" : "income"}>{pending ? "Pendiente" : "Paga"}</Badge>
                     </div>
                     <div className={pending ? "text-red-700" : undefined}>
-                      {pending && !group.closed ? (
+                      {pending && !group.closed && canWrite ? (
                         <AmountField
                           amount={charge.amount}
                           disabled={amountMutation.isPending}
@@ -388,6 +393,7 @@ export function ChargesTab() {
                     <ChargeActions
                       charge={charge}
                       closed={group.closed}
+                      readOnly={!canWrite}
                       professors={professors}
                       cintia={cintia}
                       cash={cash}
@@ -435,7 +441,7 @@ export function ChargesTab() {
                     </TableCell>
                     <TableCell>{charge.weekly_count}</TableCell>
                     <TableCell className={pending ? "text-red-700" : undefined}>
-                      {pending && !group.closed ? (
+                      {pending && !group.closed && canWrite ? (
                         <AmountField
                           amount={charge.amount}
                           disabled={amountMutation.isPending}
@@ -452,6 +458,7 @@ export function ChargesTab() {
                       <Badge variant={pending ? "expense" : "income"}>{pending ? "Pendiente" : "Paga"}</Badge>
                     </TableCell>
                     <TableCell>
+                      {canWrite ? (
                       <div className="flex flex-wrap justify-end gap-2">
                         {pending && (
                           <span title={hasPhone ? "Enviar recordatorio de pago por WhatsApp" : "El jugador no tiene teléfono cargado"}>
@@ -505,6 +512,7 @@ export function ChargesTab() {
                           </Button>
                         )}
                       </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                   );
@@ -654,6 +662,7 @@ function MoneyChip({
 function ChargeActions({
   charge,
   closed,
+  readOnly = false,
   professors,
   cintia,
   cash,
@@ -665,6 +674,7 @@ function ChargeActions({
 }: {
   charge: ClassCharge;
   closed: boolean;
+  readOnly?: boolean;
   professors: Array<{ id: number; payment_method: ClassPaymentMethodRef | null }>;
   cintia: ClassPaymentMethodRef | null;
   cash: ClassPaymentMethodRef | null;
@@ -676,6 +686,7 @@ function ChargeActions({
 }) {
   const pending = charge.status === "pending";
   const hasPhone = Boolean(charge.player?.phone?.trim());
+  if (readOnly) return null;
   return (
     <div className="flex flex-wrap gap-2">
       {pending && (

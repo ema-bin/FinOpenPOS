@@ -80,6 +80,7 @@ export default function OrderDetailPage() {
   const queryClient = useQueryClient();
   const { can, loading: permsLoading } = usePermissions();
   const canDiscount = !permsLoading && can("sales.cancel_discount");
+  const canOperate = !permsLoading && can("sales.operate");
   const orderId = Number(params?.id);
 
   const [order, setOrder] = useState<OrderDTO | null>(null);
@@ -922,30 +923,33 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[2.5fr_2fr_0.8fr] items-start">
-          <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2 max-md:max-h-[50vh] max-md:pr-0">
-            <div className="mb-3">
-              <Input
-                placeholder="Filtrar productos..."
-                value={productFilter}
-                onChange={(event) => setProductFilter(event.target.value)}
-                className="w-full"
+          {canOperate ? (
+            <div className="max-h-[70vh] overflow-y-auto pr-2 pb-2 max-md:max-h-[50vh] max-md:pr-0">
+              <div className="mb-3">
+                <Input
+                  placeholder="Filtrar productos..."
+                  value={productFilter}
+                  onChange={(event) => setProductFilter(event.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <OrderProductSelectorPanel
+                products={filteredProducts}
+                onProductSelect={handleProductSelect}
+                loadingProducts={loadingProducts}
+                isEditable={isOrderOpen}
+                showMoreProductsSelect={false}
               />
             </div>
-            <OrderProductSelectorPanel
-              products={filteredProducts}
-              onProductSelect={handleProductSelect}
-              loadingProducts={loadingProducts}
-              isEditable={isOrderOpen}
-              showMoreProductsSelect={false}
-            />
-          </div>
+          ) : null}
 
           <div className="lg:col-span-1">
             <div className="lg:sticky lg:top-4">
               <OrderConsumptionPanel
                 items={orderItems}
                 isLoading={isOrderLoading}
-                isEditable={isOrderOpen}
+                isEditable={isOrderOpen && canOperate}
+                lockedLabel={isOrderOpen ? "Solo lectura" : "Cerrado"}
                 onUpdateQuantity={(item, newQuantity) => {
                   const orderItem = displayOrder?.items?.find((i) => i.id === item.id);
                   if (orderItem) {
@@ -967,7 +971,7 @@ export default function OrderDetailPage() {
 
           <div className="lg:col-span-1">
             <div className="lg:sticky lg:top-4 space-y-3">
-              {isOrderOpen && balanceDue > 0 ? (
+              {isOrderOpen && canOperate && balanceDue > 0 ? (
                 <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
                   <Checkbox
                     id="allow-partial-pay"
@@ -995,7 +999,7 @@ export default function OrderDetailPage() {
                   isOrderOpen ? discountPercentage : displayOrder?.discount_percentage ?? null
                 }
                 discountAmount={isOrderOpen ? discountAmount : displayOrder?.discount_amount ?? null}
-                isEditable={isOrderOpen}
+                isEditable={isOrderOpen && canOperate}
                 isLoading={isOrderLoading}
                 onDiscountPercentageChange={setDiscountPercentage}
                 onDiscountAmountChange={setDiscountAmount}
@@ -1011,7 +1015,7 @@ export default function OrderDetailPage() {
                 onPaymentAmountChange={
                   allowPartialPayment ? setPaymentAmount : undefined
                 }
-                onProcess={handlePay}
+                onProcess={isOrderOpen && canOperate ? handlePay : undefined}
                 onCancel={canDiscount ? handleCancel : undefined}
                 processing={paying}
                 cancelling={cancelling}

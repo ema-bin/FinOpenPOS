@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   Card,
   CardHeader,
@@ -45,6 +46,8 @@ async function fetchTournament(id: number): Promise<TournamentDTO> {
 
 export default function TournamentDetailPage() {
   const params = useParams();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("tournaments.manage");
   const id = Number(params?.id);
   const [activeTab, setActiveTab] = useState<string>("teams");
   const [durationDialogOpen, setDurationDialogOpen] = useState(false);
@@ -132,7 +135,7 @@ export default function TournamentDetailPage() {
               {tournamentStatusLabel(tournament.status)}
             </span>
           </CardTitle>
-          <Button
+          {canWrite ? <Button
             type="button"
             variant="outline"
             size="sm"
@@ -147,7 +150,7 @@ export default function TournamentDetailPage() {
           >
             Duración: {tournament.match_duration ?? 60} /{" "}
             {tournament.match_duration_quarters_onwards ?? tournament.match_duration ?? 60} min
-          </Button>
+          </Button> : null}
         </div>
       </CardHeader>
       <CardContent className="p-0 pt-2">

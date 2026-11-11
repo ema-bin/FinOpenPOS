@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   Card,
   CardHeader,
@@ -105,6 +106,8 @@ type PurchaseLine = {
 
 export default function PurchaseDetailPage() {
   const params = useParams();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("purchases.manage");
   const router = useRouter();
   const queryClient = useQueryClient();
   const idParam = params?.id;
@@ -204,6 +207,7 @@ export default function PurchaseDetailPage() {
     !isNewPurchase &&
     purchase != null &&
     purchase.status !== "pending";
+  const linesLocked = isPurchaseReadOnly || !canWrite;
 
   /** Compra completada: no se edita, pero sí se puede cancelar para revertir stock y pago. */
   const canCancelCompletedPurchase =
@@ -489,7 +493,7 @@ export default function PurchaseDetailPage() {
         </Card>
 
         {/* Edición solo si la compra está pendiente (completadas/canceladas: solo lectura) */}
-        {!isPurchaseReadOnly && (
+        {!linesLocked && (
           <Card>
             <CardHeader>
               <CardTitle>{isNewPurchase ? "Configuración" : "Editar compra"}</CardTitle>
@@ -563,7 +567,7 @@ export default function PurchaseDetailPage() {
                 />
               </div>
             </CardContent>
-            <CardFooter className="flex flex-col gap-2">
+            {canWrite ? <CardFooter className="flex flex-col gap-2">
               <Button
                 size="lg"
                 className="w-full"
@@ -606,12 +610,12 @@ export default function PurchaseDetailPage() {
                   )}
                 </Button>
               )}
-            </CardFooter>
+            </CardFooter> : null}
           </Card>
         )}
 
         {/* Compra completada: sin edición, pero se puede cancelar (revertir stock y pago) */}
-        {canCancelCompletedPurchase && (
+        {canWrite && canCancelCompletedPurchase && (
           <Card className="border-amber-200 dark:border-amber-900">
             <CardHeader>
               <CardTitle>Acciones</CardTitle>
@@ -694,7 +698,7 @@ export default function PurchaseDetailPage() {
                 )}
               </CardDescription>
             </div>
-            {!isPurchaseReadOnly && (
+            {!linesLocked && (
               <Button variant="outline" size="sm" className="max-md:w-full" onClick={addLine}>
                 <PlusIcon className="w-4 h-4 mr-1" />
                 Agregar línea
@@ -715,7 +719,7 @@ export default function PurchaseDetailPage() {
                 const subtotal = !qty || !cost ? 0 : Number(qty) * Number(cost);
                 return (
                   <div key={line.id} className="space-y-2 rounded-lg border p-3">
-                    {isPurchaseReadOnly ? (
+                    {linesLocked ? (
                       <div className="font-medium">
                         {products.find((p) => p.id === line.productId)?.name ?? "Producto"}
                       </div>
@@ -732,7 +736,7 @@ export default function PurchaseDetailPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <span className="text-xs text-muted-foreground">Cantidad</span>
-                        {isPurchaseReadOnly ? (
+                        {linesLocked ? (
                           <div>{line.quantity}</div>
                         ) : (
                           <Input
@@ -750,7 +754,7 @@ export default function PurchaseDetailPage() {
                       </div>
                       <div className="space-y-1">
                         <span className="text-xs text-muted-foreground">Costo unitario</span>
-                        {isPurchaseReadOnly ? (
+                        {linesLocked ? (
                           <div>${typeof line.unitCost === "number" ? line.unitCost.toFixed(2) : line.unitCost}</div>
                         ) : (
                           <Input
@@ -770,7 +774,7 @@ export default function PurchaseDetailPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold">${subtotal.toFixed(2)}</span>
-                      {!isPurchaseReadOnly && (
+                      {!linesLocked && (
                         <Button
                           size="icon"
                           variant="ghost"
@@ -794,13 +798,13 @@ export default function PurchaseDetailPage() {
                   <TableHead>Cantidad</TableHead>
                   <TableHead>Costo unitario</TableHead>
                   <TableHead>Subtotal</TableHead>
-                  {!isPurchaseReadOnly && <TableHead className="w-[60px]" />}
+                  {!linesLocked && <TableHead className="w-[60px]" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {lines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isPurchaseReadOnly ? 4 : 5} className="text-center">
+                    <TableCell colSpan={linesLocked ? 4 : 5} className="text-center">
                       No hay items en esta compra.
                     </TableCell>
                   </TableRow>
@@ -819,7 +823,7 @@ export default function PurchaseDetailPage() {
                     return (
                       <TableRow key={line.id}>
                         <TableCell className="min-w-[200px]">
-                          {isPurchaseReadOnly ? (
+                          {linesLocked ? (
                             <span>
                               {products.find((p) => p.id === line.productId)?.name ?? "Producto"}
                             </span>
@@ -837,7 +841,7 @@ export default function PurchaseDetailPage() {
                           )}
                         </TableCell>
                         <TableCell className="w-[120px]">
-                          {isPurchaseReadOnly ? (
+                          {linesLocked ? (
                             <span>{line.quantity}</span>
                           ) : (
                             <Input
@@ -857,7 +861,7 @@ export default function PurchaseDetailPage() {
                           )}
                         </TableCell>
                         <TableCell className="w-[140px]">
-                          {isPurchaseReadOnly ? (
+                          {linesLocked ? (
                             <span>${typeof line.unitCost === "number" ? line.unitCost.toFixed(2) : line.unitCost}</span>
                           ) : (
                             <Input
@@ -880,7 +884,7 @@ export default function PurchaseDetailPage() {
                         <TableCell className="w-[140px]">
                           ${subtotal.toFixed(2)}
                         </TableCell>
-                        {!isPurchaseReadOnly && (
+                        {!linesLocked && (
                           <TableCell className="w-[60px] text-right">
                             <Button
                               size="icon"

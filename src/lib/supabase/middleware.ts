@@ -5,6 +5,7 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { FULL_ACCESS, type EffectiveAccess } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
 import { decideApiAccess } from "@/lib/auth/route-permissions";
+import { PERMISSION_DENIED_MESSAGE } from "@/lib/api-error";
 import {
   decodeJwtPayload,
   permissionsFromClaims,
@@ -92,7 +93,7 @@ export async function updateSession(request: NextRequest) {
     const decision = decideApiAccess(pathname, request.method, Boolean(user), permissions)
     if (decision === "allow") return supabaseResponse
     const status = decision === "unauthorized" ? 401 : 403
-    const error = decision === "unauthorized" ? "Unauthorized" : "No tenés permiso para esto."
+    const error = decision === "unauthorized" ? "Unauthorized" : PERMISSION_DENIED_MESSAGE
     return withSessionCookies(NextResponse.json({ error }, { status }), supabaseResponse)
   }
 

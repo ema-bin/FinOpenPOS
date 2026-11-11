@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { BalanceReport } from "./balance-report";
+import { usePermissions } from "@/components/permissions-provider";
 
 type BalanceByPaymentMethod = {
   payment_method_id: number | null;
@@ -115,11 +116,13 @@ function WithdrawalDateField({
   pending,
   onSave,
   label = "Fecha del retiro",
+  editable = true,
 }: {
   createdAt: string;
   pending: boolean;
   onSave: (date: string) => void;
   label?: string;
+  editable?: boolean;
 }) {
   const saved = toDateInputValue(createdAt);
   const [value, setValue] = useState(saved);
@@ -133,16 +136,19 @@ function WithdrawalDateField({
         value={value}
         onChange={(event) => setValue(event.target.value)}
         className="w-40 max-md:w-full"
+        disabled={!editable}
       />
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={!dirty || pending}
-        onClick={() => onSave(value)}
-      >
-        Guardar fecha
-      </Button>
+      {editable ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!dirty || pending}
+          onClick={() => onSave(value)}
+        >
+          Guardar fecha
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -270,6 +276,8 @@ function MethodBreakdown({
 
 export default function BalancePage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("balance.manage");
   const monthOptions = useMemo(() => buildMonthOptions(), []);
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentDescription, setAdjustmentDescription] = useState("");
@@ -384,7 +392,8 @@ export default function BalancePage() {
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["adjustments"] });
     },
-    onError: () => toast.error("No se pudo registrar el ajuste"),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo registrar el ajuste"),
   });
 
   const updateAdjustmentDateMutation = useMutation({
@@ -395,7 +404,8 @@ export default function BalancePage() {
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["adjustments"] });
     },
-    onError: () => toast.error("No se pudo cambiar la fecha del ajuste"),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo cambiar la fecha del ajuste"),
   });
 
   const withdrawalMutation = useMutation({
@@ -418,7 +428,8 @@ export default function BalancePage() {
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["partner-withdrawals"] });
     },
-    onError: () => toast.error("No se pudo registrar el retiro"),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo registrar el retiro"),
   });
 
   const updateWithdrawalDateMutation = useMutation({
@@ -429,7 +440,8 @@ export default function BalancePage() {
       queryClient.invalidateQueries({ queryKey: ["transactions-balance"] });
       queryClient.invalidateQueries({ queryKey: ["partner-withdrawals"] });
     },
-    onError: () => toast.error("No se pudo cambiar la fecha del retiro"),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo cambiar la fecha del retiro"),
   });
 
   const parsedWithdrawalAmount = Number(withdrawalAmount);
@@ -556,10 +568,14 @@ export default function BalancePage() {
               >
                 Ver informe
               </Button>
-              <Button className="max-md:w-full" onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
-              <Button variant="outline" className="max-md:w-full" onClick={() => setIsWithdrawalDialogOpen(true)}>
-                Registrar retiro
-              </Button>
+              {canWrite ? (
+                <>
+                  <Button className="max-md:w-full" onClick={() => setIsAdjustmentDialogOpen(true)}>Registrar ajuste</Button>
+                  <Button variant="outline" className="max-md:w-full" onClick={() => setIsWithdrawalDialogOpen(true)}>
+                    Registrar retiro
+                  </Button>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">
@@ -731,6 +747,7 @@ export default function BalancePage() {
                         <WithdrawalDateField
                           key={`${withdrawal.id}-${withdrawal.created_at}`}
                           createdAt={withdrawal.created_at}
+                          editable={canWrite}
                           pending={updateWithdrawalDateMutation.isPending}
                           onSave={(date) =>
                             updateWithdrawalDateMutation.mutate({ id: withdrawal.id, date })
@@ -771,6 +788,7 @@ export default function BalancePage() {
                         <WithdrawalDateField
                           key={`${withdrawal.id}-${withdrawal.created_at}`}
                           createdAt={withdrawal.created_at}
+                          editable={canWrite}
                           pending={updateWithdrawalDateMutation.isPending}
                           onSave={(date) =>
                             updateWithdrawalDateMutation.mutate({ id: withdrawal.id, date })
@@ -856,6 +874,7 @@ export default function BalancePage() {
                             key={`${adjustment.id}-${adjustment.created_at}`}
                             createdAt={adjustment.created_at}
                             label="Fecha del ajuste"
+                            editable={canWrite}
                             pending={updateAdjustmentDateMutation.isPending}
                             onSave={(date) =>
                               updateAdjustmentDateMutation.mutate({ id: adjustment.id, date })
@@ -889,6 +908,7 @@ export default function BalancePage() {
                             key={`${adjustment.id}-${adjustment.created_at}`}
                             createdAt={adjustment.created_at}
                             label="Fecha del ajuste"
+                            editable={canWrite}
                             pending={updateAdjustmentDateMutation.isPending}
                             onSave={(date) =>
                               updateAdjustmentDateMutation.mutate({ id: adjustment.id, date })

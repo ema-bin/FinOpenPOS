@@ -36,6 +36,9 @@ class PlayersService {
     const url = `${this.baseUrl}?${params.toString()}`;
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch players");
     }
     return response.json();
@@ -44,6 +47,9 @@ class PlayersService {
   async getById(id: number): Promise<PlayerDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch player");
     }
     return response.json();
@@ -67,6 +73,9 @@ class PlayersService {
       `${this.baseUrl}/duplicate-suggestions?${params.toString()}`
     );
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch duplicate suggestions");
     }
     return response.json();
@@ -81,6 +90,9 @@ class PlayersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error creating player");
     }
     return response.json();
@@ -95,6 +107,9 @@ class PlayersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating player");
     }
     return response.json();
@@ -105,6 +120,9 @@ class PlayersService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error deleting player");
     }
   }

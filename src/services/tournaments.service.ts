@@ -57,6 +57,9 @@ class TournamentsService {
       queryString ? `${this.baseUrl}?${queryString}` : this.baseUrl
     );
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournaments");
     }
     return response.json();
@@ -68,6 +71,9 @@ class TournamentsService {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error finishing tournament";
       throw new Error(errorMessage);
@@ -77,6 +83,9 @@ class TournamentsService {
   async getById(id: number): Promise<TournamentDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament");
     }
     return response.json();
@@ -91,6 +100,9 @@ class TournamentsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error creating tournament");
     }
     return response.json();
@@ -107,6 +119,9 @@ class TournamentsService {
       body: formData,
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error || "Error al subir el flier");
     }
@@ -127,6 +142,9 @@ class TournamentsService {
       }
     );
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error || "Error al actualizar estado de notificación");
     }
@@ -137,6 +155,9 @@ class TournamentsService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error || "Error al quitar el flier");
     }
@@ -172,6 +193,9 @@ class TournamentsService {
       body: JSON.stringify(updates),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error al actualizar el torneo");
     }
     return response.json();
@@ -180,6 +204,9 @@ class TournamentsService {
   async getGroups(tournamentId: number): Promise<GroupsApiResponse> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/groups`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament groups");
     }
     return response.json();
@@ -204,6 +231,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo cargar la vista previa de grupos");
     }
     return {
@@ -214,6 +244,9 @@ class TournamentsService {
   async getGroupSlots(tournamentId: number): Promise<Array<{ id: number; slot_date: string; start_time: string; end_time: string }>> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/group-slots`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament group slots");
     }
     return response.json();
@@ -230,6 +263,9 @@ class TournamentsService {
       body: JSON.stringify({ group_slots: groupSlots, match_duration: matchDuration }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Error al generar horarios");
     }
@@ -252,6 +288,9 @@ class TournamentsService {
       body: JSON.stringify({ group_slots: groupSlots, match_duration: matchDuration }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Error al agregar horarios");
     }
@@ -263,6 +302,9 @@ class TournamentsService {
       method: "POST",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Error al inicializar disponibilidad");
     }
@@ -276,6 +318,9 @@ class TournamentsService {
       method: "POST",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Error al inicializar disponibilidad");
     }
@@ -285,6 +330,9 @@ class TournamentsService {
   async getTeams(tournamentId: number): Promise<TeamDTO[]> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/teams`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament teams");
     }
     return response.json();
@@ -299,6 +347,9 @@ class TournamentsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error al crear el equipo";
       throw new Error(errorMessage);
@@ -330,6 +381,9 @@ class TournamentsService {
       body: JSON.stringify(updates),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error al actualizar el equipo";
       throw new Error(errorMessage);
@@ -349,6 +403,9 @@ class TournamentsService {
       body: JSON.stringify({ team_orders: teamOrders }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error al actualizar el orden de los equipos";
       throw new Error(errorMessage);
@@ -365,6 +422,9 @@ class TournamentsService {
       body: JSON.stringify({ team_id: teamId }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error deleting tournament team");
     }
   }
@@ -395,6 +455,9 @@ class TournamentsService {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error al actualizar restricciones horarias";
       throw new Error(errorMessage);
@@ -404,6 +467,9 @@ class TournamentsService {
   async getStandings(tournamentId: number): Promise<ApiResponseStandings> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/standings`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament standings");
     }
     return response.json();
@@ -412,6 +478,9 @@ class TournamentsService {
   async getPlayoffs(tournamentId: number): Promise<PlayoffRow[]> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/playoffs`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch tournament playoffs");
     }
     const data = await response.json();
@@ -432,6 +501,9 @@ class TournamentsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || "Error al regenerar horarios";
       throw new Error(errorMessage);
@@ -448,6 +520,9 @@ class TournamentsService {
       body: JSON.stringify(scheduleConfig || {}),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error || errorData.message || "Error closing registration";
       throw new Error(errorMessage);
@@ -457,6 +532,9 @@ class TournamentsService {
   async getRegistrationPayments(tournamentId: number): Promise<TournamentPaymentsApiResponse> {
     const response = await fetch(`${this.baseUrl}/${tournamentId}/payments`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch registration payments");
     }
     return response.json();
@@ -479,6 +557,9 @@ class TournamentsService {
       body: JSON.stringify({ tournament_team_id: teamId, player_id: playerId, ...payment }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to create registration payment");
     }
     return response.json();
@@ -500,6 +581,9 @@ class TournamentsService {
       body: JSON.stringify({ payment_id: paymentId, ...updates }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to update registration payment");
     }
     return response.json();
@@ -523,6 +607,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo planificar los playoffs");
     }
     return data;
@@ -540,6 +627,9 @@ class TournamentsService {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo planificar los playoffs");
     }
     return data;
@@ -562,6 +652,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo cargar la vista previa");
     }
     return {
@@ -592,6 +685,9 @@ class TournamentsService {
     const response = await fetch(`${this.baseUrl}/playoffs-ready/summary`);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo cargar el resumen de playoffs");
     }
     return data;
@@ -628,6 +724,9 @@ class TournamentsService {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "Error al generar playoffs en conjunto");
     }
     return data;
@@ -640,6 +739,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo marcar listo para playoffs");
     }
   }
@@ -651,6 +753,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "No se pudo reabrir la fase de grupos");
     }
   }
@@ -666,6 +771,9 @@ class TournamentsService {
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error(data.error || "Error al optimizar zonas");
     }
     return {
@@ -698,6 +806,9 @@ class TournamentMatchesService {
       }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || errorData.message || "Error scheduling match");
     }
@@ -715,6 +826,9 @@ class TournamentMatchesService {
       }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || errorData.message || "Error swapping groups");
     }
@@ -734,6 +848,9 @@ class TournamentMatchesService {
       }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || errorData.message || "Error swapping teams");
     }

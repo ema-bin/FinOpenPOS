@@ -34,6 +34,9 @@ class AdminService {
   async getTotalRevenue(): Promise<number> {
     const response = await fetch("/api/admin/revenue/total");
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       return 0;
     }
     const data = await response.json();
@@ -43,6 +46,9 @@ class AdminService {
   async getDashboardSales(): Promise<DashboardSalesData> {
     const response = await fetch("/api/admin/dashboard/sales");
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error fetching dashboard sales data");
     }
     return response.json();
@@ -51,6 +57,9 @@ class AdminService {
   async getDashboardCourts(): Promise<DashboardCourtsData> {
     const response = await fetch("/api/admin/dashboard/courts");
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error fetching dashboard courts data");
     }
     return response.json();
@@ -59,6 +68,9 @@ class AdminService {
   async getDashboardTournaments(): Promise<DashboardTournamentsData> {
     const response = await fetch("/api/admin/dashboard/tournaments");
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error fetching dashboard tournaments data");
     }
     return response.json();

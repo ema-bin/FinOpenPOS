@@ -15,6 +15,7 @@ import {
   type Permission,
   type PermissionGrant,
 } from "@/lib/auth/permissions";
+import { usePermissions } from "@/components/permissions-provider";
 
 type Role = {
   id: number;
@@ -49,6 +50,8 @@ function choiceOf(grants: readonly PermissionGrant[], permission: Permission): G
 
 export default function RolesPage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("users.manage");
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["roles-access"],
     queryFn: fetchRoles,
@@ -164,9 +167,11 @@ export default function RolesPage() {
               <span className="text-xs text-muted-foreground">{role.user_count}</span>
             </Button>
           ))}
-          <Button type="button" variant={isNew ? "secondary" : "outline"} onClick={startNew}>
-            Nuevo rol
-          </Button>
+          {canWrite ? (
+            <Button type="button" variant={isNew ? "secondary" : "outline"} onClick={startNew}>
+              Nuevo rol
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -195,6 +200,7 @@ export default function RolesPage() {
                   id="role-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  disabled={!canWrite}
                   maxLength={60}
                   required
                 />
@@ -221,6 +227,7 @@ export default function RolesPage() {
                               id={`perm-${permission}`}
                               className="h-8 rounded-md border bg-background px-2 text-sm"
                               value={choice}
+                              disabled={!canWrite}
                               onChange={(e) => setChoice(permission, e.target.value as GrantChoice)}
                             >
                               <option value="none">Sin acceso</option>
@@ -235,6 +242,7 @@ export default function RolesPage() {
                 </div>
               )}
 
+              {canWrite ? (
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={!dirty || save.isPending || !name.trim()}>
                   {save.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -263,6 +271,7 @@ export default function RolesPage() {
                   </Button>
                 ) : null}
               </div>
+              ) : null}
             </form>
           )}
         </CardContent>

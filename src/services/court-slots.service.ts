@@ -24,6 +24,9 @@ class CourtSlotsService {
   async getByDate(date: string): Promise<CourtSlotDTO[]> {
     const response = await fetch(`${this.baseUrl}?date=${date}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch court slots");
     }
     return response.json();
@@ -32,6 +35,9 @@ class CourtSlotsService {
   async getById(id: number): Promise<CourtSlotDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch court slot");
     }
     return response.json();
@@ -46,6 +52,9 @@ class CourtSlotsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || "Error generando turnos");
     }
@@ -61,6 +70,9 @@ class CourtSlotsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error updating court slot");
     }
@@ -72,6 +84,9 @@ class CourtSlotsService {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const response = await fetch(`${this.baseUrl}?date=${dateStr}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       return 0;
     }
     const slots: CourtSlotDTO[] = await response.json();
@@ -82,6 +97,9 @@ class CourtSlotsService {
   async getPricing(): Promise<CourtPricingDB[]> {
     const response = await fetch(`${this.baseUrl}/pricing`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch pricing");
     }
     return response.json();
@@ -99,6 +117,9 @@ class CourtSlotsService {
       body: JSON.stringify({ rules }),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error updating pricing");
     }

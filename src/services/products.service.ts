@@ -32,6 +32,9 @@ class ProductsService {
       const url = `${this.baseUrl}?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("No tenés permiso para esto.");
+        }
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData?.error || "Error al cargar los productos";
         throw new Error(errorMessage);
@@ -49,6 +52,9 @@ class ProductsService {
     try {
       const response = await fetch(`${this.baseUrl}/${id}`);
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("No tenés permiso para esto.");
+        }
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData?.error || "Error al cargar el producto";
         throw new Error(errorMessage);
@@ -72,6 +78,9 @@ class ProductsService {
         body: JSON.stringify(input),
       });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("No tenés permiso para esto.");
+        }
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData?.error || "Error al crear el producto";
         throw new Error(errorMessage);
@@ -95,6 +104,9 @@ class ProductsService {
         body: JSON.stringify(input),
       });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("No tenés permiso para esto.");
+        }
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData?.error || "Error al actualizar el producto";
         throw new Error(errorMessage);
@@ -114,6 +126,9 @@ class ProductsService {
         method: "DELETE",
       });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("No tenés permiso para esto.");
+        }
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData?.error || "Error al eliminar el producto";
         throw new Error(errorMessage);
@@ -149,6 +164,9 @@ class ProductCategoriesService {
 
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       return [];
     }
     return response.json();
@@ -157,6 +175,9 @@ class ProductCategoriesService {
   async getById(id: number): Promise<ProductCategoryDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch product category");
     }
     return response.json();
@@ -176,6 +197,9 @@ class ProductCategoriesService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error creating product category");
     }
     return response.json();
@@ -195,6 +219,9 @@ class ProductCategoriesService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating product category");
     }
     return response.json();
@@ -205,6 +232,9 @@ class ProductCategoriesService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error deleting product category");
     }
   }

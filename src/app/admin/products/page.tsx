@@ -12,6 +12,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/useDebounce";
 import { toast } from "sonner";
+import { usePermissions } from "@/components/permissions-provider";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -79,6 +80,8 @@ type Product = ProductDTO;
 
 export default function Products() {
   const router = useRouter();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("products.manage");
   const [activeTab, setActiveTab] = useState<"products" | "categories" | "share" | "stock">("products");
   
   // Filtros para control de stock
@@ -580,10 +583,12 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <Button size="sm" className="max-md:w-full" onClick={() => setIsAddProductDialogOpen(true)}>
-                  <PlusIcon className="w-4 h-4 mr-2" />
-                  Crear Producto
-                </Button>
+                {canWrite ? (
+                  <Button size="sm" className="max-md:w-full" onClick={() => setIsAddProductDialogOpen(true)}>
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Crear Producto
+                  </Button>
+                ) : null}
               </div>
             </CardHeader>
 
@@ -604,6 +609,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                       </div>
                       <div className="shrink-0 text-right">
                         <div className="font-semibold">${product.price.toFixed(2)}</div>
+                        {canWrite ? (
                         <div className="mt-1 flex justify-end">
                           <Button
                             size="icon"
@@ -633,6 +639,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                             <span className="sr-only">Delete</span>
                           </Button>
                         </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -689,6 +696,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                           </TableCell>
                           <TableCell>${product.price.toFixed(2)}</TableCell>
                           <TableCell>
+                          {canWrite ? (
                           <div className="flex items-center gap-2">
                             <Button
                               size="icon"
@@ -720,6 +728,7 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                               <span className="sr-only">Delete</span>
                             </Button>
                           </div>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                       );
@@ -764,14 +773,16 @@ async function fetchCategories(): Promise<ProductCategoryDTO[]> {
                 <CardTitle className="text-xl font-semibold">
                   Control de stock
                 </CardTitle>
-                <Button 
-                  size="sm"
-                  className="max-md:w-full"
-                  onClick={() => setIsAdjustmentDialogOpen(true)}
-                >
-                  <PlusIcon className="w-4 h-4 mr-2" />
-                  Ajustar stock
-                </Button>
+                {canWrite ? (
+                  <Button
+                    size="sm"
+                    className="max-md:w-full"
+                    onClick={() => setIsAdjustmentDialogOpen(true)}
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Ajustar stock
+                  </Button>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-end gap-3 max-md:w-full max-md:flex-col max-md:items-stretch">

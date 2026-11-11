@@ -10,6 +10,7 @@ interface CourtSlotFiltersProps {
   onGenerate: () => void;
   isGenerating: boolean;
   isRefreshing: boolean;
+  canGenerate?: boolean;
 }
 
 export function CourtSlotFilters({
@@ -19,6 +20,7 @@ export function CourtSlotFilters({
   onGenerate,
   isGenerating,
   isRefreshing,
+  canGenerate = true,
 }: CourtSlotFiltersProps) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 max-md:flex-col max-md:items-stretch">
@@ -47,12 +49,12 @@ export function CourtSlotFilters({
         </Button>
       </div>
 
-      <Button className="max-md:w-full" onClick={onGenerate} disabled={isGenerating}>
+      {canGenerate ? <Button className="max-md:w-full" onClick={onGenerate} disabled={isGenerating}>
         {isGenerating && (
           <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
         )}
         Generar turnos del día
-      </Button>
+      </Button> : null}
     </div>
   );
 }

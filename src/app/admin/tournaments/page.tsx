@@ -37,8 +37,11 @@ import type { Category } from "@/models/db/category";
 import { tournamentsService } from "@/services";
 import { RankingPuntuableSection } from "@/components/ranking-puntuable-section";
 import { RegistrationPricingSettingsSection } from "./RegistrationPricingSettingsSection";
+import { usePermissions } from "@/components/permissions-provider";
 
 export default function TournamentsPage() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("tournaments.manage");
   const [tournaments, setTournaments] = useState<TournamentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -263,10 +266,12 @@ export default function TournamentsPage() {
           >
             Playoffs global
           </Button>
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <PlusIcon className="w-4 h-4 mr-1" />
-            Nuevo torneo
-          </Button>
+          {canWrite ? (
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <PlusIcon className="w-4 h-4 mr-1" />
+              Nuevo torneo
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="p-0 pt-4 space-y-4">
@@ -323,7 +328,7 @@ export default function TournamentsPage() {
                     {t.format === "master" ? " • Master" : ""}
                   </div>
                 </button>
-                {t.status === "draft" && (
+                {canWrite && t.status === "draft" && (
                   <Button
                     type="button"
                     variant="ghost"

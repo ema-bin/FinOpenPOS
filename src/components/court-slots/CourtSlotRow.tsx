@@ -34,6 +34,7 @@ interface CourtSlotRowProps {
   onCancel: () => void;
   hasChanges: boolean;
   isSaving: boolean;
+  readOnly?: boolean;
 }
 
 function formatSlotDate(slotDate: string) {
@@ -82,6 +83,7 @@ export function CourtSlotCard({
   onCancel,
   hasChanges,
   isSaving,
+  readOnly = false,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
   const tournamentBlock = slot.tournament_block;
@@ -104,7 +106,7 @@ export function CourtSlotCard({
         <label className="flex shrink-0 items-center gap-2 text-sm">
           <Checkbox
             checked={slot.was_played}
-            disabled={occupied}
+            disabled={readOnly || occupied}
             onCheckedChange={(checked) =>
               onUpdate(slot.id, { was_played: Boolean(checked) })
             }
@@ -131,14 +133,14 @@ export function CourtSlotCard({
                 value={slot.was_played ? methodId : null}
                 onChange={(value) => onUpdate(slot.id, { [field]: value })}
                 paymentMethods={paymentMethods}
-                disabled={!slot.was_played}
+                disabled={readOnly || !slot.was_played}
               />
             </div>
           ))}
         </div>
       )}
 
-      {hasChanges && (
+      {hasChanges && !readOnly && (
         <div className="mt-3 flex gap-2">
           <Button size="sm" variant="default" onClick={onSave} disabled={isSaving} className="flex-1">
             {isSaving ? (
@@ -167,6 +169,7 @@ export function CourtSlotRow({
   onCancel,
   hasChanges,
   isSaving,
+  readOnly = false,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
   const tournamentBlock = slot.tournament_block;
@@ -179,7 +182,7 @@ export function CourtSlotRow({
       <TableCell className="text-center">
         <Checkbox
           checked={slot.was_played}
-          disabled={occupied}
+          disabled={readOnly || occupied}
           onCheckedChange={(checked) =>
             onUpdate(slot.id, {
               was_played: Boolean(checked),
@@ -216,7 +219,7 @@ export function CourtSlotRow({
             })
           }
           paymentMethods={paymentMethods}
-          disabled={!slot.was_played}
+          disabled={readOnly || !slot.was_played}
         />
       </TableCell>
 
@@ -229,7 +232,7 @@ export function CourtSlotRow({
             })
           }
           paymentMethods={paymentMethods}
-          disabled={!slot.was_played}
+          disabled={readOnly || !slot.was_played}
         />
       </TableCell>
 
@@ -242,7 +245,7 @@ export function CourtSlotRow({
             })
           }
           paymentMethods={paymentMethods}
-          disabled={!slot.was_played}
+          disabled={readOnly || !slot.was_played}
         />
       </TableCell>
 
@@ -255,14 +258,14 @@ export function CourtSlotRow({
             })
           }
           paymentMethods={paymentMethods}
-          disabled={!slot.was_played}
+          disabled={readOnly || !slot.was_played}
         />
       </TableCell>
       </>
       )}
 
       <TableCell>
-        {hasChanges && (
+        {hasChanges && !readOnly && (
           <div className="flex gap-1">
             <Button
               size="sm"

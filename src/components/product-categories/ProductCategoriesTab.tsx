@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   Card,
   CardHeader,
@@ -49,6 +50,8 @@ import { toast } from "sonner";
 type ActiveFilter = "all" | "active" | "inactive";
 
 export function ProductCategoriesTab() {
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("products.manage");
   const [categories, setCategories] = useState<ProductCategoryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -332,10 +335,12 @@ export function ProductCategoriesTab() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Nueva categoría
-            </Button>
+            {canWrite ? (
+              <Button size="sm" className="max-md:w-full" onClick={openCreateDialog}>
+                <PlusIcon className="w-4 h-4 mr-2" />
+                Nueva categoría
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -358,6 +363,7 @@ export function ProductCategoriesTab() {
                       Venta {cat.is_sellable ? "sí" : "no"} · Cantina {cat.is_cantina_revenue ? "sí" : "no"} · {cat.is_active ? "Activa" : "Inactiva"}
                     </div>
                   </div>
+                  {canWrite ? (
                   <div className="flex shrink-0">
                     <Button size="icon" variant="ghost" onClick={() => openEditDialog(cat)}>
                       <FilePenIcon className="h-4 w-4" />
@@ -376,6 +382,7 @@ export function ProductCategoriesTab() {
                       <span className="sr-only">Eliminar</span>
                     </Button>
                   </div>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -440,6 +447,7 @@ export function ProductCategoriesTab() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {canWrite ? (
                       <div className="flex items-center gap-2">
                         <Button
                           size="icon"
@@ -462,6 +470,7 @@ export function ProductCategoriesTab() {
                           <span className="sr-only">Eliminar</span>
                         </Button>
                       </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}

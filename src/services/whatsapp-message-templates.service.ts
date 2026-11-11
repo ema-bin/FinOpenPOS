@@ -5,6 +5,9 @@ import type {
 
 async function parseOrThrow<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("No tenés permiso para esto.");
+    }
     const data = await response.json().catch(() => null);
     throw new Error(data?.error ?? fallback);
   }
@@ -47,6 +50,9 @@ class WhatsAppMessageTemplatesService {
   async delete(id: number): Promise<void> {
     const response = await fetch(`${this.baseUrl}/${id}`, { method: "DELETE" });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const data = await response.json().catch(() => null);
       throw new Error(data?.error ?? "Error al eliminar la variante");
     }

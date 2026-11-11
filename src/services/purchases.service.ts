@@ -21,6 +21,9 @@ class PurchasesService {
   async getAll(): Promise<PurchaseDTO[]> {
     const response = await fetch(this.baseUrl);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch purchases");
     }
     return response.json();
@@ -29,6 +32,9 @@ class PurchasesService {
   async getById(id: number): Promise<PurchaseDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch purchase");
     }
     return response.json();
@@ -43,6 +49,9 @@ class PurchasesService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || "Error creating purchase");
     }
@@ -61,6 +70,9 @@ class PurchasesService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error al registrar compra rápida");
     }
@@ -76,6 +88,9 @@ class PurchasesService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || "Error updating purchase");
     }
@@ -93,6 +108,9 @@ class SuppliersService {
   async getAll(): Promise<SupplierDTO[]> {
     const response = await fetch(this.baseUrl);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch suppliers");
     }
     return response.json();
@@ -101,6 +119,9 @@ class SuppliersService {
   async getById(id: number): Promise<SupplierDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch supplier");
     }
     return response.json();
@@ -115,6 +136,9 @@ class SuppliersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error creating supplier");
     }
     return response.json();
@@ -129,6 +153,9 @@ class SuppliersService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating supplier");
     }
     return response.json();
@@ -139,6 +166,9 @@ class SuppliersService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error deleting supplier");
     }
   }
@@ -155,6 +185,9 @@ class PaymentMethodsService {
     
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch payment methods");
     }
     return response.json();
@@ -163,6 +196,9 @@ class PaymentMethodsService {
   async getById(id: number): Promise<PaymentMethodDTO> {
     const response = await fetch(`${this.baseUrl}/${id}`);
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Failed to fetch payment method");
     }
     return response.json();
@@ -177,6 +213,9 @@ class PaymentMethodsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error creating payment method");
     }
     return response.json();
@@ -191,6 +230,9 @@ class PaymentMethodsService {
       body: JSON.stringify(input),
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error updating payment method");
     }
     return response.json();
@@ -201,6 +243,9 @@ class PaymentMethodsService {
       method: "DELETE",
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
       throw new Error("Error deleting payment method");
     }
   }

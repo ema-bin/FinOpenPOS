@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { usePermissions } from "@/components/permissions-provider";
 import {
   FilePenIcon,
   TrashIcon,
@@ -61,6 +62,8 @@ type AdvertisementFilterOption = "active" | "inactive" | "all";
 
 export default function AdvertisementsPage() {
   const queryClient = useQueryClient();
+  const { can, loading: permsLoading } = usePermissions();
+  const canWrite = !permsLoading && can("advertisements.manage");
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<AdvertisementFilterOption>("active");
 
@@ -258,7 +261,9 @@ export default function AdvertisementsPage() {
                 <SelectItem value="all">Todas</SelectItem>
               </SelectContent>
             </Select>
-            <Button className="max-md:w-full" onClick={() => openDialog()}>Nueva publicidad</Button>
+            {canWrite ? (
+              <Button className="max-md:w-full" onClick={() => openDialog()}>Nueva publicidad</Button>
+            ) : null}
           </div>
         </CardHeader>
       <CardContent className="p-0">
@@ -289,6 +294,7 @@ export default function AdvertisementsPage() {
                       Orden {ad.ordering} · {ad.is_active ? "Activa" : "Inactiva"}
                     </div>
                   </div>
+                  {canWrite ? (
                   <div className="flex shrink-0">
                     <Button size="icon" variant="ghost" onClick={() => openDialog(ad)} aria-label="Editar publicidad">
                       <FilePenIcon className="h-4 w-4" />
@@ -314,6 +320,7 @@ export default function AdvertisementsPage() {
                       </Button>
                     )}
                   </div>
+                  ) : null}
                 </div>
               ))
             )}
@@ -362,6 +369,7 @@ export default function AdvertisementsPage() {
                           {ad.is_active ? "Sí" : "No"}
                         </TableCell>
                         <TableCell>
+                          {canWrite ? (
                           <div className="flex items-center gap-1">
                             <Button
                               size="icon"
@@ -392,6 +400,7 @@ export default function AdvertisementsPage() {
                               </Button>
                             )}
                           </div>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     ))}

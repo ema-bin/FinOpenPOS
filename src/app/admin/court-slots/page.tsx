@@ -28,6 +28,7 @@ import { usePermissions } from "@/components/permissions-provider";
 export default function CourtSlotsPage() {
   const { can, loading: permsLoading } = usePermissions();
   const canEditPricing = !permsLoading && can("courts.pricing");
+  const canEditSlots = !permsLoading && can("courts.operate");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -307,6 +308,7 @@ export default function CourtSlotsPage() {
               onGenerate={handleGenerateDay}
               isGenerating={generateMutation.isPending}
               isRefreshing={fetchingSlots}
+              canGenerate={canEditSlots}
             />
 
             <DayNotesEditor
@@ -318,6 +320,7 @@ export default function CourtSlotsPage() {
               onNotesChange={setDayNotes}
               isSaving={saveDayNotesMutation.isPending}
               isLoading={loadingDayNotes}
+              readOnly={!canEditSlots}
             />
 
             {canEditPricing && (
@@ -346,6 +349,7 @@ export default function CourtSlotsPage() {
               pendingChanges={pendingChanges}
               isSaving={updateSlotMutation.isPending}
               isLoading={loadingSlots && slots.length === 0}
+              readOnly={!canEditSlots}
             />
           </div>
 
