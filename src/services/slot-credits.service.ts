@@ -1,6 +1,7 @@
 import type {
   SlotCreditMovementRow,
   SlotCreditPlayerRow,
+  SlotPackDefinition,
 } from "@/repositories/slot-credits.repository";
 
 async function readError(response: Response, fallback: string): Promise<never> {
@@ -32,12 +33,36 @@ class SlotCreditsService {
     return response.json();
   }
 
-  async grant(input: {
-    player_id: number;
+  async listDefinitions(): Promise<SlotPackDefinition[]> {
+    const response = await fetch("/api/slot-pack-definitions");
+    if (!response.ok) await readError(response, "No se pudieron cargar los packs");
+    return response.json();
+  }
+
+  async saveDefinition(input: {
+    id?: number | null;
     name: string;
     credits: number;
+    price: number;
+    is_active: boolean;
+  }): Promise<void> {
+    const isEdit = input.id != null;
+    const response = await fetch(
+      isEdit ? `/api/slot-pack-definitions/${input.id}` : "/api/slot-pack-definitions",
+      {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }
+    );
+    if (!response.ok) await readError(response, "No se pudo guardar el pack");
+  }
+
+  async grant(input: {
+    player_id: number;
+    definition_id: number;
     amount_paid: number;
-    payment_method_id: number | null;
+    payment_method_id: number;
     sold_at: string;
     notes: string | null;
   }): Promise<void> {

@@ -21,6 +21,7 @@ export function throwSlotRpcError(error: { message?: string } | null): void {
   }
   if (
     raw.includes("save_court_slot") ||
+    raw.includes("save_slot_pack_definition") ||
     raw.includes("grant_slot_pack") ||
     raw.includes("adjust_slot_credits") ||
     raw.includes("delete_court_slot") ||

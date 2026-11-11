@@ -219,6 +219,8 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),
   "/api/slot-packs": { GET: read("courts.operate"), POST: write("courts.operate") },
+  "/api/slot-pack-definitions": { GET: read("courts.operate"), POST: write("courts.operate") },
+  "/api/slot-pack-definitions/[id]": { PATCH: write("courts.operate") },
   "/api/slot-credits": { GET: read("courts.operate") },
   "/api/slot-credits/movements": { GET: read("courts.operate") },
   "/api/slot-credits/adjustments": { POST: write("courts.operate") },

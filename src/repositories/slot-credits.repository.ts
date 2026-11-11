@@ -39,6 +39,14 @@ export type SlotCreditMovementRow = {
   created_at: string;
 };
 
+export type SlotPackDefinition = {
+  id: number;
+  name: string;
+  credits: number;
+  price: number;
+  is_active: boolean;
+};
+
 type PlayerName = {
   id: number;
   first_name: string;
@@ -199,19 +207,51 @@ export class SlotCreditsRepository extends BaseRepository {
     });
   }
 
-  async grant(input: {
-    playerId: number;
+  async listDefinitions(): Promise<SlotPackDefinition[]> {
+    const { data, error } = await this.supabase
+      .from("slot_pack_definitions")
+      .select("id, name, credits, price, is_active")
+      .order("credits", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      credits: Number(row.credits),
+      price: Number(row.price),
+      is_active: Boolean(row.is_active),
+    }));
+  }
+
+  async saveDefinition(input: {
+    id: number | null;
     name: string;
     credits: number;
+    price: number;
+    isActive: boolean;
+  }): Promise<number> {
+    const { data, error } = await this.supabase.rpc("save_slot_pack_definition", {
+      p_id: input.id,
+      p_name: input.name,
+      p_credits: input.credits,
+      p_price: input.price,
+      p_is_active: input.isActive,
+    });
+    throwSlotRpcError(error);
+    return Number(data);
+  }
+
+  async grant(input: {
+    playerId: number;
+    definitionId: number;
     amountPaid: number;
-    paymentMethodId: number | null;
+    paymentMethodId: number;
     soldAt: string;
     notes: string | null;
   }): Promise<number> {
     const { data, error } = await this.supabase.rpc("grant_slot_pack", {
       p_player_id: input.playerId,
-      p_name: input.name,
-      p_credits: input.credits,
+      p_definition_id: input.definitionId,
       p_amount_paid: input.amountPaid,
       p_payment_method_id: input.paymentMethodId,
       p_sold_at: input.soldAt,

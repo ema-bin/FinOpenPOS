@@ -16,10 +16,24 @@ ALTER TABLE court_slots
   ADD COLUMN IF NOT EXISTS player3_id BIGINT REFERENCES players(id),
   ADD COLUMN IF NOT EXISTS player4_id BIGINT REFERENCES players(id);
 
+CREATE TABLE IF NOT EXISTS slot_pack_definitions (
+  id          BIGSERIAL PRIMARY KEY,
+  user_uid    UUID NOT NULL,
+  name        TEXT NOT NULL CHECK (length(btrim(name)) > 0),
+  credits     INTEGER NOT NULL CHECK (credits > 0),
+  price       NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (price >= 0),
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS slot_pack_definitions_name_idx
+  ON slot_pack_definitions (lower(btrim(name)));
+
 CREATE TABLE IF NOT EXISTS slot_packs (
   id                 BIGSERIAL PRIMARY KEY,
   user_uid           UUID NOT NULL,
   player_id          BIGINT NOT NULL REFERENCES players(id),
+  definition_id      BIGINT REFERENCES slot_pack_definitions(id),
   name               TEXT NOT NULL CHECK (length(btrim(name)) > 0),
   credits            INTEGER NOT NULL CHECK (credits > 0),
   amount_paid        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
@@ -30,6 +44,9 @@ CREATE TABLE IF NOT EXISTS slot_packs (
 );
 
 CREATE INDEX IF NOT EXISTS slot_packs_player_idx ON slot_packs(player_id, sold_at, id);
+
+ALTER TABLE slot_packs
+  ADD COLUMN IF NOT EXISTS definition_id BIGINT REFERENCES slot_pack_definitions(id);
 
 CREATE TABLE IF NOT EXISTS player_slot_balances (
   player_id   BIGINT PRIMARY KEY REFERENCES players(id),
@@ -445,10 +462,11 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS grant_slot_pack(bigint, text, integer, numeric, bigint, date, text);
+
 CREATE OR REPLACE FUNCTION grant_slot_pack(
   p_player_id bigint,
-  p_name text,
-  p_credits integer,
+  p_definition_id bigint,
   p_amount_paid numeric,
   p_payment_method_id bigint,
   p_sold_at date,
@@ -462,7 +480,92 @@ AS $$
 DECLARE
   v_pack_id bigint;
   v_actor uuid;
+  v_definition slot_pack_definitions%ROWTYPE;
+  v_amount numeric;
+BEGIN
+  v_actor := auth.uid();
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT *
+  INTO v_definition
+  FROM slot_pack_definitions
+  WHERE id = p_definition_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:Elegí un pack';
+  END IF;
+  IF NOT v_definition.is_active THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:Ese pack no está activo';
+  END IF;
+
+  v_amount := COALESCE(p_amount_paid, v_definition.price, 0);
+  IF v_amount < 0 THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:El importe del pack no puede ser negativo';
+  END IF;
+  IF p_payment_method_id IS NULL THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:Elegí cómo lo pagó';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM payment_methods WHERE id = p_payment_method_id) THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:El medio de pago no existe';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM payment_methods
+    WHERE id = p_payment_method_id AND consumes_slot_credit
+  ) THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:El pack se cobra con un medio que no usa créditos';
+  END IF;
+
+  PERFORM slot_credit_lock_balance(p_player_id);
+
+  INSERT INTO slot_packs (
+    user_uid, player_id, definition_id, name, credits, amount_paid, payment_method_id, sold_at, notes
+  ) VALUES (
+    v_actor,
+    p_player_id,
+    v_definition.id,
+    v_definition.name,
+    v_definition.credits,
+    v_amount,
+    p_payment_method_id,
+    COALESCE(p_sold_at, CURRENT_DATE),
+    NULLIF(btrim(COALESCE(p_notes, '')), '')
+  )
+  RETURNING id INTO v_pack_id;
+
+  INSERT INTO slot_credit_movements (
+    user_uid, player_id, pack_id, kind, delta, status, reason
+  ) VALUES (
+    v_actor, p_player_id, v_pack_id, 'grant', v_definition.credits, 'open', NULL
+  );
+
+  UPDATE player_slot_balances
+  SET balance = balance + v_definition.credits,
+      updated_at = now()
+  WHERE player_id = p_player_id;
+
+  RETURN v_pack_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION save_slot_pack_definition(
+  p_id bigint,
+  p_name text,
+  p_credits integer,
+  p_price numeric,
+  p_is_active boolean
+)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_actor uuid;
   v_name text;
+  v_id bigint;
 BEGIN
   v_actor := auth.uid();
   IF v_actor IS NULL THEN
@@ -474,52 +577,42 @@ BEGIN
     RAISE EXCEPTION 'SLOT_CREDIT:El pack necesita un nombre';
   END IF;
   IF p_credits IS NULL OR p_credits <= 0 THEN
-    RAISE EXCEPTION 'SLOT_CREDIT:Los créditos del pack tienen que ser mayores a cero';
+    RAISE EXCEPTION 'SLOT_CREDIT:Los turnos del pack tienen que ser mayores a cero';
   END IF;
-  IF COALESCE(p_amount_paid, 0) < 0 THEN
-    RAISE EXCEPTION 'SLOT_CREDIT:El importe del pack no puede ser negativo';
-  END IF;
-
-  PERFORM slot_credit_lock_balance(p_player_id);
-
-  IF p_payment_method_id IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM payment_methods WHERE id = p_payment_method_id) THEN
-      RAISE EXCEPTION 'SLOT_CREDIT:El medio de pago no existe';
-    END IF;
-    IF EXISTS (
-      SELECT 1 FROM payment_methods
-      WHERE id = p_payment_method_id AND consumes_slot_credit
-    ) THEN
-      RAISE EXCEPTION 'SLOT_CREDIT:El pack se cobra con un medio que no usa créditos';
-    END IF;
+  IF COALESCE(p_price, 0) < 0 THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:El precio del pack no puede ser negativo';
   END IF;
 
-  INSERT INTO slot_packs (
-    user_uid, player_id, name, credits, amount_paid, payment_method_id, sold_at, notes
-  ) VALUES (
-    v_actor,
-    p_player_id,
-    v_name,
-    p_credits,
-    COALESCE(p_amount_paid, 0),
-    p_payment_method_id,
-    COALESCE(p_sold_at, CURRENT_DATE),
-    NULLIF(btrim(COALESCE(p_notes, '')), '')
-  )
-  RETURNING id INTO v_pack_id;
+  IF EXISTS (
+    SELECT 1
+    FROM slot_pack_definitions
+    WHERE lower(btrim(name)) = lower(v_name)
+      AND (p_id IS NULL OR id <> p_id)
+  ) THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:Ya existe un pack con ese nombre';
+  END IF;
 
-  INSERT INTO slot_credit_movements (
-    user_uid, player_id, pack_id, kind, delta, status, reason
-  ) VALUES (
-    v_actor, p_player_id, v_pack_id, 'grant', p_credits, 'open', NULL
-  );
+  IF p_id IS NULL THEN
+    INSERT INTO slot_pack_definitions (user_uid, name, credits, price, is_active)
+    VALUES (v_actor, v_name, p_credits, COALESCE(p_price, 0), COALESCE(p_is_active, TRUE))
+    RETURNING id INTO v_id;
+    RETURN v_id;
+  END IF;
 
-  UPDATE player_slot_balances
-  SET balance = balance + p_credits,
-      updated_at = now()
-  WHERE player_id = p_player_id;
+  UPDATE slot_pack_definitions
+  SET
+    name = v_name,
+    credits = p_credits,
+    price = COALESCE(p_price, 0),
+    is_active = COALESCE(p_is_active, TRUE)
+  WHERE id = p_id
+  RETURNING id INTO v_id;
 
-  RETURN v_pack_id;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'SLOT_CREDIT:No se encontró el pack';
+  END IF;
+
+  RETURN v_id;
 END;
 $$;
 
@@ -576,14 +669,17 @@ REVOKE ALL ON FUNCTION slot_credit_consume(bigint, bigint, smallint, text) FROM 
 REVOKE ALL ON FUNCTION save_court_slot(bigint, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION delete_court_slot(bigint) FROM PUBLIC;
 REVOKE ALL ON FUNCTION grant_slot_pack(bigint, text, integer, numeric, bigint, date, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION grant_slot_pack(bigint, bigint, numeric, bigint, date, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION save_slot_pack_definition(bigint, text, integer, numeric, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION adjust_slot_credits(bigint, integer, text) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION save_court_slot(bigint, jsonb) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION delete_court_slot(bigint) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION grant_slot_pack(bigint, text, integer, numeric, bigint, date, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION save_slot_pack_definition(bigint, text, integer, numeric, boolean) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION grant_slot_pack(bigint, bigint, numeric, bigint, date, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION adjust_slot_credits(bigint, integer, text) TO authenticated, service_role;
 
-GRANT SELECT ON slot_packs, player_slot_balances, slot_credit_movements, slot_pack_balances
+GRANT SELECT ON slot_pack_definitions, slot_packs, player_slot_balances, slot_credit_movements, slot_pack_balances
   TO authenticated, service_role;
-GRANT ALL ON slot_packs, player_slot_balances, slot_credit_movements
+GRANT ALL ON slot_pack_definitions, slot_packs, player_slot_balances, slot_credit_movements
   TO service_role;
