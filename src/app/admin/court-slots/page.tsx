@@ -78,6 +78,15 @@ export default function CourtSlotsPage() {
     staleTime: 1000 * 60,
   });
 
+  const {
+    data: positiveBalances = [],
+    isSuccess: positiveLoaded,
+    isError: positiveFailed,
+  } = useQuery({
+    queryKey: ["slot-credits", "positive"],
+    queryFn: () => slotCreditsService.positiveBalances(),
+  });
+
   // Limpiar cambios pendientes cuando cambia la fecha
   useEffect(() => {
     setPendingChanges(new Map());
@@ -187,9 +196,19 @@ export default function CourtSlotsPage() {
 
   const balances = useMemo(() => {
     const map = new Map<number, number>();
+    for (const row of positiveBalances) map.set(row.player_id, row.balance);
     for (const row of balanceRows) map.set(row.player_id, row.balance);
     return map;
-  }, [balanceRows]);
+  }, [positiveBalances, balanceRows]);
+
+  const qrPlayers = useMemo(() => {
+    if (positiveFailed) return players;
+    if (!positiveLoaded) return [];
+    const ids = new Set(
+      positiveBalances.filter((row) => row.balance > 0).map((row) => row.player_id)
+    );
+    return players.filter((player) => ids.has(player.id));
+  }, [players, positiveBalances, positiveFailed, positiveLoaded]);
 
   const playerNames = useMemo(() => {
     const map = new Map<number, string>();
@@ -222,6 +241,10 @@ export default function CourtSlotsPage() {
     {
       error: isCourtSlotsError,
       message: "No se pudieron cargar los turnos de canchas.",
+    },
+    {
+      error: positiveFailed,
+      message: "No se pudieron cargar los jugadores con créditos.",
     },
   ]);
 
@@ -423,8 +446,9 @@ export default function CourtSlotsPage() {
             <CourtSlotTable
               slots={localSlots}
               paymentMethods={paymentMethods}
-              players={players}
+              players={qrPlayers}
               balances={balances}
+              playersReady={positiveLoaded || positiveFailed}
               onSlotUpdate={updateSlotField}
               onSaveSlot={handleSaveSlot}
               onCancelSlot={handleCancelSlot}

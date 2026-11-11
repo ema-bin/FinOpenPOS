@@ -150,6 +150,18 @@ export class SlotCreditsRepository extends BaseRepository {
       );
   }
 
+  async positiveBalances(): Promise<{ player_id: number; balance: number }[]> {
+    const { data, error } = await this.supabase
+      .from("player_slot_balances")
+      .select("player_id, balance")
+      .gt("balance", 0);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      player_id: Number(row.player_id),
+      balance: Number(row.balance),
+    }));
+  }
+
   async balances(playerIds: number[]): Promise<{ player_id: number; balance: number }[]> {
     if (playerIds.length === 0) return [];
     const { data, error } = await this.supabase

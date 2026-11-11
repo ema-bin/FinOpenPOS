@@ -19,6 +19,13 @@ class SlotCreditsService {
     return response.json();
   }
 
+  async positiveBalances(): Promise<{ player_id: number; balance: number }[]> {
+    const response = await fetch("/api/slot-credits?positive=1");
+    if (!response.ok) await readError(response, "No se pudieron cargar los créditos");
+    const data = await response.json();
+    return data.balances ?? [];
+  }
+
   async balances(playerIds: number[]): Promise<{ player_id: number; balance: number }[]> {
     if (playerIds.length === 0) return [];
     const response = await fetch(`/api/slot-credits?playerIds=${playerIds.join(",")}`);

@@ -7,6 +7,11 @@ export async function GET(request: Request) {
   try {
     const repos = await createRepositories();
     const url = new URL(request.url);
+    if (url.searchParams.get("positive") === "1") {
+      const balances = await repos.slotCredits.positiveBalances();
+      return NextResponse.json({ balances });
+    }
+
     const playerIds = (url.searchParams.get("playerIds") ?? "")
       .split(",")
       .map((value) => Number(value.trim()))

@@ -88,6 +88,7 @@ function SeatEditor({
   players,
   balance,
   disabled,
+  playersReady,
   showLabel,
   onChange,
 }: {
@@ -99,6 +100,7 @@ function SeatEditor({
   players: PlayerDTO[];
   balance: number | undefined;
   disabled: boolean;
+  playersReady: boolean;
   showLabel: boolean;
   onChange: (patch: { methodId: number | null; playerId: number | null }) => void;
 }) {
@@ -130,10 +132,10 @@ function SeatEditor({
             players={options}
             value={playerId}
             onValueChange={(value) => onChange({ methodId: methodId ?? null, playerId: value })}
-            placeholder="Buscar jugador..."
+            placeholder={playersReady ? "Buscar jugador..." : "Cargando créditos..."}
             searchPlaceholder="Nombre o apellido..."
-            emptyMessage="No se encontró el jugador."
-            disabled={disabled}
+            emptyMessage="Ningún jugador con créditos."
+            disabled={disabled || !playersReady}
           />
           {playerId != null ? (
             <p className={`text-[11px] ${balance === 0 ? "text-destructive" : "text-muted-foreground"}`}>
@@ -154,6 +156,7 @@ export function SeatEditors({
   players,
   balances,
   disabled,
+  playersReady,
   showLabel,
   asCells = false,
   onUpdate,
@@ -163,6 +166,7 @@ export function SeatEditors({
   players: PlayerDTO[];
   balances: ReadonlyMap<number, number>;
   disabled: boolean;
+  playersReady: boolean;
   showLabel: boolean;
   asCells?: boolean;
   onUpdate: (slotId: number, patch: SlotChanges) => void;
@@ -184,6 +188,7 @@ export function SeatEditors({
             players={players}
             balance={playerId == null ? undefined : balances.get(playerId)}
             disabled={disabled || !slot.was_played}
+            playersReady={playersReady}
             showLabel={showLabel}
             onChange={(patch) =>
               onUpdate(slot.id, {
