@@ -39,6 +39,7 @@ function grants(permissions: readonly Permission[], isSystem = false): Effective
 const ADMIN_CANCHAS = grants([
   "dashboard.view",
   "courts.operate",
+  "courts.reservations",
   "courts.pricing",
   "tournaments.manage",
 ]);
@@ -160,9 +161,10 @@ describe("páginas por rol", () => {
     }
   });
 
-  it("Admin Canchas: canchas y torneos", () => {
+  it("Admin Canchas: canchas, reservas y torneos", () => {
     expect(canPage(ADMIN_CANCHAS, "/admin")).toBe(true);
     expect(canPage(ADMIN_CANCHAS, "/admin/court-slots")).toBe(true);
+    expect(canPage(ADMIN_CANCHAS, "/admin/reservations")).toBe(true);
     expect(canPage(ADMIN_CANCHAS, "/admin/slot-packs")).toBe(false);
     expect(canPage(ADMIN_CANCHAS, "/admin/tournaments/10")).toBe(true);
     expect(canPage(ADMIN_CANCHAS, "/admin/orders")).toBe(false);
@@ -174,6 +176,7 @@ describe("páginas por rol", () => {
     expect(canPage(CAJERO, "/admin/orders/5")).toBe(true);
     expect(canPage(CAJERO, "/admin/quick-sale")).toBe(true);
     expect(canPage(CAJERO, "/admin/court-slots")).toBe(true);
+    expect(canPage(CAJERO, "/admin/reservations")).toBe(false);
     expect(canPage(CAJERO, "/admin/tournaments")).toBe(true);
     expect(canPage(CAJERO, "/admin/daily-sales-closure")).toBe(false);
     expect(canPage(CAJERO, "/admin/purchases")).toBe(false);
@@ -232,6 +235,14 @@ describe("APIs por rol", () => {
     expect(canApi(ADMIN_CANCHAS, "/api/court-slots/pricing/3", "PUT")).toBe(true);
     expect(canApi(CAJERO, "/api/court-slots/pricing/3", "PUT")).toBe(false);
     expect(canApi(CAJERO, "/api/court-slots/pricing", "GET")).toBe(true);
+  });
+
+  it("reservas exigen courts.reservations, no alcanza courts.operate", () => {
+    expect(canApi(ADMIN_CANCHAS, "/api/court-reservations", "GET")).toBe(true);
+    expect(canApi(ADMIN_CANCHAS, "/api/court-reservations", "POST")).toBe(true);
+    expect(canApi(CAJERO, "/api/court-reservations", "GET")).toBe(false);
+    expect(canApi(CAJERO, "/api/court-fixed-bookings", "GET")).toBe(false);
+    expect(canApi(CAJERO, "/api/court-slots/1", "PATCH")).toBe(true);
   });
 
   it("Cajero opera ventas, cancela y ve reportes; Admin Canchas no", () => {

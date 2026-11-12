@@ -33,6 +33,7 @@ export default function CourtSlotsPage() {
   const { can, canRead, loading: permsLoading } = usePermissions();
   const canEditPricing = !permsLoading && can("courts.pricing");
   const canEditSlots = !permsLoading && can("courts.operate");
+  const canSeeReservations = !permsLoading && canRead("courts.reservations");
   const canSeePacks =
     !permsLoading &&
     (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
@@ -86,7 +87,7 @@ export default function CourtSlotsPage() {
   const { data: reservationRows = [] } = useQuery({
     queryKey: ["court-reservations", selectedDate],
     queryFn: () => courtReservationsService.day(selectedDate),
-    enabled: reservationsOn,
+    enabled: reservationsOn && canSeeReservations,
   });
 
   const {
@@ -482,7 +483,7 @@ export default function CourtSlotsPage() {
               isSaving={updateSlotMutation.isPending}
               isLoading={loadingSlots && slots.length === 0}
               readOnly={!canEditSlots}
-              reservationLabels={reservationsOn ? reservationLabels : undefined}
+              reservationLabels={reservationsOn && canSeeReservations ? reservationLabels : undefined}
             />
           </div>
 

@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   "purchases.manage": { label: "Compras y proveedores", group: "Compras", mode: "both" },
   "products.manage": { label: "Productos, categorías y stock", group: "Compras", mode: "both" },
   "courts.operate": { label: "Turnos de canchas", group: "Canchas", mode: "both" },
+  "courts.reservations": { label: "Reservas y turnos fijos", group: "Canchas", mode: "both" },
   "courts.pricing": { label: "Precios y configuración de canchas", group: "Canchas", mode: "both" },
   "packs.define": { label: "Crear packs", group: "Packs", mode: "both" },
   "packs.sell": { label: "Vender packs", group: "Packs", mode: "both" },

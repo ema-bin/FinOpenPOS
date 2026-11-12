@@ -6,7 +6,7 @@ import { ReservationsCalendar } from "@/components/reservations/ReservationsCale
 
 export function ReservationsScreen() {
   const { can, loading } = usePermissions();
-  const canWrite = !loading && can("courts.operate");
+  const canWrite = !loading && can("courts.reservations");
 
   return (
     <div className="space-y-4">

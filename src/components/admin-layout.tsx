@@ -46,7 +46,7 @@ const NAV_ITEMS: {
   { href: "/admin/orders", label: "Ventas", icon: ShoppingCartIcon, permission: "sales.operate" },
   { href: "/admin/purchases", label: "Compras", icon: PackageIcon, permission: "purchases.manage" },
   { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
-  { href: "/admin/reservations", label: "Reservas", icon: CalendarRangeIcon, permission: "courts.operate" },
+  { href: "/admin/reservations", label: "Reservas", icon: CalendarRangeIcon, permission: "courts.reservations" },
   {
     href: "/admin/slot-packs",
     label: "Packs",
