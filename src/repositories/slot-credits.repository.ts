@@ -39,6 +39,19 @@ export type SlotCreditMovementRow = {
   created_at: string;
 };
 
+export type SlotPackSaleRow = {
+  id: number;
+  player_id: number;
+  first_name: string;
+  last_name: string;
+  name: string;
+  credits: number;
+  amount_paid: number;
+  payment_method_name: string | null;
+  sold_at: string;
+  notes: string | null;
+};
+
 export type SlotPackDefinition = {
   id: number;
   name: string;
@@ -148,6 +161,46 @@ export class SlotCreditsRepository extends BaseRepository {
       .sort((a, b) =>
         `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "es")
       );
+  }
+
+  async listSales(from: string | null, to: string | null): Promise<SlotPackSaleRow[]> {
+    let query = this.supabase
+      .from("slot_packs")
+      .select(
+        `
+        id,
+        player_id,
+        name,
+        credits,
+        amount_paid,
+        sold_at,
+        notes,
+        player:player_id ( first_name, last_name ),
+        payment_method:payment_method_id ( name )
+      `
+      )
+      .order("sold_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (from) query = query.gte("sold_at", from);
+    if (to) query = query.lte("sold_at", to);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => {
+      const player = one(row.player);
+      const method = one(row.payment_method);
+      return {
+        id: Number(row.id),
+        player_id: Number(row.player_id),
+        first_name: player?.first_name ?? "",
+        last_name: player?.last_name ?? "",
+        name: String(row.name),
+        credits: Number(row.credits),
+        amount_paid: Number(row.amount_paid),
+        payment_method_name: method?.name == null ? null : String(method.name),
+        sold_at: String(row.sold_at).slice(0, 10),
+        notes: row.notes == null ? null : String(row.notes),
+      };
+    });
   }
 
   async positiveBalances(): Promise<{ player_id: number; balance: number }[]> {

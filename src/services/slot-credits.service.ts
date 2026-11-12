@@ -2,6 +2,7 @@ import type {
   SlotCreditMovementRow,
   SlotCreditPlayerRow,
   SlotPackDefinition,
+  SlotPackSaleRow,
 } from "@/repositories/slot-credits.repository";
 
 async function readError(response: Response, fallback: string): Promise<never> {
@@ -13,6 +14,16 @@ async function readError(response: Response, fallback: string): Promise<never> {
 }
 
 class SlotCreditsService {
+  async listSales(from: string, to: string): Promise<SlotPackSaleRow[]> {
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const query = params.toString();
+    const response = await fetch(query ? `/api/slot-packs/sales?${query}` : "/api/slot-packs/sales");
+    if (!response.ok) await readError(response, "No se pudieron cargar las ventas");
+    return response.json();
+  }
+
   async listPlayers(): Promise<SlotCreditPlayerRow[]> {
     const response = await fetch("/api/slot-packs");
     if (!response.ok) await readError(response, "No se pudieron cargar los packs");
