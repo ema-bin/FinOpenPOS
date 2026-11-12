@@ -66,6 +66,7 @@ export function SellPackTab({ canWrite }: { canWrite: boolean }) {
       setPlayerId(null);
       setNotes("");
       queryClient.invalidateQueries({ queryKey: ["slot-packs"] });
+      queryClient.invalidateQueries({ queryKey: ["slot-pack-sales"] });
       queryClient.invalidateQueries({ queryKey: ["slot-credits"] });
     },
     onError: (error) => {

@@ -275,6 +275,9 @@ describe("APIs por rol", () => {
     expect(canApi(definir, "/api/slot-pack-definitions", "GET")).toBe(true);
     expect(canApi(definir, "/api/slot-pack-definitions", "POST")).toBe(false);
     expect(canApi(vender, "/api/slot-packs", "POST")).toBe(true);
+    expect(canApi(vender, "/api/slot-packs/sales", "GET")).toBe(true);
+    expect(canApi(definir, "/api/slot-packs/sales", "GET")).toBe(false);
+    expect(canApi(creditos, "/api/slot-packs/sales", "GET")).toBe(false);
     expect(canApi(vender, "/api/slot-pack-definitions", "GET")).toBe(true);
     expect(canApi(vender, "/api/slot-pack-definitions/4", "PATCH")).toBe(false);
     expect(canApi(vender, "/api/players", "GET")).toBe(true);

@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/components/permissions-provider";
 import { PackDefinitionsTab } from "@/components/slot-packs/PackDefinitionsTab";
 import { SellPackTab } from "@/components/slot-packs/SellPackTab";
+import { PackSalesTab } from "@/components/slot-packs/PackSalesTab";
 import { PlayerCreditsTab } from "@/components/slot-packs/PlayerCreditsTab";
 
 export default function SlotPacksPage() {
@@ -14,15 +15,15 @@ export default function SlotPacksPage() {
   const canWriteDefine = !permsLoading && can("packs.define");
   const canWriteSell = !permsLoading && can("packs.sell");
   const canWriteCredits = !permsLoading && can("packs.credits");
-  const defaultTab = showDefine ? "definitions" : showSell ? "sell" : "credits";
-  const visibleTabs = [showDefine, showSell, showCredits].filter(Boolean).length;
+  const defaultTab = showDefine ? "definitions" : showSell ? "sales" : "credits";
+  const visibleTabs = (showDefine ? 1 : 0) + (showSell ? 2 : 0) + (showCredits ? 1 : 0);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Packs de turnos</h1>
         <p className="text-sm text-muted-foreground">
-          Definí los packs, vendelos a un jugador y consultá los créditos que le quedan.
+          Definí los packs, vendelos, revisá las ventas y consultá los créditos que le quedan.
         </p>
       </div>
       {permsLoading ? null : (
@@ -31,9 +32,9 @@ export default function SlotPacksPage() {
           className={`max-md:grid max-md:h-auto max-md:w-full ${
             visibleTabs <= 1
               ? "max-md:grid-cols-1"
-              : visibleTabs === 2
-                ? "max-md:grid-cols-2"
-                : "max-md:grid-cols-3"
+              : visibleTabs === 3
+                ? "max-md:grid-cols-3"
+                : "max-md:grid-cols-2"
           }`}
         >
           {showDefine ? (
@@ -46,6 +47,11 @@ export default function SlotPacksPage() {
               Vender
             </TabsTrigger>
           ) : null}
+          {showSell ? (
+            <TabsTrigger className="max-md:px-2" value="sales">
+              Ventas
+            </TabsTrigger>
+          ) : null}
           {showCredits ? (
             <TabsTrigger className="max-md:px-2" value="credits">
               Créditos
@@ -55,6 +61,11 @@ export default function SlotPacksPage() {
         {showDefine ? (
           <TabsContent value="definitions" className="mt-4">
             <PackDefinitionsTab canWrite={canWriteDefine} />
+          </TabsContent>
+        ) : null}
+        {showSell ? (
+          <TabsContent value="sales" className="mt-4">
+            <PackSalesTab />
           </TabsContent>
         ) : null}
         {showSell ? (
