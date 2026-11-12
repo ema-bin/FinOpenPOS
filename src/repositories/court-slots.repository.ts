@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { BaseRepository } from "./base-repository";
 import type { CourtSlotDB, CreateCourtSlotInput, CourtSlotWithCourt } from "@/models/db/court";
+import { throwSlotRpcError } from "@/lib/slot-credit-rpc";
 
 export class CourtSlotsRepository extends BaseRepository {
   /**
@@ -27,6 +28,10 @@ export class CourtSlotsRepository extends BaseRepository {
         player3_note,
         player4_payment_method_id,
         player4_note,
+        player1_id,
+        player2_id,
+        player3_id,
+        player4_id,
         created_at,
         court:court_id (
           id,
@@ -34,19 +39,43 @@ export class CourtSlotsRepository extends BaseRepository {
         ),
         player1_payment_method:player1_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player2_payment_method:player2_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player3_payment_method:player3_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player4_payment_method:player4_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
+        ),
+        player1:player1_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player2:player2_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player3:player3_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player4:player4_id (
+          id,
+          first_name,
+          last_name
         )
       `
       )
@@ -66,6 +95,10 @@ export class CourtSlotsRepository extends BaseRepository {
       player2_payment_method: Array.isArray(item.player2_payment_method) ? (item.player2_payment_method[0] || null) : item.player2_payment_method,
       player3_payment_method: Array.isArray(item.player3_payment_method) ? (item.player3_payment_method[0] || null) : item.player3_payment_method,
       player4_payment_method: Array.isArray(item.player4_payment_method) ? (item.player4_payment_method[0] || null) : item.player4_payment_method,
+      player1: Array.isArray(item.player1) ? (item.player1[0] || null) : item.player1,
+      player2: Array.isArray(item.player2) ? (item.player2[0] || null) : item.player2,
+      player3: Array.isArray(item.player3) ? (item.player3[0] || null) : item.player3,
+      player4: Array.isArray(item.player4) ? (item.player4[0] || null) : item.player4,
     })) as CourtSlotWithCourt[];
   }
 
@@ -93,6 +126,10 @@ export class CourtSlotsRepository extends BaseRepository {
         player3_note,
         player4_payment_method_id,
         player4_note,
+        player1_id,
+        player2_id,
+        player3_id,
+        player4_id,
         created_at,
         court:court_id (
           id,
@@ -100,19 +137,43 @@ export class CourtSlotsRepository extends BaseRepository {
         ),
         player1_payment_method:player1_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player2_payment_method:player2_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player3_payment_method:player3_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player4_payment_method:player4_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
+        ),
+        player1:player1_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player2:player2_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player3:player3_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player4:player4_id (
+          id,
+          first_name,
+          last_name
         )
       `
       )
@@ -134,6 +195,10 @@ export class CourtSlotsRepository extends BaseRepository {
       player2_payment_method: Array.isArray(data.player2_payment_method) ? (data.player2_payment_method[0] || null) : data.player2_payment_method,
       player3_payment_method: Array.isArray(data.player3_payment_method) ? (data.player3_payment_method[0] || null) : data.player3_payment_method,
       player4_payment_method: Array.isArray(data.player4_payment_method) ? (data.player4_payment_method[0] || null) : data.player4_payment_method,
+      player1: Array.isArray(data.player1) ? (data.player1[0] || null) : data.player1,
+      player2: Array.isArray(data.player2) ? (data.player2[0] || null) : data.player2,
+      player3: Array.isArray(data.player3) ? (data.player3[0] || null) : data.player3,
+      player4: Array.isArray(data.player4) ? (data.player4[0] || null) : data.player4,
     };
     return normalized as CourtSlotWithCourt;
   }
@@ -179,6 +244,10 @@ export class CourtSlotsRepository extends BaseRepository {
         player3_note,
         player4_payment_method_id,
         player4_note,
+        player1_id,
+        player2_id,
+        player3_id,
+        player4_id,
         created_at,
         court:court_id (
           id,
@@ -186,19 +255,43 @@ export class CourtSlotsRepository extends BaseRepository {
         ),
         player1_payment_method:player1_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player2_payment_method:player2_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player3_payment_method:player3_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player4_payment_method:player4_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
+        ),
+        player1:player1_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player2:player2_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player3:player3_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player4:player4_id (
+          id,
+          first_name,
+          last_name
         )
       `
       )
@@ -216,6 +309,10 @@ export class CourtSlotsRepository extends BaseRepository {
       player2_payment_method: Array.isArray(data.player2_payment_method) ? (data.player2_payment_method[0] || null) : data.player2_payment_method,
       player3_payment_method: Array.isArray(data.player3_payment_method) ? (data.player3_payment_method[0] || null) : data.player3_payment_method,
       player4_payment_method: Array.isArray(data.player4_payment_method) ? (data.player4_payment_method[0] || null) : data.player4_payment_method,
+      player1: Array.isArray(data.player1) ? (data.player1[0] || null) : data.player1,
+      player2: Array.isArray(data.player2) ? (data.player2[0] || null) : data.player2,
+      player3: Array.isArray(data.player3) ? (data.player3[0] || null) : data.player3,
+      player4: Array.isArray(data.player4) ? (data.player4[0] || null) : data.player4,
     };
     return normalized as CourtSlotWithCourt;
   }
@@ -263,6 +360,10 @@ export class CourtSlotsRepository extends BaseRepository {
         player3_note,
         player4_payment_method_id,
         player4_note,
+        player1_id,
+        player2_id,
+        player3_id,
+        player4_id,
         created_at,
         court:court_id (
           id,
@@ -270,19 +371,43 @@ export class CourtSlotsRepository extends BaseRepository {
         ),
         player1_payment_method:player1_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player2_payment_method:player2_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player3_payment_method:player3_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
         ),
         player4_payment_method:player4_payment_method_id (
           id,
-          name
+          name,
+          consumes_slot_credit
+        ),
+        player1:player1_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player2:player2_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player3:player3_id (
+          id,
+          first_name,
+          last_name
+        ),
+        player4:player4_id (
+          id,
+          first_name,
+          last_name
         )
       `
       );
@@ -299,6 +424,10 @@ export class CourtSlotsRepository extends BaseRepository {
       player2_payment_method: Array.isArray(item.player2_payment_method) ? (item.player2_payment_method[0] || null) : item.player2_payment_method,
       player3_payment_method: Array.isArray(item.player3_payment_method) ? (item.player3_payment_method[0] || null) : item.player3_payment_method,
       player4_payment_method: Array.isArray(item.player4_payment_method) ? (item.player4_payment_method[0] || null) : item.player4_payment_method,
+      player1: Array.isArray(item.player1) ? (item.player1[0] || null) : item.player1,
+      player2: Array.isArray(item.player2) ? (item.player2[0] || null) : item.player2,
+      player3: Array.isArray(item.player3) ? (item.player3[0] || null) : item.player3,
+      player4: Array.isArray(item.player4) ? (item.player4[0] || null) : item.player4,
     })) as CourtSlotWithCourt[];
   }
 
@@ -309,67 +438,17 @@ export class CourtSlotsRepository extends BaseRepository {
     slotId: number,
     updates: Partial<Omit<CourtSlotDB, "id" | "user_uid" | "created_at">>
   ): Promise<CourtSlotWithCourt> {
-    const { data, error } = await this.supabase
-      .from("court_slots")
-      .update(updates)
-      .eq("id", slotId)
-      .select(
-        `
-        id,
-        user_uid,
-        court_id,
-        slot_date,
-        start_time,
-        end_time,
-        was_played,
-        notes,
-        player1_payment_method_id,
-        player1_note,
-        player2_payment_method_id,
-        player2_note,
-        player3_payment_method_id,
-        player3_note,
-        player4_payment_method_id,
-        player4_note,
-        created_at,
-        court:court_id (
-          id,
-          name
-        ),
-        player1_payment_method:player1_payment_method_id (
-          id,
-          name
-        ),
-        player2_payment_method:player2_payment_method_id (
-          id,
-          name
-        ),
-        player3_payment_method:player3_payment_method_id (
-          id,
-          name
-        ),
-        player4_payment_method:player4_payment_method_id (
-          id,
-          name
-        )
-      `
-      )
-      .single();
+    const { error } = await this.supabase.rpc("save_court_slot", {
+      p_slot_id: slotId,
+      p_patch: updates,
+    });
+    throwSlotRpcError(error);
 
-    if (error) {
-      throw new Error(`Failed to update court slot: ${error.message}`);
+    const slot = await this.findById(slotId);
+    if (!slot) {
+      throw new Error("Court slot not found");
     }
-
-    // Normalize relations (Supabase returns array for relations)
-    const normalized = {
-      ...data,
-      court: Array.isArray(data.court) ? (data.court[0] || null) : data.court,
-      player1_payment_method: Array.isArray(data.player1_payment_method) ? (data.player1_payment_method[0] || null) : data.player1_payment_method,
-      player2_payment_method: Array.isArray(data.player2_payment_method) ? (data.player2_payment_method[0] || null) : data.player2_payment_method,
-      player3_payment_method: Array.isArray(data.player3_payment_method) ? (data.player3_payment_method[0] || null) : data.player3_payment_method,
-      player4_payment_method: Array.isArray(data.player4_payment_method) ? (data.player4_payment_method[0] || null) : data.player4_payment_method,
-    };
-    return normalized as CourtSlotWithCourt;
+    return slot;
   }
 
   /**
@@ -392,14 +471,10 @@ export class CourtSlotsRepository extends BaseRepository {
    * Delete a court slot
    */
   async delete(slotId: number): Promise<void> {
-    const { error } = await this.supabase
-      .from("court_slots")
-      .delete()
-      .eq("id", slotId);
-
-    if (error) {
-      throw new Error(`Failed to delete court slot: ${error.message}`);
-    }
+    const { error } = await this.supabase.rpc("delete_court_slot", {
+      p_slot_id: slotId,
+    });
+    throwSlotRpcError(error);
   }
 
   /**

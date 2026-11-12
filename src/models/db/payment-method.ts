@@ -7,6 +7,7 @@ export interface PaymentMethodDB {
   name: string;
   scope: PaymentScope;
   is_active: boolean;
+  consumes_slot_credit: boolean;
   created_at: string;
 }
 

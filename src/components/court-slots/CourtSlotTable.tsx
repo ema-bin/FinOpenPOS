@@ -8,29 +8,17 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CourtSlotCard, CourtSlotRow } from "./CourtSlotRow";
+import type { SlotChanges } from "./SeatEditors";
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
-import type { CourtSlotDB } from "@/models/db/court";
-
-type SlotChanges = Partial<
-  Pick<
-    CourtSlotDB,
-    | "was_played"
-    | "notes"
-    | "player1_payment_method_id"
-    | "player1_note"
-    | "player2_payment_method_id"
-    | "player2_note"
-    | "player3_payment_method_id"
-    | "player3_note"
-    | "player4_payment_method_id"
-    | "player4_note"
-  >
->;
+import type { PlayerDTO } from "@/models/dto/player";
 
 interface CourtSlotTableProps {
   slots: CourtSlotDTO[];
   paymentMethods: PaymentMethodDTO[];
+  players: PlayerDTO[];
+  balances: ReadonlyMap<number, number>;
+  playersReady: boolean;
   onSlotUpdate: (slotId: number, patch: SlotChanges) => void;
   onSaveSlot: (slotId: number) => void;
   onCancelSlot: (slotId: number) => void;
@@ -43,6 +31,9 @@ interface CourtSlotTableProps {
 export function CourtSlotTable({
   slots,
   paymentMethods,
+  players,
+  balances,
+  playersReady,
   onSlotUpdate,
   onSaveSlot,
   onCancelSlot,
@@ -127,6 +118,9 @@ export function CourtSlotTable({
             key={slot.id}
             slot={slot}
             paymentMethods={paymentMethods}
+            players={players}
+            balances={balances}
+            playersReady={playersReady}
             onUpdate={onSlotUpdate}
             onSave={() => onSaveSlot(slot.id)}
             onCancel={() => onCancelSlot(slot.id)}
@@ -161,6 +155,9 @@ export function CourtSlotTable({
                 key={slot.id}
                 slot={slot}
                 paymentMethods={paymentMethods}
+                players={players}
+                balances={balances}
+                playersReady={playersReady}
                 onUpdate={onSlotUpdate}
                 onSave={() => onSaveSlot(slot.id)}
                 onCancel={() => onCancelSlot(slot.id)}

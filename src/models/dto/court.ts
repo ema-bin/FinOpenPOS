@@ -15,6 +15,10 @@ export interface CourtSlotDTO extends Omit<CourtSlotDB, "user_uid" | "court_id" 
   player2_payment_method?: PaymentMethodNestedDTO | null;
   player3_payment_method?: PaymentMethodNestedDTO | null;
   player4_payment_method?: PaymentMethodNestedDTO | null;
+  player1?: { id: number; first_name: string; last_name: string } | null;
+  player2?: { id: number; first_name: string; last_name: string } | null;
+  player3?: { id: number; first_name: string; last_name: string } | null;
+  player4?: { id: number; first_name: string; last_name: string } | null;
   class_block?: { label: string } | null;
   tournament_block?: { label: string } | null;
 }

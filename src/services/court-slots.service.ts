@@ -16,6 +16,10 @@ export interface UpdateCourtSlotInput {
   player3_note?: string | null;
   player4_payment_method_id?: number | null;
   player4_note?: string | null;
+  player1_id?: number | null;
+  player2_id?: number | null;
+  player3_id?: number | null;
+  player4_id?: number | null;
 }
 
 class CourtSlotsService {

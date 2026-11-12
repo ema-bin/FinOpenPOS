@@ -23,6 +23,10 @@ export interface CourtSlotDB {
   player3_note: string | null;
   player4_payment_method_id: number | null;
   player4_note: string | null;
+  player1_id: number | null;
+  player2_id: number | null;
+  player3_id: number | null;
+  player4_id: number | null;
   created_at: string;
 }
 
@@ -57,19 +61,27 @@ export interface CourtSlotWithCourt extends CourtSlotDB {
   player1_payment_method?: {
     id: number;
     name: string;
+    consumes_slot_credit?: boolean;
   } | null;
   player2_payment_method?: {
     id: number;
     name: string;
+    consumes_slot_credit?: boolean;
   } | null;
   player3_payment_method?: {
     id: number;
     name: string;
+    consumes_slot_credit?: boolean;
   } | null;
   player4_payment_method?: {
     id: number;
     name: string;
+    consumes_slot_credit?: boolean;
   } | null;
+  player1?: { id: number; first_name: string; last_name: string } | null;
+  player2?: { id: number; first_name: string; last_name: string } | null;
+  player3?: { id: number; first_name: string; last_name: string } | null;
+  player4?: { id: number; first_name: string; last_name: string } | null;
 }
 
 export type CourtType = 'C1' | 'C2' | 'OTRAS';

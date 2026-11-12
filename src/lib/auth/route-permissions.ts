@@ -48,6 +48,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/suppliers", requirement: read("purchases.manage") },
   { prefix: "/admin/products", requirement: read("products.manage") },
   { prefix: "/admin/court-slots", requirement: read("courts.operate") },
+  { prefix: "/admin/slot-packs", requirement: read("packs.define", "packs.sell", "packs.credits") },
   { prefix: "/admin/classes", requirement: read("classes.manage") },
   { prefix: "/admin/tournaments", requirement: read("tournaments.manage") },
   { prefix: "/admin/players", requirement: read("players.manage") },
@@ -60,6 +61,9 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
 export const LANDING_PAGES: ReadonlyArray<{ path: string; permission: Permission }> = [
   { path: "/admin", permission: "dashboard.view" },
   { path: "/admin/court-slots", permission: "courts.operate" },
+  { path: "/admin/slot-packs", permission: "packs.define" },
+  { path: "/admin/slot-packs", permission: "packs.sell" },
+  { path: "/admin/slot-packs", permission: "packs.credits" },
   { path: "/admin/classes", permission: "classes.manage" },
   { path: "/admin/orders", permission: "sales.operate" },
   { path: "/admin/tournaments", permission: "tournaments.manage" },
@@ -104,6 +108,8 @@ const PLAYER_SOURCES = [
   "sales.operate",
   "tournaments.manage",
   "classes.manage",
+  "courts.operate",
+  "packs.sell",
 ] as const;
 const PAYMENT_SOURCES = [
   "sales.operate",
@@ -111,6 +117,7 @@ const PAYMENT_SOURCES = [
   "purchases.manage",
   "courts.operate",
   "tournaments.manage",
+  "packs.sell",
 ] as const;
 const COURT_SOURCES = [
   "courts.operate",
@@ -216,6 +223,15 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),
+  "/api/slot-packs": { GET: read("packs.credits"), POST: write("packs.sell") },
+  "/api/slot-pack-definitions": {
+    GET: read("packs.define", "packs.sell"),
+    POST: write("packs.define"),
+  },
+  "/api/slot-pack-definitions/[id]": { PATCH: write("packs.define") },
+  "/api/slot-credits": { GET: read("packs.credits", "courts.operate") },
+  "/api/slot-credits/movements": { GET: read("packs.credits") },
+  "/api/slot-credits/adjustments": { POST: write("packs.credits") },
   "/api/courts": { GET: read(...COURT_SOURCES), POST: write("courts.pricing") },
   "/api/courts/[id]": {
     GET: read(...COURT_SOURCES),

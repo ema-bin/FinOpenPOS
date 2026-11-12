@@ -5,30 +5,17 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { SaveIcon, Loader2Icon, XIcon } from "lucide-react";
 import { courtPillClasses, formatTime } from "@/lib/court-slots-utils";
-import { PlayerPaymentSelect } from "./PlayerPaymentSelect";
+import { SeatEditors, type SlotChanges } from "./SeatEditors";
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
-import type { CourtSlotDB } from "@/models/db/court";
-
-type SlotChanges = Partial<
-  Pick<
-    CourtSlotDB,
-    | "was_played"
-    | "notes"
-    | "player1_payment_method_id"
-    | "player1_note"
-    | "player2_payment_method_id"
-    | "player2_note"
-    | "player3_payment_method_id"
-    | "player3_note"
-    | "player4_payment_method_id"
-    | "player4_note"
-  >
->;
+import type { PlayerDTO } from "@/models/dto/player";
 
 interface CourtSlotRowProps {
   slot: CourtSlotDTO;
   paymentMethods: PaymentMethodDTO[];
+  players: PlayerDTO[];
+  balances: ReadonlyMap<number, number>;
+  playersReady: boolean;
   onUpdate: (slotId: number, patch: SlotChanges) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -78,6 +65,9 @@ function OccupancyNote({
 export function CourtSlotCard({
   slot,
   paymentMethods,
+  players,
+  balances,
+  playersReady,
   onUpdate,
   onSave,
   onCancel,
@@ -121,22 +111,16 @@ export function CourtSlotCard({
         </div>
       ) : (
         <div className="mt-3 grid grid-cols-1 gap-2">
-          {([
-            ["Jugador 1", slot.player1_payment_method?.id, "player1_payment_method_id"],
-            ["Jugador 2", slot.player2_payment_method?.id, "player2_payment_method_id"],
-            ["Jugador 3", slot.player3_payment_method?.id, "player3_payment_method_id"],
-            ["Jugador 4", slot.player4_payment_method?.id, "player4_payment_method_id"],
-          ] as const).map(([label, methodId, field]) => (
-            <div key={field} className="space-y-1">
-              <span className="text-xs text-muted-foreground">{label}</span>
-              <PlayerPaymentSelect
-                value={slot.was_played ? methodId : null}
-                onChange={(value) => onUpdate(slot.id, { [field]: value })}
-                paymentMethods={paymentMethods}
-                disabled={readOnly || !slot.was_played}
-              />
-            </div>
-          ))}
+          <SeatEditors
+            slot={slot}
+            paymentMethods={paymentMethods}
+            players={players}
+            balances={balances}
+            disabled={readOnly}
+            playersReady={playersReady}
+            showLabel
+            onUpdate={onUpdate}
+          />
         </div>
       )}
 
@@ -164,6 +148,9 @@ export function CourtSlotCard({
 export function CourtSlotRow({
   slot,
   paymentMethods,
+  players,
+  balances,
+  playersReady,
   onUpdate,
   onSave,
   onCancel,
@@ -210,57 +197,17 @@ export function CourtSlotRow({
         </TableCell>
       ) : (
       <>
-      <TableCell className="min-w-[160px]">
-        <PlayerPaymentSelect
-          value={slot.was_played ? slot.player1_payment_method?.id : null}
-          onChange={(value) =>
-            onUpdate(slot.id, {
-              player1_payment_method_id: value,
-            })
-          }
-          paymentMethods={paymentMethods}
-          disabled={readOnly || !slot.was_played}
-        />
-      </TableCell>
-
-      <TableCell className="min-w-[160px]">
-        <PlayerPaymentSelect
-          value={slot.was_played ? slot.player2_payment_method?.id : null}
-          onChange={(value) =>
-            onUpdate(slot.id, {
-              player2_payment_method_id: value,
-            })
-          }
-          paymentMethods={paymentMethods}
-          disabled={readOnly || !slot.was_played}
-        />
-      </TableCell>
-
-      <TableCell className="min-w-[160px]">
-        <PlayerPaymentSelect
-          value={slot.was_played ? slot.player3_payment_method?.id : null}
-          onChange={(value) =>
-            onUpdate(slot.id, {
-              player3_payment_method_id: value,
-            })
-          }
-          paymentMethods={paymentMethods}
-          disabled={readOnly || !slot.was_played}
-        />
-      </TableCell>
-
-      <TableCell className="min-w-[160px]">
-        <PlayerPaymentSelect
-          value={slot.was_played ? slot.player4_payment_method?.id : null}
-          onChange={(value) =>
-            onUpdate(slot.id, {
-              player4_payment_method_id: value,
-            })
-          }
-          paymentMethods={paymentMethods}
-          disabled={readOnly || !slot.was_played}
-        />
-      </TableCell>
+      <SeatEditors
+        slot={slot}
+        paymentMethods={paymentMethods}
+        players={players}
+        balances={balances}
+        disabled={readOnly}
+        playersReady={playersReady}
+        showLabel={false}
+        asCells
+        onUpdate={onUpdate}
+      />
       </>
       )}
 

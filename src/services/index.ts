@@ -14,4 +14,5 @@ export * from "./stock-movements.service";
 export * from "./advertisements.service";
 export * from "./whatsapp-message-templates.service";
 export * from "./classes.service";
+export * from "./slot-credits.service";
 
