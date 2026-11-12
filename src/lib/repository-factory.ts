@@ -29,6 +29,7 @@ import { TournamentRegistrationNotifiedRepository } from "@/repositories/tournam
 import { WhatsAppMessageTemplatesRepository } from "@/repositories/whatsapp-message-templates.repository";
 import { ClassesRepository } from "@/repositories/classes.repository";
 import { SlotCreditsRepository } from "@/repositories/slot-credits.repository";
+import { CourtReservationsRepository } from "@/repositories/court-reservations.repository";
 
 /**
  * Factory function to create repositories with authenticated user context
@@ -109,6 +110,7 @@ export async function createRepositories() {
     whatsappMessageTemplates: new WhatsAppMessageTemplatesRepository(supabase, user.id),
     classes: new ClassesRepository(supabase, user.id),
     slotCredits: new SlotCreditsRepository(supabase, user.id),
+    courtReservations: new CourtReservationsRepository(supabase, user.id),
   };
 }
 

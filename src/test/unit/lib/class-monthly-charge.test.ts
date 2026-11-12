@@ -52,7 +52,7 @@ describe("cruce de horarios", () => {
         },
       ]
     );
-    expect(block).toEqual({ label: "Seba" });
+    expect(block).toEqual({ label: "Seba", sessionIds: [] });
   });
 
   it("un partido de torneo ocupa el turno de esa cancha y no el de otra", () => {
@@ -79,6 +79,7 @@ describe("cruce de horarios", () => {
     expect(holds.class_block).toBeNull();
     expect(holds.tournament_block).toEqual({
       label: "Master · Pérez / Gómez vs Díaz / Ruiz",
+      sessionIds: [],
     });
   });
 

@@ -48,6 +48,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/suppliers", requirement: read("purchases.manage") },
   { prefix: "/admin/products", requirement: read("products.manage") },
   { prefix: "/admin/court-slots", requirement: read("courts.operate") },
+  { prefix: "/admin/reservations", requirement: read("courts.reservations") },
   { prefix: "/admin/slot-packs", requirement: read("packs.define", "packs.sell", "packs.credits") },
   { prefix: "/admin/classes", requirement: read("classes.manage") },
   { prefix: "/admin/tournaments", requirement: read("tournaments.manage") },
@@ -61,6 +62,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
 export const LANDING_PAGES: ReadonlyArray<{ path: string; permission: Permission }> = [
   { path: "/admin", permission: "dashboard.view" },
   { path: "/admin/court-slots", permission: "courts.operate" },
+  { path: "/admin/reservations", permission: "courts.reservations" },
   { path: "/admin/slot-packs", permission: "packs.define" },
   { path: "/admin/slot-packs", permission: "packs.sell" },
   { path: "/admin/slot-packs", permission: "packs.credits" },
@@ -132,6 +134,7 @@ const PUBLIC: RouteRequirement = { kind: "public" };
 
 export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, RouteRequirement>>>> = {
   "/api/cron/daily-sales-closure": { GET: PUBLIC },
+  "/api/cron/court-reservations": { GET: PUBLIC },
 
   // Dashboard y reportes financieros
   "/api/admin/dashboard/sales": { GET: read("sales.operate") },
@@ -223,6 +226,14 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),
+  "/api/court-reservations": { GET: read("courts.reservations"), POST: write("courts.reservations") },
+  "/api/court-reservations/release-class": { POST: write("courts.reservations") },
+  "/api/court-reservations/restore-class": { POST: write("courts.reservations") },
+  "/api/court-reservations/generate-week": { POST: write("courts.reservations") },
+  "/api/court-reservations/[id]": { PATCH: write("courts.reservations"), DELETE: write("courts.reservations") },
+  "/api/court-fixed-bookings": { GET: read("courts.reservations"), POST: write("courts.reservations") },
+  "/api/court-fixed-bookings/[id]": { PATCH: write("courts.reservations"), DELETE: write("courts.reservations") },
+  "/api/court-fixed-bookings/[id]/exceptions": { POST: write("courts.reservations") },
   "/api/slot-packs": { GET: read("packs.credits"), POST: write("packs.sell") },
   "/api/slot-packs/sales": { GET: read("packs.sell") },
   "/api/slot-pack-definitions": {

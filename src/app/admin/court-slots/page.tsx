@@ -23,7 +23,8 @@ import { CourtPricingDialog } from "@/components/court-slots/CourtPricingDialog"
 import type { CourtSlotDTO } from "@/models/dto/court";
 import { useQuery } from "@tanstack/react-query";
 import { usePermissions } from "@/components/permissions-provider";
-import { playersService, slotCreditsService } from "@/services";
+import { playersService, slotCreditsService, courtReservationsService } from "@/services";
+import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
 import { creditSaveError, seatsFromSlot } from "@/lib/slot-credits";
 import type { SlotChanges } from "@/components/court-slots/SeatEditors";
 import Link from "next/link";
@@ -32,9 +33,11 @@ export default function CourtSlotsPage() {
   const { can, canRead, loading: permsLoading } = usePermissions();
   const canEditPricing = !permsLoading && can("courts.pricing");
   const canEditSlots = !permsLoading && can("courts.operate");
+  const canSeeReservations = !permsLoading && canRead("courts.reservations");
   const canSeePacks =
     !permsLoading &&
     (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
+  const reservationsOn = isCourtReservationsEnabledClient();
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -79,6 +82,12 @@ export default function CourtSlotsPage() {
     queryKey: ["players", "onlyActive"],
     queryFn: () => playersService.getAll("active"),
     staleTime: 1000 * 60,
+  });
+
+  const { data: reservationRows = [] } = useQuery({
+    queryKey: ["court-reservations", selectedDate],
+    queryFn: () => courtReservationsService.day(selectedDate),
+    enabled: reservationsOn && canSeeReservations,
   });
 
   const {
@@ -212,6 +221,16 @@ export default function CourtSlotsPage() {
     );
     return players.filter((player) => ids.has(player.id));
   }, [players, positiveBalances, positiveFailed, positiveLoaded]);
+
+  const reservationLabels = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const row of reservationRows) {
+      if (row.reservation_status !== "reserved" || !row.reserved_player_name) continue;
+      const kind = row.reservation_source === "fixed" ? "Fijo" : "Reserva";
+      map.set(row.id, `${kind} · ${row.reserved_player_name}`);
+    }
+    return map;
+  }, [reservationRows]);
 
   const playerNames = useMemo(() => {
     const map = new Map<number, string>();
@@ -464,6 +483,7 @@ export default function CourtSlotsPage() {
               isSaving={updateSlotMutation.isPending}
               isLoading={loadingSlots && slots.length === 0}
               readOnly={!canEditSlots}
+              reservationLabels={reservationsOn && canSeeReservations ? reservationLabels : undefined}
             />
           </div>
 

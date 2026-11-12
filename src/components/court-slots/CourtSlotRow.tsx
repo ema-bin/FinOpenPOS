@@ -22,6 +22,7 @@ interface CourtSlotRowProps {
   hasChanges: boolean;
   isSaving: boolean;
   readOnly?: boolean;
+  reservationLabel?: string | null;
 }
 
 function formatSlotDate(slotDate: string) {
@@ -74,6 +75,7 @@ export function CourtSlotCard({
   hasChanges,
   isSaving,
   readOnly = false,
+  reservationLabel = null,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
   const tournamentBlock = slot.tournament_block;
@@ -92,6 +94,11 @@ export function CourtSlotCard({
             {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
           </div>
           <div className="text-xs text-muted-foreground">{formatSlotDate(slot.slot_date)}</div>
+          {reservationLabel ? (
+            <div className={`mt-1 text-xs ${reservationLabel.startsWith("Fijo") ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"}`}>
+              {reservationLabel}
+            </div>
+          ) : null}
         </div>
         <label className="flex shrink-0 items-center gap-2 text-sm">
           <Checkbox
@@ -157,6 +164,7 @@ export function CourtSlotRow({
   hasChanges,
   isSaving,
   readOnly = false,
+  reservationLabel = null,
 }: CourtSlotRowProps) {
   const classBlock = slot.class_block;
   const tournamentBlock = slot.tournament_block;
@@ -188,7 +196,12 @@ export function CourtSlotRow({
         {formatSlotDate(slot.slot_date)}
       </TableCell>
       <TableCell>
-        {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+        <div>{formatTime(slot.start_time)} - {formatTime(slot.end_time)}</div>
+        {reservationLabel ? (
+          <div className={`text-xs ${reservationLabel.startsWith("Fijo") ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"}`}>
+            {reservationLabel}
+          </div>
+        ) : null}
       </TableCell>
 
       {occupied ? (

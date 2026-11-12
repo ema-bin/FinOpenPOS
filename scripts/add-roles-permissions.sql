@@ -50,6 +50,7 @@ FROM roles r
 JOIN (VALUES
     ('Admin Canchas', 'dashboard.view'),
     ('Admin Canchas', 'courts.operate'),
+    ('Admin Canchas', 'courts.reservations'),
     ('Admin Canchas', 'courts.pricing'),
     ('Admin Canchas', 'tournaments.manage'),
     ('Cajero', 'dashboard.view'),
