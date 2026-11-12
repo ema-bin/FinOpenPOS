@@ -11,9 +11,18 @@ async function readError(response: Response, fallback: string): Promise<never> {
   throw new Error(typeof data.error === "string" ? data.error : fallback);
 }
 
+export type ReservationClassSession = {
+  id: number;
+  label: string;
+  start_time: string;
+  end_time: string;
+  status: "scheduled" | "cancelled";
+};
+
 export type ReservationSlotView = CourtReservationSlot & {
   class_block: { label: string } | null;
   tournament_block: { label: string } | null;
+  class_sessions?: ReservationClassSession[];
 };
 
 class CourtReservationsService {
@@ -21,6 +30,24 @@ class CourtReservationsService {
     const response = await fetch(`/api/court-reservations?date=${date}`);
     if (!response.ok) await readError(response, "No se pudieron cargar las reservas");
     return response.json();
+  }
+
+  async releaseClass(slotId: number, sessionId: number): Promise<void> {
+    const response = await fetch("/api/court-reservations/release-class", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot_id: slotId, session_id: sessionId }),
+    });
+    if (!response.ok) await readError(response, "No se pudo cancelar la clase");
+  }
+
+  async restoreClass(slotId: number, sessionId: number): Promise<void> {
+    const response = await fetch("/api/court-reservations/restore-class", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot_id: slotId, session_id: sessionId }),
+    });
+    if (!response.ok) await readError(response, "No se pudo restaurar la clase");
   }
 
   async reserve(slotId: number, playerId: number): Promise<void> {

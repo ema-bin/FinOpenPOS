@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
 import { ReservationError } from "@/lib/court-reservation-rpc";
-import { blocksForCourtSlot } from "@/lib/class-occupancy";
+import { blocksForCourtSlot, classesTouchingSlot } from "@/lib/class-occupancy";
 import { isIsoDate } from "@/lib/class-time";
 
 function disabled() {
@@ -37,13 +37,15 @@ export async function GET(request: Request) {
     const repos = await createRepositories();
     const [slots, classOccupancy, tournamentOccupancy] = await Promise.all([
       repos.courtReservations.listDay(date),
-      repos.classes.listOccupancy(date),
+      repos.classes.listOccupancy(date, { includeCancelled: true }),
       repos.tournamentMatches.listCourtOccupancy(date),
     ]);
+    const scheduledClasses = classOccupancy.filter((session) => session.status === "scheduled");
     return NextResponse.json(
       slots.map((slot) => ({
         ...slot,
-        ...blocksForCourtSlot(slot, classOccupancy, tournamentOccupancy),
+        ...blocksForCourtSlot(slot, scheduledClasses, tournamentOccupancy),
+        class_sessions: classesTouchingSlot(slot, classOccupancy),
       }))
     );
   } catch (error) {

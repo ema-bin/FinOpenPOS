@@ -558,7 +558,7 @@ export class ClassesRepository extends BaseRepository {
   }
 
   /** Sesiones del día para marcar turnos ocupados. Si las tablas no existen, no hay clases. */
-  async listOccupancy(date: string): Promise<OccupancySession[]> {
+  async listOccupancy(date: string, options?: { includeCancelled?: boolean }): Promise<OccupancySession[]> {
     if (isIsoDate(date)) {
       try {
         await this.ensureSessions(date, date);
@@ -567,17 +567,18 @@ export class ClassesRepository extends BaseRepository {
         throw error;
       }
     }
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from("class_sessions")
       .select(
         `
-        court_id, start_time, end_time, status,
+        id, court_id, start_time, end_time, status,
         professor:professor_id (name),
         schedule:schedule_id (name)
       `
       )
-      .eq("session_date", date)
-      .eq("status", "scheduled");
+      .eq("session_date", date);
+    if (!options?.includeCancelled) query = query.eq("status", "scheduled");
+    const { data, error } = await query;
     if (error) {
       if (isMissingRelation(error)) return [];
       throw this.fail(error);
@@ -586,6 +587,7 @@ export class ClassesRepository extends BaseRepository {
       const schedule = one(row.schedule as { name: string | null } | { name: string | null }[] | null);
       const professor = one(row.professor as { name: string } | { name: string }[] | null);
       return {
+        id: Number(row.id),
         courtId: row.court_id as number,
         startTime: row.start_time as string,
         endTime: row.end_time as string,

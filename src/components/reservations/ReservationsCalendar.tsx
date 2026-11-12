@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeftIcon, ChevronRightIcon, Loader2Icon } from "lucide-react";
+import { CalendarOffIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,7 +20,7 @@ import {
   todayInBuenosAires,
   weekDatesFromMonday,
 } from "@/lib/court-reservation-rules";
-import { addDaysIso, weekdayOf } from "@/lib/class-time";
+import { addDaysIso, WEEKDAY_LABELS, weekdayOf } from "@/lib/class-time";
 import type { ReservationSlotView } from "@/services/court-reservations.service";
 import type { CourtFixedBooking } from "@/repositories/court-reservations.repository";
 import { formatTime } from "@/lib/court-slots-utils";
@@ -91,7 +91,7 @@ function cellTitle(slot: ReservationSlotView | null, start: string, end: string)
 
 function activeFixedBooking(
   courtId: number,
-  date: string,
+  weekday: number,
   start: string,
   end: string,
   bookings: CourtFixedBooking[]
@@ -100,7 +100,7 @@ function activeFixedBooking(
     (booking) =>
       booking.is_active &&
       booking.court_id === courtId &&
-      booking.weekday === weekdayOf(date) &&
+      booking.weekday === weekday &&
       clock(booking.start_time) === start &&
       clock(booking.end_time) === end
   );
@@ -124,6 +124,7 @@ export function ReservationsCalendar({
   const queryClient = useQueryClient();
   const today = todayInBuenosAires();
   const [monday, setMonday] = useState(() => mondayOfWeek(today));
+  const [courtId, setCourtId] = useState<number | null>(null);
   const [target, setTarget] = useState<CellTarget | null>(null);
   const [playerId, setPlayerId] = useState<number | null>(null);
 
@@ -132,6 +133,8 @@ export function ReservationsCalendar({
     queries: dates.map((date) => ({
       queryKey: ["court-reservations", date],
       queryFn: () => courtReservationsService.day(date),
+      enabled: mode === "calendar",
+      staleTime: 0,
     })),
   });
   const { data: players = [] } = useQuery({
@@ -173,7 +176,7 @@ export function ReservationsCalendar({
   }
 
   function openCell(next: CellTarget) {
-    const booking = activeFixedBooking(next.courtId, next.date, next.start, next.end, fixedBookings);
+    const booking = activeFixedBooking(next.courtId, weekdayOf(next.date), next.start, next.end, fixedBookings);
     setTarget(next);
     setPlayerId(mode === "fixed" ? booking?.player_id ?? null : next.slot?.reserved_player_id ?? null);
   }
@@ -181,6 +184,7 @@ export function ReservationsCalendar({
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["court-reservations"] });
     queryClient.invalidateQueries({ queryKey: ["court-fixed-bookings"] });
+    queryClient.invalidateQueries({ queryKey: ["court-slots"] });
   };
 
   const save = useMutation({
@@ -191,7 +195,7 @@ export function ReservationsCalendar({
         await saveFixedCell(target, playerId, fixedBookings);
         return;
       }
-      const booking = activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings);
+      const booking = activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, fixedBookings);
       const tone = calendarTone(target.slot, booking);
       if (tone === "fixed") throw new Error("Los turnos fijos se guardan en Turnos fijos");
       if (tone === "class" || tone === "tournament") {
@@ -231,10 +235,36 @@ export function ReservationsCalendar({
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo generar la semana"),
   });
 
+  const releaseClass = useMutation({
+    mutationFn: async (sessionId: number) => {
+      if (!target?.slot) throw new Error("Elegí el turno");
+      await courtReservationsService.releaseClass(target.slot.id, sessionId);
+    },
+    onSuccess: () => {
+      toast.success("Clase cancelada. Ese horario quedó libre.");
+      setTarget(null);
+      refresh();
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo cancelar la clase"),
+  });
+
+  const restoreClass = useMutation({
+    mutationFn: async (sessionId: number) => {
+      if (!target?.slot) throw new Error("Elegí el turno");
+      await courtReservationsService.restoreClass(target.slot.id, sessionId);
+    },
+    onSuccess: () => {
+      toast.success("Clase restaurada.");
+      setTarget(null);
+      refresh();
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo restaurar la clase"),
+  });
+
   const deactivate = useMutation({
     mutationFn: async () => {
       if (!target) throw new Error("Elegí un turno");
-      const booking = activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings);
+      const booking = activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, fixedBookings);
       if (!booking) throw new Error("No hay un turno fijo en ese horario");
       await courtReservationsService.deactivateFixed(booking.id);
     },
@@ -246,8 +276,16 @@ export function ReservationsCalendar({
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo desactivar"),
   });
 
+  const selectedCourt = visibleCourts.find((court) => court.id === courtId) ?? visibleCourts[0] ?? null;
+  const missingDates =
+    mode === "calendar" && selectedCourt
+      ? dates.filter(
+          (_, index) => !slotsByDay[index]?.some((slot) => slot.court_id === selectedCourt.id)
+        )
+      : [];
+  const weekIsEmpty = mode === "calendar" && missingDates.length === dates.length;
   const matchedBooking = target
-    ? activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings)
+    ? activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, fixedBookings)
     : undefined;
   const tone = target ? (mode === "fixed" ? (matchedBooking ? "fixed" : "free") : calendarTone(target.slot, matchedBooking)) : "free";
   const blocked = mode === "calendar" && (tone === "class" || tone === "tournament");
@@ -257,7 +295,12 @@ export function ReservationsCalendar({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn("rounded-lg px-3 py-2 text-sm", mode === "fixed" ? "bg-blue-600 text-white" : "bg-orange-500 text-white")}>
+        {mode === "fixed"
+          ? "Turnos fijos. Guardar acá deja ese horario para todas las semanas."
+          : "Calendario. Guardar acá reserva solo ese día. Lo rojo es un fijo y se cambia en la otra pestaña."}
+      </div>
+      {mode === "calendar" ? <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="icon" onClick={() => setMonday(addDaysIso(monday, -7))} aria-label="Semana anterior">
           <ChevronLeftIcon className="h-4 w-4" />
         </Button>
@@ -276,18 +319,18 @@ export function ReservationsCalendar({
             Generar esta semana
           </Button>
         ) : null}
-      </div>
+      </div> : null}
 
       <div className="flex flex-wrap gap-2">
         {LEGEND.filter((item) => mode === "calendar" || item.tone === "free" || item.tone === "fixed").map((item) => (
           <span key={item.tone} className="inline-flex items-center gap-1.5 text-xs">
-            <span className={cn("h-3 w-3 rounded-sm", TONE_CLASS[item.tone])} />
+            <span className={cn("h-3 w-3 rounded-sm", mode === "fixed" && item.tone === "fixed" ? "bg-blue-600" : TONE_CLASS[item.tone])} />
             {item.label}
           </span>
         ))}
       </div>
 
-      {loading ? (
+      {mode === "calendar" && loading ? (
         <div className="flex justify-center py-10"><Loader2Icon className="h-5 w-5 animate-spin" /></div>
       ) : loadError ? (
         <p className="text-sm text-destructive">
@@ -296,12 +339,61 @@ export function ReservationsCalendar({
       ) : visibleCourts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No hay canchas activas.</p>
       ) : (
-        <div className="space-y-5">
-          {visibleCourts.map((court) => (
-            <section key={court.id} className="overflow-hidden rounded-xl border">
-              <h2 className="border-b bg-muted/40 px-3 py-2 text-sm font-semibold">{court.name}</h2>
+        <div className="space-y-3">
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {visibleCourts.map((court) => (
+              <button
+                key={court.id}
+                type="button"
+                className={cn(
+                  "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium",
+                  selectedCourt?.id === court.id
+                    ? mode === "fixed"
+                      ? "bg-blue-600 text-white"
+                      : "bg-orange-500 text-white"
+                    : "bg-muted text-muted-foreground"
+                )}
+                onClick={() => setCourtId(court.id)}
+              >
+                {court.name}
+              </button>
+            ))}
+          </div>
+          {selectedCourt ? (
+            <section className={cn("overflow-hidden rounded-xl border-2", mode === "fixed" ? "border-blue-600" : "border-orange-500")}>
+              <h2 className={cn("border-b px-3 py-2 text-sm font-semibold text-white", mode === "fixed" ? "bg-blue-600" : "bg-orange-500")}>
+                {selectedCourt.name}
+              </h2>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[44rem] border-separate border-spacing-1 px-1">
+                {mode === "calendar" && missingDates.length > 0 ? (
+                  <div className={cn("m-3 rounded-xl border border-dashed px-4 py-6 text-center", weekIsEmpty ? "border-orange-300 bg-orange-50 dark:bg-orange-950/30" : "border-border bg-muted/40")}>
+                    <CalendarOffIcon className={cn("mx-auto h-8 w-8", weekIsEmpty ? "text-orange-600" : "text-muted-foreground")} />
+                    <p className="mt-2 text-sm font-medium">
+                      {weekIsEmpty ? "Esta semana no tiene turnos generados" : "Faltan días por generar"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {weekIsEmpty
+                        ? `${shortDate(dates[0])} – ${shortDate(dates[6])}. Generala para ver reservas, clases y torneos.`
+                        : missingDates.map((date) => `${DAY_SHORT[weekdayOf(date)]} ${dayNumber(date)}`).join(", ")}
+                    </p>
+                    {canWrite ? (
+                      <Button type="button" className="mt-3" onClick={() => generateWeek.mutate()} disabled={generateWeek.isPending}>
+                        {generateWeek.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Generar esta semana
+                      </Button>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">Hace falta alguien con permiso de canchas para generarlos.</p>
+                    )}
+                  </div>
+                ) : null}
+                {weekIsEmpty ? null : (
+                <table className="w-full min-w-[44rem] table-fixed border-separate border-spacing-1 px-1">
+                  <colgroup>
+                    <col className="w-14" />
+                    {dates.map((date) => (
+                      <col key={date} style={{ width: "calc((100% - 3.5rem) / 7)" }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
                       <th className="sticky left-0 z-10 w-14 bg-background" />
@@ -313,10 +405,12 @@ export function ReservationsCalendar({
                             date === today && "text-foreground"
                           )}
                         >
-                          <div>{DAY_SHORT[weekdayOf(date)]}</div>
-                          <div className={cn("text-sm", date === today && "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background")}>
-                            {dayNumber(date)}
-                          </div>
+                          <div>{mode === "fixed" ? WEEKDAY_LABELS[weekdayOf(date)] : DAY_SHORT[weekdayOf(date)]}</div>
+                          {mode === "calendar" ? (
+                            <div className={cn("text-sm", date === today && "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background")}>
+                              {dayNumber(date)}
+                            </div>
+                          ) : null}
                         </th>
                       ))}
                     </tr>
@@ -324,17 +418,20 @@ export function ReservationsCalendar({
                   <tbody>
                     {STANDARD_COURT_SLOTS.map((hours) => (
                       <tr key={hours.start}>
-                        <th className="sticky left-0 z-10 bg-background pr-1 text-right text-[11px] font-medium text-muted-foreground">
+                        <th className="sticky left-0 z-10 w-14 bg-background pr-1 text-right text-[11px] font-medium text-muted-foreground">
                           {hours.start}
                         </th>
                         {dates.map((date, dayIndex) => {
-                          const slot = slotAt(court.id, dayIndex, hours.start);
-                          const rule = activeFixedBooking(court.id, date, hours.start, hours.end, fixedBookings);
+                          const slot = slotAt(selectedCourt.id, dayIndex, hours.start);
+                          if (mode === "calendar" && !slot) {
+                            return <td key={date} className="p-0"><div className="h-11" /></td>;
+                          }
+                          const rule = activeFixedBooking(selectedCourt.id, weekdayOf(date), hours.start, hours.end, fixedBookings);
                           const toneOfCell = mode === "fixed" ? (rule ? "fixed" : "free") : calendarTone(slot, rule);
                           const name = mode === "fixed" ? rule?.player_name : slot?.reserved_player_name ?? rule?.player_name;
                           const reservedToo =
                             mode === "calendar" &&
-                            (toneOfCell === "class" || toneOfCell === "tournament") &&
+                            toneOfCell === "class" &&
                             (slot?.reservation_status === "reserved" || Boolean(rule));
                           return (
                             <td key={date} className="p-0">
@@ -342,15 +439,17 @@ export function ReservationsCalendar({
                                 type="button"
                                 title={cellTitle(slot, hours.start, hours.end)}
                                 className={cn(
-                                  "flex h-11 w-full flex-col items-center justify-center rounded-md px-1 text-[11px] leading-tight transition-colors",
-                                  TONE_CLASS[toneOfCell],
+                                  "relative flex h-11 max-h-11 w-full flex-col items-center justify-center overflow-hidden rounded-md px-1 text-[11px] leading-tight transition-colors",
+                                  mode === "fixed" && toneOfCell === "fixed"
+                                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                                    : TONE_CLASS[toneOfCell],
                                   reservedToo && (slot?.reservation_source === "fixed" || rule) && "ring-2 ring-inset ring-red-700",
                                   reservedToo && slot?.reservation_source !== "fixed" && !rule && "ring-2 ring-inset ring-orange-700"
                                 )}
                                 onClick={() =>
                                   openCell({
-                                    courtId: court.id,
-                                    courtName: court.name,
+                                    courtId: selectedCourt.id,
+                                    courtName: selectedCourt.name,
                                     date,
                                     start: hours.start,
                                     end: hours.end,
@@ -367,6 +466,9 @@ export function ReservationsCalendar({
                                         ? "Libre"
                                         : playerLabel(name)}
                                 </span>
+                                {mode === "calendar" && toneOfCell !== "class" && slot?.class_sessions?.some((session) => session.status === "cancelled") ? (
+                                  <span className="absolute bottom-0.5 max-w-[calc(100%-4px)] truncate rounded bg-yellow-200 px-1 text-[10px] leading-none text-yellow-950">Cancelada</span>
+                                ) : null}
                                 {reservedToo ? (
                                   <span className="max-w-full truncate font-medium">{playerLabel(name)}</span>
                                 ) : null}
@@ -378,9 +480,10 @@ export function ReservationsCalendar({
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             </section>
-          ))}
+          ) : null}
         </div>
       )}
 
@@ -389,7 +492,9 @@ export function ReservationsCalendar({
           <DialogHeader>
             <DialogTitle>
               {target
-                ? `${target.courtName} · ${weekdayLabel} ${shortDate(target.date)} · ${formatTime(target.start)}–${formatTime(target.end)}`
+                ? mode === "fixed"
+                  ? `Fijo · ${target.courtName} · ${WEEKDAY_LABELS[weekdayOf(target.date)]} · ${formatTime(target.start)}–${formatTime(target.end)}`
+                  : `Este día · ${target.courtName} · ${weekdayLabel} ${shortDate(target.date)} · ${formatTime(target.start)}–${formatTime(target.end)}`
                 : "Turno"}
             </DialogTitle>
           </DialogHeader>
@@ -402,15 +507,46 @@ export function ReservationsCalendar({
                     : "Disponible"
                   : cellTitle(target.slot, target.start, target.end)}
               </p>
-              {blocked ? (
+              {tone === "tournament" ? (
                 <p className="text-sm text-muted-foreground">
-                  Ese horario está ocupado por {tone === "tournament" ? "un torneo" : "una clase"} y no se puede reservar.
+                  Este horario sigue el partido{target.slot?.tournament_block ? `: ${target.slot.tournament_block.label}` : ""}. Si el partido se mueve o se cancela, la celda cambia. Si el turno también está reservado o tiene clase, se muestra el torneo.
                 </p>
-              ) : fixedLocked ? (
+              ) : null}
+              {(target.slot?.class_sessions?.length ?? 0) > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Cada clase se cancela o se restaura por su horario. Las otras clases del día no cambian.
+                  </p>
+                  {target.slot?.class_sessions?.map((session) => (
+                    <div key={session.id} className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5">
+                      <span className="min-w-0 text-sm">
+                        {session.label} · {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                        {session.status === "cancelled" ? " · cancelada" : ""}
+                      </span>
+                      {canWrite ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={session.status === "cancelled" ? "default" : "outline"}
+                          disabled={releaseClass.isPending || restoreClass.isPending}
+                          onClick={() =>
+                            session.status === "cancelled"
+                              ? restoreClass.mutate(session.id)
+                              : releaseClass.mutate(session.id)
+                          }
+                        >
+                          {session.status === "cancelled" ? "Restaurar" : "Cancelar"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {fixedLocked ? (
                 <p className="text-sm text-muted-foreground">
                   Este horario es un turno fijo{matchedBooking ? ` de ${matchedBooking.player_name}` : ""}. Se cambia en Turnos fijos.
                 </p>
-              ) : canWrite ? (
+              ) : canWrite && !blocked ? (
                 <PlayerSearchSelect
                   players={players}
                   value={playerId}
@@ -444,7 +580,7 @@ export function ReservationsCalendar({
 }
 
 async function saveFixedCell(target: CellTarget, playerId: number, bookings: CourtFixedBooking[]) {
-  const existing = activeFixedBooking(target.courtId, target.date, target.start, target.end, bookings);
+  const existing = activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, bookings);
   const openEnded = {
     valid_from: todayInBuenosAires(),
     valid_until: null,

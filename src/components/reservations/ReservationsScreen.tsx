@@ -18,8 +18,12 @@ export function ReservationsScreen() {
       </div>
       <Tabs defaultValue="calendar">
         <TabsList className="max-md:grid max-md:h-auto max-md:w-full max-md:grid-cols-2">
-          <TabsTrigger value="calendar">Calendario</TabsTrigger>
-          <TabsTrigger value="fixed">Turnos fijos</TabsTrigger>
+          <TabsTrigger value="calendar" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+            Calendario
+          </TabsTrigger>
+          <TabsTrigger value="fixed" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            Turnos fijos
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="calendar" className="mt-4">
           <ReservationsCalendar canWrite={canWrite} />
