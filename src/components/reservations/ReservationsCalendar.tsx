@@ -1,12 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2Icon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -16,40 +14,125 @@ import {
 } from "@/components/ui/dialog";
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
 import { courtReservationsService, courtSlotsService, playersService } from "@/services";
-import { nextMonday, todayInBuenosAires } from "@/lib/court-reservation-rules";
-import type { ReservationSlotView as SlotView } from "@/services/court-reservations.service";
+import {
+  mondayOfWeek,
+  STANDARD_COURT_SLOTS,
+  todayInBuenosAires,
+  weekDatesFromMonday,
+} from "@/lib/court-reservation-rules";
+import { addDaysIso, weekdayOf } from "@/lib/class-time";
+import type { ReservationSlotView } from "@/services/court-reservations.service";
+import type { CourtFixedBooking } from "@/repositories/court-reservations.repository";
 import { formatTime } from "@/lib/court-slots-utils";
+import { cn } from "@/lib/utils";
 
-function tone(slot: SlotView) {
-  if (slot.tournament_block) return "border-amber-300 bg-amber-50 dark:bg-amber-950/30";
-  if (slot.class_block) return "border-sky-300 bg-sky-50 dark:bg-sky-950/30";
-  if (slot.reservation_status === "reserved" && slot.reservation_source === "fixed") {
-    return "border-indigo-300 bg-indigo-50 dark:bg-indigo-950/30";
-  }
-  if (slot.reservation_status === "reserved") return "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30";
-  return "border-border bg-background";
+const DAY_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"] as const;
+
+type CellTone = "free" | "reserved" | "fixed" | "class" | "tournament" | "missing";
+
+type CourtOption = { id: number; name: string };
+
+type CellTarget = {
+  courtId: number;
+  courtName: string;
+  date: string;
+  start: string;
+  end: string;
+  slot: ReservationSlotView | null;
+};
+
+const TONE_CLASS: Record<CellTone, string> = {
+  free: "bg-green-600 text-white hover:bg-green-700",
+  reserved: "bg-orange-500 text-white hover:bg-orange-600",
+  fixed: "bg-red-600 text-white hover:bg-red-700",
+  class: "bg-yellow-400 text-yellow-950 hover:bg-yellow-300",
+  tournament: "bg-[#b24a32] text-white hover:bg-[#9a3e2a]",
+  missing: "bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-950 dark:text-green-100",
+};
+
+const LEGEND: Array<{ tone: CellTone; label: string }> = [
+  { tone: "free", label: "Disponible" },
+  { tone: "reserved", label: "Reservado" },
+  { tone: "fixed", label: "Fijo" },
+  { tone: "class", label: "Clase" },
+  { tone: "tournament", label: "Torneo" },
+];
+
+function clock(value: string): string {
+  return value.slice(0, 5);
 }
 
-function statusLabel(slot: SlotView) {
-  if (slot.tournament_block) return `Torneo · ${slot.tournament_block.label}`;
-  if (slot.class_block) return `Clase · ${slot.class_block.label}`;
+function dayNumber(iso: string): string {
+  return iso.slice(8, 10);
+}
+
+function shortDate(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+function playerLabel(name: string | null | undefined): string {
+  const cleaned = name?.trim();
+  if (!cleaned) return "Sin nombre";
+  const parts = cleaned.split(/\s+/);
+  return parts.length > 1 ? parts[parts.length - 1] : parts[0];
+}
+
+function cellTitle(slot: ReservationSlotView | null, start: string, end: string): string {
+  const range = `${formatTime(start)}–${formatTime(end)}`;
+  if (!slot) return `${range}. Disponible`;
+  if (slot.tournament_block) return `${range}. Torneo: ${slot.tournament_block.label}`;
+  if (slot.class_block) return `${range}. Clase: ${slot.class_block.label}`;
   if (slot.reservation_status === "reserved") {
     const origin = slot.reservation_source === "fixed" ? "Turno fijo" : "Reserva";
-    return `${origin} · ${slot.reserved_player_name ?? "Sin nombre"}`;
+    return `${range}. ${origin}: ${slot.reserved_player_name ?? "Sin nombre"}`;
   }
-  return "Libre";
+  return `${range}. Disponible`;
 }
 
-export function ReservationsCalendar({ canWrite }: { canWrite: boolean }) {
+function activeFixedBooking(
+  courtId: number,
+  date: string,
+  start: string,
+  end: string,
+  bookings: CourtFixedBooking[]
+): CourtFixedBooking | undefined {
+  return bookings.find(
+    (booking) =>
+      booking.is_active &&
+      booking.court_id === courtId &&
+      booking.weekday === weekdayOf(date) &&
+      clock(booking.start_time) === start &&
+      clock(booking.end_time) === end
+  );
+}
+
+function calendarTone(slot: ReservationSlotView | null, booking: CourtFixedBooking | undefined): CellTone {
+  if (slot?.tournament_block) return "tournament";
+  if (slot?.class_block) return "class";
+  if (slot?.reservation_status === "reserved" && slot.reservation_source !== "fixed") return "reserved";
+  if (slot?.reservation_source === "fixed" || booking) return "fixed";
+  return "free";
+}
+
+export function ReservationsCalendar({
+  canWrite,
+  mode = "calendar",
+}: {
+  canWrite: boolean;
+  mode?: "calendar" | "fixed";
+}) {
   const queryClient = useQueryClient();
-  const [date, setDate] = useState(() => todayInBuenosAires());
-  const [courtId, setCourtId] = useState<number | "all">("all");
-  const [selected, setSelected] = useState<SlotView | null>(null);
+  const today = todayInBuenosAires();
+  const [monday, setMonday] = useState(() => mondayOfWeek(today));
+  const [target, setTarget] = useState<CellTarget | null>(null);
   const [playerId, setPlayerId] = useState<number | null>(null);
 
-  const dayQuery = useQuery({
-    queryKey: ["court-reservations", date],
-    queryFn: () => courtReservationsService.day(date),
+  const dates = useMemo(() => weekDatesFromMonday(monday), [monday]);
+  const dayQueries = useQueries({
+    queries: dates.map((date) => ({
+      queryKey: ["court-reservations", date],
+      queryFn: () => courtReservationsService.day(date),
+    })),
   });
   const { data: players = [] } = useQuery({
     queryKey: ["players", "onlyActive"],
@@ -60,174 +143,297 @@ export function ReservationsCalendar({ canWrite }: { canWrite: boolean }) {
     queryFn: async () => {
       const response = await fetch("/api/courts");
       if (!response.ok) throw new Error("No se pudieron cargar las canchas");
-      return response.json() as Promise<Array<{ id: number; name: string }>>;
+      return response.json() as Promise<CourtOption[]>;
     },
   });
+  const { data: fixedBookings = [] } = useQuery({
+    queryKey: ["court-fixed-bookings"],
+    queryFn: () => courtReservationsService.fixedBookings(),
+  });
 
-  const slots = useMemo(() => {
-    const rows = dayQuery.data ?? [];
-    return courtId === "all" ? rows : rows.filter((slot) => slot.court_id === courtId);
-  }, [courtId, dayQuery.data]);
-  const times = useMemo(
-    () => Array.from(new Set(slots.map((slot) => slot.start_time))),
-    [slots]
-  );
+  const slotsByDay = dayQueries.map((query) => query.data ?? []);
+  const loading = dayQueries.some((query) => query.isLoading);
+  const loadError = dayQueries.find((query) => query.isError)?.error;
+
   const visibleCourts = useMemo(() => {
-    const ids = Array.from(new Set(slots.map((slot) => slot.court_id)));
-    return ids.map((id) => ({
-      id,
-      name: slots.find((slot) => slot.court_id === id)?.court_name ?? "Cancha",
-    }));
-  }, [slots]);
+    if (courts.length > 0) return courts;
+    const seen = new Map<number, string>();
+    for (const rows of slotsByDay) {
+      for (const slot of rows) seen.set(slot.court_id, slot.court_name);
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name }));
+  }, [courts, slotsByDay]);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["court-reservations", date] });
+  function slotAt(courtId: number, dayIndex: number, start: string): ReservationSlotView | null {
+    return (
+      slotsByDay[dayIndex]?.find(
+        (slot) => slot.court_id === courtId && clock(slot.start_time) === start
+      ) ?? null
+    );
+  }
+
+  function openCell(next: CellTarget) {
+    const booking = activeFixedBooking(next.courtId, next.date, next.start, next.end, fixedBookings);
+    setTarget(next);
+    setPlayerId(mode === "fixed" ? booking?.player_id ?? null : next.slot?.reserved_player_id ?? null);
+  }
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["court-reservations"] });
+    queryClient.invalidateQueries({ queryKey: ["court-fixed-bookings"] });
+  };
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!selected || playerId == null) throw new Error("Elegí un jugador");
-      if (selected.reservation_status === "reserved") {
-        await courtReservationsService.setPlayer(selected.id, playerId);
-      } else {
-        await courtReservationsService.reserve(selected.id, playerId);
+      if (!target) throw new Error("Elegí un turno");
+      if (playerId == null) throw new Error("Elegí un jugador");
+      if (mode === "fixed") {
+        await saveFixedCell(target, playerId, fixedBookings);
+        return;
       }
+      const booking = activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings);
+      const tone = calendarTone(target.slot, booking);
+      if (tone === "fixed") throw new Error("Los turnos fijos se guardan en Turnos fijos");
+      if (tone === "class" || tone === "tournament") {
+        throw new Error("Ese horario está ocupado y no se puede reservar");
+      }
+      await saveOccasionalCell(target, playerId);
     },
     onSuccess: () => {
-      toast.success(selected?.reservation_status === "reserved" ? "Reserva actualizada." : "Turno reservado.");
-      setSelected(null);
+      toast.success(mode === "fixed" ? "Turno fijo guardado." : "Reserva guardada.");
+      setTarget(null);
       refresh();
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar"),
   });
+
   const cancel = useMutation({
-    mutationFn: () => courtReservationsService.cancel(selected!.id),
+    mutationFn: async () => {
+      if (!target?.slot || target.slot.reservation_status !== "reserved" || target.slot.reservation_source === "fixed") {
+        throw new Error("Ese turno no tiene una reserva ocasional");
+      }
+      await courtReservationsService.cancel(target.slot.id);
+    },
     onSuccess: () => {
       toast.success("Reserva cancelada.");
-      setSelected(null);
+      setTarget(null);
       refresh();
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo cancelar"),
   });
-  const generateDay = useMutation({
-    mutationFn: () => courtSlotsService.generate({ date }),
+
+  const generateWeek = useMutation({
+    mutationFn: () => courtReservationsService.generateWeek(monday),
     onSuccess: () => {
-      toast.success("Turnos del día listos.");
+      toast.success("Semana generada.");
       refresh();
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudieron generar los turnos"),
-  });
-  const generateWeek = useMutation({
-    mutationFn: () => courtReservationsService.generateWeek(nextMonday(date)),
-    onSuccess: () => toast.success("Semana generada."),
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo generar la semana"),
   });
 
-  const blocked = Boolean(selected?.class_block || selected?.tournament_block);
+  const deactivate = useMutation({
+    mutationFn: async () => {
+      if (!target) throw new Error("Elegí un turno");
+      const booking = activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings);
+      if (!booking) throw new Error("No hay un turno fijo en ese horario");
+      await courtReservationsService.deactivateFixed(booking.id);
+    },
+    onSuccess: () => {
+      toast.success("Turno fijo quitado.");
+      setTarget(null);
+      refresh();
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo desactivar"),
+  });
+
+  const matchedBooking = target
+    ? activeFixedBooking(target.courtId, target.date, target.start, target.end, fixedBookings)
+    : undefined;
+  const tone = target ? (mode === "fixed" ? (matchedBooking ? "fixed" : "free") : calendarTone(target.slot, matchedBooking)) : "free";
+  const blocked = mode === "calendar" && (tone === "class" || tone === "tournament");
+  const fixedLocked = mode === "calendar" && tone === "fixed";
+  const occasional = mode === "calendar" && tone === "reserved";
+  const weekdayLabel = target ? DAY_SHORT[weekdayOf(target.date)] : "";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="reservation-date" className="text-xs">Fecha</Label>
-          <Input id="reservation-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-40 max-md:w-full" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="icon" onClick={() => setMonday(addDaysIso(monday, -7))} aria-label="Semana anterior">
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+        <div className="min-w-[9rem] text-center text-sm font-medium">
+          {shortDate(dates[0])} – {shortDate(dates[6])}
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="reservation-court" className="text-xs">Cancha</Label>
-          <select
-            id="reservation-court"
-            className="h-10 rounded-md border bg-background px-2 text-sm"
-            value={courtId === "all" ? "all" : String(courtId)}
-            onChange={(event) => setCourtId(event.target.value === "all" ? "all" : Number(event.target.value))}
-          >
-            <option value="all">Todas</option>
-            {courts.map((court) => (
-              <option key={court.id} value={court.id}>{court.name}</option>
-            ))}
-          </select>
-        </div>
+        <Button type="button" variant="outline" size="icon" onClick={() => setMonday(addDaysIso(monday, 7))} aria-label="Semana siguiente">
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setMonday(mondayOfWeek(today))}>
+          Esta semana
+        </Button>
         {canWrite ? (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => generateDay.mutate()} disabled={generateDay.isPending}>
-              Generar este día
-            </Button>
-            <Button type="button" variant="outline" onClick={() => generateWeek.mutate()} disabled={generateWeek.isPending || !/^\d{4}-\d{2}-\d{2}$/.test(date)}>
-              Generar semana del {/^\d{4}-\d{2}-\d{2}$/.test(date) ? nextMonday(date).split("-").reverse().join("/") : "lunes"}
-            </Button>
-          </div>
+          <Button type="button" variant="outline" onClick={() => generateWeek.mutate()} disabled={generateWeek.isPending}>
+            {generateWeek.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Generar esta semana
+          </Button>
         ) : null}
       </div>
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span>Libre</span>
-        <span className="text-emerald-700">Reserva</span>
-        <span className="text-indigo-700">Turno fijo</span>
-        <span className="text-sky-700">Clase</span>
-        <span className="text-amber-700">Torneo</span>
+
+      <div className="flex flex-wrap gap-2">
+        {LEGEND.filter((item) => mode === "calendar" || item.tone === "free" || item.tone === "fixed").map((item) => (
+          <span key={item.tone} className="inline-flex items-center gap-1.5 text-xs">
+            <span className={cn("h-3 w-3 rounded-sm", TONE_CLASS[item.tone])} />
+            {item.label}
+          </span>
+        ))}
       </div>
-      {dayQuery.isLoading ? (
-        <div className="flex justify-center py-8"><Loader2Icon className="h-5 w-5 animate-spin" /></div>
-      ) : dayQuery.isError ? (
-        <p className="text-sm text-destructive">{dayQuery.error instanceof Error ? dayQuery.error.message : "No se pudieron cargar las reservas"}</p>
-      ) : slots.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Este día todavía no tiene turnos generados.</p>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2Icon className="h-5 w-5 animate-spin" /></div>
+      ) : loadError ? (
+        <p className="text-sm text-destructive">
+          {loadError instanceof Error ? loadError.message : "No se pudieron cargar las reservas"}
+        </p>
+      ) : visibleCourts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No hay canchas activas.</p>
       ) : (
-        <div className="space-y-4">
-          {times.map((time) => (
-            <section key={time} className="space-y-2">
-              <h2 className="text-sm font-medium">{formatTime(time)}</h2>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                {visibleCourts.map((court) => {
-                  const slot = slots.find((item) => item.start_time === time && item.court_id === court.id);
-                  if (!slot) return null;
-                  return (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      className={`rounded-lg border p-3 text-left ${tone(slot)}`}
-                      onClick={() => {
-                        setSelected(slot);
-                        setPlayerId(slot.reserved_player_id);
-                      }}
-                    >
-                      <div className="text-xs text-muted-foreground">{slot.court_name} · {formatTime(slot.start_time)}–{formatTime(slot.end_time)}</div>
-                      <div className="mt-1 text-sm font-medium">{statusLabel(slot)}</div>
-                    </button>
-                  );
-                })}
+        <div className="space-y-5">
+          {visibleCourts.map((court) => (
+            <section key={court.id} className="overflow-hidden rounded-xl border">
+              <h2 className="border-b bg-muted/40 px-3 py-2 text-sm font-semibold">{court.name}</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[44rem] border-separate border-spacing-1 px-1">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 z-10 w-14 bg-background" />
+                      {dates.map((date) => (
+                        <th
+                          key={date}
+                          className={cn(
+                            "px-1 py-1 text-center text-[11px] font-medium",
+                            date === today && "text-foreground"
+                          )}
+                        >
+                          <div>{DAY_SHORT[weekdayOf(date)]}</div>
+                          <div className={cn("text-sm", date === today && "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background")}>
+                            {dayNumber(date)}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {STANDARD_COURT_SLOTS.map((hours) => (
+                      <tr key={hours.start}>
+                        <th className="sticky left-0 z-10 bg-background pr-1 text-right text-[11px] font-medium text-muted-foreground">
+                          {hours.start}
+                        </th>
+                        {dates.map((date, dayIndex) => {
+                          const slot = slotAt(court.id, dayIndex, hours.start);
+                          const rule = activeFixedBooking(court.id, date, hours.start, hours.end, fixedBookings);
+                          const toneOfCell = mode === "fixed" ? (rule ? "fixed" : "free") : calendarTone(slot, rule);
+                          const name = mode === "fixed" ? rule?.player_name : slot?.reserved_player_name ?? rule?.player_name;
+                          const reservedToo =
+                            mode === "calendar" &&
+                            (toneOfCell === "class" || toneOfCell === "tournament") &&
+                            (slot?.reservation_status === "reserved" || Boolean(rule));
+                          return (
+                            <td key={date} className="p-0">
+                              <button
+                                type="button"
+                                title={cellTitle(slot, hours.start, hours.end)}
+                                className={cn(
+                                  "flex h-11 w-full flex-col items-center justify-center rounded-md px-1 text-[11px] leading-tight transition-colors",
+                                  TONE_CLASS[toneOfCell],
+                                  reservedToo && (slot?.reservation_source === "fixed" || rule) && "ring-2 ring-inset ring-red-700",
+                                  reservedToo && slot?.reservation_source !== "fixed" && !rule && "ring-2 ring-inset ring-orange-700"
+                                )}
+                                onClick={() =>
+                                  openCell({
+                                    courtId: court.id,
+                                    courtName: court.name,
+                                    date,
+                                    start: hours.start,
+                                    end: hours.end,
+                                    slot,
+                                  })
+                                }
+                              >
+                                <span className="max-w-full truncate">
+                                  {toneOfCell === "tournament"
+                                    ? "Torneo"
+                                    : toneOfCell === "class"
+                                      ? "Clase"
+                                      : toneOfCell === "free"
+                                        ? "Libre"
+                                        : playerLabel(name)}
+                                </span>
+                                {reservedToo ? (
+                                  <span className="max-w-full truncate font-medium">{playerLabel(name)}</span>
+                                ) : null}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
           ))}
         </div>
       )}
 
-      <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
+      <Dialog open={target != null} onOpenChange={(open) => !open && setTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {selected ? `${selected.court_name} · ${formatTime(selected.start_time)}–${formatTime(selected.end_time)}` : "Turno"}
+              {target
+                ? `${target.courtName} · ${weekdayLabel} ${shortDate(target.date)} · ${formatTime(target.start)}–${formatTime(target.end)}`
+                : "Turno"}
             </DialogTitle>
           </DialogHeader>
-          {selected ? (
+          {target ? (
             <div className="space-y-3">
-              <p className="text-sm">{statusLabel(selected)}</p>
+              <p className="text-sm">
+                {mode === "fixed"
+                  ? matchedBooking
+                    ? `Fijo · ${matchedBooking.player_name}`
+                    : "Disponible"
+                  : cellTitle(target.slot, target.start, target.end)}
+              </p>
               {blocked ? (
-                <p className="text-sm text-muted-foreground">Ese horario está ocupado y no se puede reservar.</p>
+                <p className="text-sm text-muted-foreground">
+                  Ese horario está ocupado por {tone === "tournament" ? "un torneo" : "una clase"} y no se puede reservar.
+                </p>
+              ) : fixedLocked ? (
+                <p className="text-sm text-muted-foreground">
+                  Este horario es un turno fijo{matchedBooking ? ` de ${matchedBooking.player_name}` : ""}. Se cambia en Turnos fijos.
+                </p>
               ) : canWrite ? (
                 <PlayerSearchSelect
                   players={players}
                   value={playerId}
                   onValueChange={setPlayerId}
-                  placeholder="Jugador de la reserva"
+                  placeholder="Jugador"
                 />
               ) : null}
             </div>
           ) : null}
           <DialogFooter className="gap-2">
-            {canWrite && selected?.reservation_status === "reserved" && !blocked ? (
+            {canWrite && mode === "fixed" && matchedBooking ? (
+              <Button type="button" variant="outline" onClick={() => deactivate.mutate()} disabled={deactivate.isPending}>
+                Quitar
+              </Button>
+            ) : null}
+            {canWrite && occasional ? (
               <Button type="button" variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 Cancelar reserva
               </Button>
             ) : null}
-            {canWrite && !blocked ? (
+            {canWrite && !blocked && !fixedLocked ? (
               <Button type="button" onClick={() => save.mutate()} disabled={save.isPending || playerId == null}>
-                {selected?.reservation_status === "reserved" ? "Cambiar jugador" : "Reservar"}
+                {mode === "fixed" ? "Guardar" : occasional ? "Guardar jugador" : "Reservar"}
               </Button>
             ) : null}
           </DialogFooter>
@@ -235,4 +441,56 @@ export function ReservationsCalendar({ canWrite }: { canWrite: boolean }) {
       </Dialog>
     </div>
   );
+}
+
+async function saveFixedCell(target: CellTarget, playerId: number, bookings: CourtFixedBooking[]) {
+  const existing = activeFixedBooking(target.courtId, target.date, target.start, target.end, bookings);
+  const openEnded = {
+    valid_from: todayInBuenosAires(),
+    valid_until: null,
+    is_active: true,
+    suspended_from: null,
+    suspended_until: null,
+  };
+  if (existing) {
+    await courtReservationsService.saveFixed({
+      id: existing.id,
+      player_id: playerId,
+      court_id: existing.court_id,
+      weekday: existing.weekday,
+      start_time: clock(existing.start_time),
+      end_time: clock(existing.end_time),
+      ...openEnded,
+    });
+    return;
+  }
+  await courtReservationsService.saveFixed({
+    id: null,
+    player_id: playerId,
+    court_id: target.courtId,
+    weekday: weekdayOf(target.date),
+    start_time: target.start,
+    end_time: target.end,
+    ...openEnded,
+  });
+  if (!target.slot) {
+    await courtSlotsService.generate({ date: target.date });
+  }
+}
+
+async function saveOccasionalCell(target: CellTarget, playerId: number) {
+  let slotId = target.slot?.id;
+  if (!slotId) {
+    await courtSlotsService.generate({ date: target.date });
+    const rows = await courtReservationsService.day(target.date);
+    slotId = rows.find(
+      (slot) => slot.court_id === target.courtId && clock(slot.start_time) === target.start
+    )?.id;
+  }
+  if (!slotId) throw new Error("No se encontró el turno");
+  if (target.slot?.reservation_status === "reserved") {
+    await courtReservationsService.setPlayer(slotId, playerId);
+    return;
+  }
+  await courtReservationsService.reserve(slotId, playerId);
 }

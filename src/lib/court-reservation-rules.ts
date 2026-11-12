@@ -29,6 +29,14 @@ export function todayInBuenosAires(now = new Date()): string {
   }).format(now);
 }
 
+/** Lunes de la semana que contiene la fecha. Domingo pertenece a la semana que termina ese día. */
+export function mondayOfWeek(isoDate: string): string {
+  if (!isIsoDate(isoDate)) throw new Error("La fecha no es válida");
+  const weekday = weekdayOf(isoDate);
+  const back = weekday === 0 ? 6 : weekday - 1;
+  return addDaysIso(isoDate, -back);
+}
+
 /** El lunes siguiente. Si hoy ya es lunes, el de la semana que viene. */
 export function nextMonday(isoDate: string): string {
   if (!isIsoDate(isoDate)) throw new Error("La fecha no es válida");

@@ -3,7 +3,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/components/permissions-provider";
 import { ReservationsCalendar } from "@/components/reservations/ReservationsCalendar";
-import { FixedBookingsTab } from "@/components/reservations/FixedBookingsTab";
 
 export function ReservationsScreen() {
   const { can, loading } = usePermissions();
@@ -14,7 +13,7 @@ export function ReservationsScreen() {
       <div>
         <h1 className="text-2xl font-semibold">Reservas</h1>
         <p className="text-sm text-muted-foreground">
-          Reservá un turno o administrá los turnos fijos. Reservar no marca el turno como jugado ni como pago.
+          En Calendario se reserva un día. En Turnos fijos se elige quién lo tiene todas las semanas. Reservar no marca el turno como jugado ni como pago.
         </p>
       </div>
       <Tabs defaultValue="calendar">
@@ -26,7 +25,7 @@ export function ReservationsScreen() {
           <ReservationsCalendar canWrite={canWrite} />
         </TabsContent>
         <TabsContent value="fixed" className="mt-4">
-          <FixedBookingsTab canWrite={canWrite} />
+          <ReservationsCalendar canWrite={canWrite} mode="fixed" />
         </TabsContent>
       </Tabs>
     </div>

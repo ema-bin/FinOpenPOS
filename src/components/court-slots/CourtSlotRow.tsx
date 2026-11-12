@@ -94,7 +94,11 @@ export function CourtSlotCard({
             {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
           </div>
           <div className="text-xs text-muted-foreground">{formatSlotDate(slot.slot_date)}</div>
-          {reservationLabel ? <div className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">{reservationLabel}</div> : null}
+          {reservationLabel ? (
+            <div className={`mt-1 text-xs ${reservationLabel.startsWith("Fijo") ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"}`}>
+              {reservationLabel}
+            </div>
+          ) : null}
         </div>
         <label className="flex shrink-0 items-center gap-2 text-sm">
           <Checkbox
@@ -193,7 +197,11 @@ export function CourtSlotRow({
       </TableCell>
       <TableCell>
         <div>{formatTime(slot.start_time)} - {formatTime(slot.end_time)}</div>
-        {reservationLabel ? <div className="text-xs text-indigo-700 dark:text-indigo-300">{reservationLabel}</div> : null}
+        {reservationLabel ? (
+          <div className={`text-xs ${reservationLabel.startsWith("Fijo") ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"}`}>
+            {reservationLabel}
+          </div>
+        ) : null}
       </TableCell>
 
       {occupied ? (

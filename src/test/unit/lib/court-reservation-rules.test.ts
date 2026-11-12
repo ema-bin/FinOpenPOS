@@ -3,6 +3,7 @@ import { weekdayOf } from "@/lib/class-time";
 import {
   fixedBookingApplyDecision,
   isStandardCourtSlot,
+  mondayOfWeek,
   nextMonday,
   STANDARD_COURT_SLOTS,
   weekDatesFromMonday,
@@ -31,6 +32,12 @@ describe("semana siguiente", () => {
 
   it("un lunes pide el lunes siguiente", () => {
     expect(nextMonday("2026-11-16")).toBe("2026-11-23");
+  });
+
+  it("el calendario abre en el lunes de la semana visible", () => {
+    expect(mondayOfWeek("2026-11-12")).toBe("2026-11-09");
+    expect(mondayOfWeek("2026-11-15")).toBe("2026-11-09");
+    expect(mondayOfWeek("2026-11-16")).toBe("2026-11-16");
   });
 });
 
