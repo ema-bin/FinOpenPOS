@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
 
 type GenerateBody = {
   date?: string; // YYYY-MM-DD
@@ -43,6 +44,14 @@ export async function POST(request: Request) {
       },
       courts.map((c) => c.id)
     );
+
+    if (isCourtReservationsEnabledServer()) {
+      try {
+        await repos.courtReservations.applyDate(slotDate);
+      } catch (applyError) {
+        console.error("No se pudieron aplicar los turnos fijos:", applyError);
+      }
+    }
 
     return NextResponse.json(slots);
   } catch (error) {

@@ -26,6 +26,7 @@ interface CourtSlotTableProps {
   isSaving: boolean;
   isLoading: boolean;
   readOnly?: boolean;
+  reservationLabels?: ReadonlyMap<number, string>;
 }
 
 export function CourtSlotTable({
@@ -41,6 +42,7 @@ export function CourtSlotTable({
   isSaving,
   isLoading,
   readOnly = false,
+  reservationLabels,
 }: CourtSlotTableProps) {
   if (isLoading) {
     return (
@@ -127,6 +129,7 @@ export function CourtSlotTable({
             hasChanges={hasChanges}
             isSaving={isSaving}
             readOnly={readOnly}
+            reservationLabel={reservationLabels?.get(slot.id) ?? null}
           />
         );
       })}
@@ -164,6 +167,7 @@ export function CourtSlotTable({
                 hasChanges={hasChanges}
                 isSaving={isSaving}
                 readOnly={readOnly}
+                reservationLabel={reservationLabels?.get(slot.id) ?? null}
               />
             );
           })}

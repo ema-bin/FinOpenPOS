@@ -18,6 +18,7 @@ import {
   ShoppingCartIcon,
   PackageIcon,
   CalendarIcon,
+  CalendarRangeIcon,
   TicketIcon,
   TrophyIcon,
   ShieldIcon,
@@ -30,6 +31,7 @@ import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/components/permissions-provider";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
+import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
 import type { Permission } from "@/lib/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -44,6 +46,7 @@ const NAV_ITEMS: {
   { href: "/admin/orders", label: "Ventas", icon: ShoppingCartIcon, permission: "sales.operate" },
   { href: "/admin/purchases", label: "Compras", icon: PackageIcon, permission: "purchases.manage" },
   { href: "/admin/court-slots", label: "Canchas", icon: CalendarIcon, permission: "courts.operate" },
+  { href: "/admin/reservations", label: "Reservas", icon: CalendarRangeIcon, permission: "courts.operate" },
   {
     href: "/admin/slot-packs",
     label: "Packs",
@@ -76,6 +79,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/purchases-history": "Compras", // Redirigir a compras
   "/admin/suppliers": "Proveedores",
   "/admin/court-slots": "Turnos de canchas",
+  "/admin/reservations": "Reservas",
   "/admin/slot-packs": "Packs de turnos",
   "/admin/classes": "Clases",
   "/admin/tournaments": "Torneos",
@@ -98,6 +102,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
   const { canRead, loading: permsLoading } = usePermissions();
+  const reservationsOn = isCourtReservationsEnabledClient();
+  const navItems = NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn);
 
   useEffect(() => {
     setMounted(true);
@@ -197,7 +203,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </div>
         {menuOpen && (
           <nav className="flex flex-col gap-1 border-t bg-background px-2 py-2 md:hidden">
-            {NAV_ITEMS.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
+            {navItems.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
               const active =
                 mounted &&
                 (item.exact ? pathname === item.href : pathname.startsWith(item.href));
@@ -220,7 +226,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Barra de navegación principal */}
         <nav className="hidden h-12 items-center gap-1 border-t bg-muted/40 px-4 md:flex">
-          {NAV_ITEMS.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
+          {navItems.filter((item) => permsLoading || canSeeNav(item.permission, canRead)).map((item) => {
             const active =
               mounted &&
               (item.exact ? pathname === item.href : pathname.startsWith(item.href));
