@@ -322,6 +322,7 @@ BEGIN
   FOR v_booking IN
     SELECT * FROM court_fixed_bookings b
     WHERE b.is_active
+      AND b.weekday BETWEEN 1 AND 5
       AND b.weekday = EXTRACT(DOW FROM p_date)::int
       AND b.valid_from <= p_date
       AND (b.valid_until IS NULL OR b.valid_until >= p_date)
@@ -423,8 +424,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM courts WHERE id = p_court_id AND is_active) THEN
     RAISE EXCEPTION 'RESERVATION:Elegí una cancha';
   END IF;
-  IF p_weekday < 0 OR p_weekday > 6 THEN
-    RAISE EXCEPTION 'RESERVATION:Elegí el día de la semana';
+  IF p_weekday < 1 OR p_weekday > 5 THEN
+    RAISE EXCEPTION 'RESERVATION:Los turnos fijos son de lunes a viernes';
   END IF;
   IF NOT reservation_slot_is_standard(p_start, p_end) THEN
     RAISE EXCEPTION 'RESERVATION:El horario tiene que coincidir con un turno de la grilla';

@@ -15,6 +15,7 @@ import {
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
 import { courtReservationsService, courtSlotsService, playersService } from "@/services";
 import {
+  fixedBookingGridDates,
   mondayOfWeek,
   STANDARD_COURT_SLOTS,
   todayInBuenosAires,
@@ -129,6 +130,11 @@ export function ReservationsCalendar({
   const [playerId, setPlayerId] = useState<number | null>(null);
 
   const dates = useMemo(() => weekDatesFromMonday(monday), [monday]);
+  const gridDates = useMemo(
+    () => (mode === "fixed" ? fixedBookingGridDates(monday) : dates),
+    [dates, mode, monday]
+  );
+  const dayColumnCount = gridDates.length;
   const dayQueries = useQueries({
     queries: dates.map((date) => ({
       queryKey: ["court-reservations", date],
@@ -297,7 +303,7 @@ export function ReservationsCalendar({
     <div className="space-y-4">
       <div className={cn("rounded-lg px-3 py-2 text-sm", mode === "fixed" ? "bg-blue-600 text-white" : "bg-orange-500 text-white")}>
         {mode === "fixed"
-          ? "Turnos fijos. Guardar acá deja ese horario para todas las semanas."
+          ? "Turnos fijos de lunes a viernes. Guardar acá deja ese horario para todas las semanas."
           : "Calendario. Guardar acá reserva solo ese día. Lo rojo es un fijo y se cambia en la otra pestaña."}
       </div>
       {mode === "calendar" ? <div className="flex flex-wrap items-center gap-2">
@@ -390,19 +396,19 @@ export function ReservationsCalendar({
                 <table className="w-full min-w-[44rem] table-fixed border-separate border-spacing-1 px-1">
                   <colgroup>
                     <col className="w-14" />
-                    {dates.map((date) => (
-                      <col key={date} style={{ width: "calc((100% - 3.5rem) / 7)" }} />
+                    {gridDates.map((date) => (
+                      <col key={date} style={{ width: `calc((100% - 3.5rem) / ${dayColumnCount})` }} />
                     ))}
                   </colgroup>
                   <thead>
                     <tr>
                       <th className="sticky left-0 z-10 w-14 bg-background" />
-                      {dates.map((date) => (
+                      {gridDates.map((date) => (
                         <th
                           key={date}
                           className={cn(
                             "px-1 py-1 text-center text-[11px] font-medium",
-                            date === today && "text-foreground"
+                            date === today && mode === "calendar" && "text-foreground"
                           )}
                         >
                           <div>{mode === "fixed" ? WEEKDAY_LABELS[weekdayOf(date)] : DAY_SHORT[weekdayOf(date)]}</div>
@@ -421,8 +427,9 @@ export function ReservationsCalendar({
                         <th className="sticky left-0 z-10 w-14 bg-background pr-1 text-right text-[11px] font-medium text-muted-foreground">
                           {hours.start}
                         </th>
-                        {dates.map((date, dayIndex) => {
-                          const slot = slotAt(selectedCourt.id, dayIndex, hours.start);
+                        {gridDates.map((date) => {
+                          const dayIndex = dates.indexOf(date);
+                          const slot = dayIndex >= 0 ? slotAt(selectedCourt.id, dayIndex, hours.start) : null;
                           if (mode === "calendar" && !slot) {
                             return <td key={date} className="p-0"><div className="h-11" /></td>;
                           }

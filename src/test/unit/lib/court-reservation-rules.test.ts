@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { weekdayOf } from "@/lib/class-time";
 import {
   fixedBookingApplyDecision,
+  fixedBookingGridDates,
+  isFixedBookingWeekday,
   isStandardCourtSlot,
   mondayOfWeek,
   nextMonday,
@@ -9,6 +11,21 @@ import {
   weekDatesFromMonday,
 } from "@/lib/court-reservation-rules";
 import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+
+describe("turnos fijos", () => {
+  it("solo acepta lunes a viernes", () => {
+    expect(isFixedBookingWeekday(1)).toBe(true);
+    expect(isFixedBookingWeekday(5)).toBe(true);
+    expect(isFixedBookingWeekday(0)).toBe(false);
+    expect(isFixedBookingWeekday(6)).toBe(false);
+  });
+
+  it("la grilla de fijos tiene cinco columnas", () => {
+    const grid = fixedBookingGridDates("2026-11-09");
+    expect(grid).toHaveLength(5);
+    expect(grid.map(weekdayOf)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
 
 describe("turnos estándar", () => {
   it("coincide con la grilla de 90 minutos y el cierre de las 01:00", () => {

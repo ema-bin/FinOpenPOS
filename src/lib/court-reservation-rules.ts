@@ -52,6 +52,17 @@ export function weekDatesFromMonday(monday: string): string[] {
   return Array.from({ length: 7 }, (_, index) => addDaysIso(monday, index));
 }
 
+/** 1 = lunes … 5 = viernes (mismo criterio que weekdayOf / PostgreSQL DOW). */
+export const FIXED_BOOKING_WEEKDAYS = [1, 2, 3, 4, 5] as const;
+
+export function isFixedBookingWeekday(weekday: number): boolean {
+  return FIXED_BOOKING_WEEKDAYS.includes(weekday as (typeof FIXED_BOOKING_WEEKDAYS)[number]);
+}
+
+export function fixedBookingGridDates(monday: string): string[] {
+  return weekDatesFromMonday(monday).filter((date) => isFixedBookingWeekday(weekdayOf(date)));
+}
+
 export type FixedApplyState = {
   reservationStatus: "free" | "reserved";
   source: "manual" | "fixed" | null;
