@@ -112,11 +112,11 @@ function activeFixedBooking(
   );
 }
 
-function calendarTone(slot: ReservationSlotView | null, booking: CourtFixedBooking | undefined): CellTone {
+function calendarTone(slot: ReservationSlotView | null, _booking?: CourtFixedBooking | undefined): CellTone {
   if (slot?.tournament_block) return "tournament";
   if (slot?.class_block) return "class";
   if (slot?.reservation_status === "reserved" && slot.reservation_source !== "fixed") return "reserved";
-  if (slot?.reservation_source === "fixed" || booking) return "fixed";
+  if (slot?.reservation_source === "fixed") return "fixed";
   return "free";
 }
 
@@ -287,6 +287,26 @@ export function ReservationsCalendar({
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo desactivar"),
   });
 
+  const releaseFixedDay = useMutation({
+    mutationFn: async () => {
+      if (!target) throw new Error("Elegí un turno");
+      const bookingId =
+        target.slot?.fixed_booking_id ??
+        activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, fixedBookings)?.id;
+      if (!bookingId) throw new Error("No hay turno fijo en ese día");
+      if (target.slot?.reservation_source !== "fixed") {
+        throw new Error("Este día no tiene un turno fijo aplicado");
+      }
+      await courtReservationsService.cancelFixedDate(bookingId, target.date);
+    },
+    onSuccess: () => {
+      toast.success("Día liberado. El turno fijo sigue para las demás semanas.");
+      setTarget(null);
+      refresh();
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo liberar ese día"),
+  });
+
   const selectedCourt = visibleCourts.find((court) => court.id === courtId) ?? visibleCourts[0] ?? null;
   const missingDates =
     mode === "calendar" && selectedCourt
@@ -311,7 +331,7 @@ export function ReservationsCalendar({
       <div className={cn("rounded-lg px-3 py-2 text-sm", mode === "fixed" ? "bg-blue-600 text-white" : "bg-orange-500 text-white")}>
         {mode === "fixed"
           ? "Turnos fijos de lunes a viernes. Guardar acá deja ese horario para todas las semanas."
-          : "Calendario. Guardar acá reserva solo ese día. Lo rojo es un fijo y se cambia en la otra pestaña."}
+          : "Calendario. Guardar acá reserva solo ese día. Lo rojo es un fijo: podés liberar un día puntual o cambiar la regla en Turnos fijos."}
       </div>
       {mode === "calendar" ? <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="icon" onClick={() => setMonday(addDaysIso(monday, -7))} aria-label="Semana anterior">
@@ -580,7 +600,10 @@ export function ReservationsCalendar({
               ) : null}
               {fixedLocked ? (
                 <p className="text-sm text-muted-foreground">
-                  Este horario es un turno fijo{matchedBooking ? ` de ${matchedBooking.player_name}` : ""}. Se cambia en Turnos fijos.
+                  Turno fijo
+                  {matchedBooking?.player_name ? ` de ${matchedBooking.player_name}` : ""}. Podés liberar solo este
+                  {shortDate(target.date)}; la regla semanal no se toca. Para cambiar quién lo tiene siempre, usá Turnos
+                  fijos.
                 </p>
               ) : canWrite && !blocked ? (
                 <PlayerSearchSelect
@@ -601,6 +624,16 @@ export function ReservationsCalendar({
             {canWrite && occasional ? (
               <Button type="button" variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 Cancelar reserva
+              </Button>
+            ) : null}
+            {canWrite && mode === "calendar" && fixedLocked ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => releaseFixedDay.mutate()}
+                disabled={releaseFixedDay.isPending}
+              >
+                Liberar este día
               </Button>
             ) : null}
             {canWrite && !blocked && !fixedLocked ? (
