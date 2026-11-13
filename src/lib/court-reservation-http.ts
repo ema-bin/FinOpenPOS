@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { isIsoDate } from "@/lib/class-time";
-import { isStandardCourtSlot } from "@/lib/court-reservation-rules";
+import { isFixedBookingWeekday, isStandardCourtSlot } from "@/lib/court-reservation-rules";
 import type { FixedBookingInput } from "@/repositories/court-reservations.repository";
 
 export function reservationsDisabled() {
@@ -41,7 +41,9 @@ export function readFixedBooking(
     body.suspended_until == null || body.suspended_until === "" ? null : String(body.suspended_until);
   if (!Number.isInteger(playerId) || playerId <= 0) return { error: "Elegí un jugador" };
   if (!Number.isInteger(courtId) || courtId <= 0) return { error: "Elegí una cancha" };
-  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return { error: "Elegí el día de la semana" };
+  if (!Number.isInteger(weekday) || !isFixedBookingWeekday(weekday)) {
+    return { error: "Los turnos fijos son de lunes a viernes" };
+  }
   if (!isStandardCourtSlot(start, end)) return { error: "El horario tiene que coincidir con un turno de la grilla" };
   if (!isIsoDate(validFrom)) return { error: "La vigencia no es válida" };
   if (validUntil && !isIsoDate(validUntil)) return { error: "La vigencia no es válida" };

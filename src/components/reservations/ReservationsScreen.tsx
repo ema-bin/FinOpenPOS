@@ -25,10 +25,10 @@ export function ReservationsScreen() {
             Turnos fijos
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="calendar" className="mt-4">
+        <TabsContent value="calendar" className="mt-4 min-w-0">
           <ReservationsCalendar canWrite={canWrite} />
         </TabsContent>
-        <TabsContent value="fixed" className="mt-4">
+        <TabsContent value="fixed" className="mt-4 min-w-0">
           <ReservationsCalendar canWrite={canWrite} mode="fixed" />
         </TabsContent>
       </Tabs>
