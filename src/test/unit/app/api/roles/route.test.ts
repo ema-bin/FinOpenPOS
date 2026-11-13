@@ -29,36 +29,45 @@ describe("/api/roles", () => {
         if (table === "roles") {
           return {
             select: () => ({
-              order: async () => ({
-                data: [
-                  {
-                    id: 3,
-                    name: "Cajero",
-                    is_system: false,
-                    description: null,
-                    role_permissions: [{ permission: "sales.operate" }, { permission: "viejo" }],
-                  },
-                ],
-                error: null,
+              eq: () => ({
+                order: async () => ({
+                  data: [
+                    {
+                      id: 3,
+                      name: "Cajero",
+                      is_system: false,
+                      description: null,
+                      role_permissions: [{ permission: "sales.operate" }, { permission: "viejo" }],
+                    },
+                  ],
+                  error: null,
+                }),
               }),
             }),
           };
         }
         return {
-          select: (columns: string) =>
-            columns === "role_id"
-              ? {
-                  eq: () => ({
-                    maybeSingle: async () => ({ data: { role_id: 1 }, error: null }),
+          select: (columns: string) => {
+            if (columns === "club_id" || columns === "role_id") {
+              return {
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: columns === "club_id" ? { club_id: 1 } : { role_id: 1 },
+                    error: null,
                   }),
-                }
-              : Promise.resolve({
-                  data: [
-                    { user_id: "u1", role_id: 3 },
-                    { user_id: "u2", role_id: 3 },
-                  ],
-                  error: null,
                 }),
+              };
+            }
+            return {
+              eq: async () => ({
+                data: [
+                  { user_id: "u1", role_id: 3 },
+                  { user_id: "u2", role_id: 3 },
+                ],
+                error: null,
+              }),
+            };
+          },
         };
       },
     } as never);
@@ -76,13 +85,24 @@ describe("/api/roles", () => {
 
   it("POST 409 si el nombre ya existe", async () => {
     vi.mocked(createServiceClient).mockReturnValue({
-      from: () => ({
-        insert: () => ({
-          select: () => ({
-            single: async () => ({ data: null, error: { code: "23505", message: "duplicate key" } }),
+      from: (table: string) => {
+        if (table === "user_roles") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { club_id: 1 }, error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          insert: () => ({
+            select: () => ({
+              single: async () => ({ data: null, error: { code: "23505", message: "duplicate key" } }),
+            }),
           }),
-        }),
-      }),
+        };
+      },
     } as never);
 
     const res = await POST(
@@ -96,10 +116,15 @@ describe("/api/roles", () => {
 
   it("PATCH no deja editar permisos del rol Admin", async () => {
     vi.mocked(createServiceClient).mockReturnValue({
-      from: () => ({
-        select: () => ({
+      from: (table: string) => ({
+        select: (columns?: string) => ({
           eq: () => ({
-            maybeSingle: async () => ({ data: { id: 1, is_system: true, role_id: 1 }, error: null }),
+            maybeSingle: async () => ({
+              data: columns === "club_id"
+                ? { club_id: 1 }
+                : { id: 1, is_system: true, club_id: 1, role_id: table === "user_roles" ? 1 : 1 },
+              error: null,
+            }),
           }),
         }),
       }),
@@ -122,15 +147,26 @@ describe("/api/roles", () => {
           return {
             select: () => ({
               eq: () => ({
-                maybeSingle: async () => ({ data: { id: 3, is_system: false }, error: null }),
+                maybeSingle: async () => ({ data: { id: 3, is_system: false, club_id: 1 }, error: null }),
               }),
             }),
           };
         }
         return {
-          select: () => ({
-            eq: async () => ({ count: 2, error: null }),
-          }),
+          select: (columns: string) => {
+            if (columns === "club_id") {
+              return {
+                eq: () => ({
+                  maybeSingle: async () => ({ data: { club_id: 1 }, error: null }),
+                }),
+              };
+            }
+            return {
+              eq: () => ({
+                eq: async () => ({ count: 2, error: null }),
+              }),
+            };
+          },
         };
       },
     } as never);

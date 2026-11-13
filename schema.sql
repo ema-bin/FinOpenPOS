@@ -2,6 +2,11 @@
 -- RESET (para desarrollo)
 -- =========================================================
 
+ALTER TABLE IF EXISTS user_roles DROP CONSTRAINT IF EXISTS user_roles_club_id_fkey;
+ALTER TABLE IF EXISTS roles DROP CONSTRAINT IF EXISTS roles_club_id_fkey;
+DROP TABLE IF EXISTS platform_admins;
+DROP TABLE IF EXISTS clubs;
+
 DROP TABLE IF EXISTS class_month_closures;
 DROP TABLE IF EXISTS class_charges;
 DROP TABLE IF EXISTS class_session_players;
@@ -2450,3 +2455,6 @@ END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
   ON court_slots (court_id, slot_date, start_time);
+
+-- La ficha del complejo y el club_id de roles se aplican con scripts/add-clubs.sql
+-- (corre después de scripts/add-roles-permissions.sql).

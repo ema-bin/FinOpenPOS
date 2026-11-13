@@ -56,6 +56,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/advertisements", requirement: read("advertisements.manage") },
   { prefix: "/admin/users", requirement: read("users.manage") },
   { prefix: "/admin/roles", requirement: read("users.manage") },
+  { prefix: "/admin/club", requirement: read("users.manage") },
 ];
 
 /** Orden en que se elige la sección de destino cuando no hay acceso a la pedida. */
@@ -331,6 +332,8 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/users/[id]/status": { POST: write("users.manage") },
   "/api/roles": { GET: read("users.manage"), POST: write("users.manage") },
   "/api/roles/[id]": { PATCH: write("users.manage"), DELETE: write("users.manage") },
+  "/api/club": { GET: { kind: "authenticated" }, PATCH: write("users.manage") },
+  "/api/club/logo": { POST: write("users.manage") },
 
   "/api/tournament-matches/[id]/photo/upload": crud("tournaments.manage"),
   "/api/tournament-matches/[id]/result": crud("tournaments.manage"),
