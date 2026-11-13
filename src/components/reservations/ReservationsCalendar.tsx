@@ -120,6 +120,13 @@ function calendarTone(slot: ReservationSlotView | null, _booking?: CourtFixedBoo
   return "free";
 }
 
+function fixedCellTone(slot: ReservationSlotView | null, rule: CourtFixedBooking | undefined): CellTone {
+  if (slot?.tournament_block) return "tournament";
+  if (slot?.class_block) return "class";
+  if (rule) return "fixed";
+  return "free";
+}
+
 export function ReservationsCalendar({
   canWrite,
   mode = "calendar",
@@ -144,7 +151,7 @@ export function ReservationsCalendar({
     queries: dates.map((date) => ({
       queryKey: ["court-reservations", date],
       queryFn: () => courtReservationsService.day(date),
-      enabled: mode === "calendar",
+      enabled: mode === "calendar" || mode === "fixed",
       staleTime: 0,
     })),
   });
@@ -318,8 +325,12 @@ export function ReservationsCalendar({
   const matchedBooking = target
     ? activeFixedBooking(target.courtId, weekdayOf(target.date), target.start, target.end, fixedBookings)
     : undefined;
-  const tone = target ? (mode === "fixed" ? (matchedBooking ? "fixed" : "free") : calendarTone(target.slot, matchedBooking)) : "free";
-  const blocked = mode === "calendar" && (tone === "class" || tone === "tournament");
+  const tone = target
+    ? mode === "fixed"
+      ? fixedCellTone(target.slot, matchedBooking)
+      : calendarTone(target.slot, matchedBooking)
+    : "free";
+  const blocked = tone === "class" || tone === "tournament";
   const fixedLocked = mode === "calendar" && tone === "fixed";
   const occasional = mode === "calendar" && tone === "reserved";
   const weekdayLabel = target ? DAY_SHORT[weekdayOf(target.date)] : "";
@@ -330,7 +341,7 @@ export function ReservationsCalendar({
     <div className="min-w-0 w-full space-y-4">
       <div className={cn("rounded-lg px-3 py-2 text-sm", mode === "fixed" ? "bg-blue-600 text-white" : "bg-orange-500 text-white")}>
         {mode === "fixed"
-          ? "Turnos fijos de lunes a viernes. Guardar acá deja ese horario para todas las semanas."
+          ? "Turnos fijos de lunes a viernes. El amarillo muestra clases de la semana en curso (como guía). Guardar acá deja ese horario para todas las semanas."
           : "Calendario. Guardar acá reserva solo ese día. Lo rojo es un fijo: podés liberar un día puntual o cambiar la regla en Turnos fijos."}
       </div>
       {mode === "calendar" ? <div className="flex flex-wrap items-center gap-2">
@@ -355,7 +366,14 @@ export function ReservationsCalendar({
       </div> : null}
 
       <div className="flex flex-wrap gap-2">
-        {LEGEND.filter((item) => mode === "calendar" || item.tone === "free" || item.tone === "fixed").map((item) => (
+        {LEGEND.filter(
+          (item) =>
+            mode === "calendar" ||
+            item.tone === "free" ||
+            item.tone === "fixed" ||
+            item.tone === "class" ||
+            item.tone === "tournament"
+        ).map((item) => (
           <span key={item.tone} className="inline-flex items-center gap-1.5 text-xs">
             <span className={cn("h-3 w-3 rounded-sm", mode === "fixed" && item.tone === "fixed" ? "bg-blue-600" : TONE_CLASS[item.tone])} />
             {item.label}
@@ -363,7 +381,7 @@ export function ReservationsCalendar({
         ))}
       </div>
 
-      {mode === "calendar" && loading ? (
+      {loading ? (
         <div className="flex justify-center py-10"><Loader2Icon className="h-5 w-5 animate-spin" /></div>
       ) : loadError ? (
         <p className="text-sm text-destructive">
@@ -481,12 +499,14 @@ export function ReservationsCalendar({
                             );
                           }
                           const rule = activeFixedBooking(selectedCourt.id, weekdayOf(date), hours.start, hours.end, fixedBookings);
-                          const toneOfCell = mode === "fixed" ? (rule ? "fixed" : "free") : calendarTone(slot, rule);
+                          const toneOfCell =
+                            mode === "fixed" ? fixedCellTone(slot, rule) : calendarTone(slot, rule);
                           const name = mode === "fixed" ? rule?.player_name : slot?.reserved_player_name ?? rule?.player_name;
-                          const reservedToo =
-                            mode === "calendar" &&
+                          const classWithExtra =
                             toneOfCell === "class" &&
-                            (slot?.reservation_status === "reserved" || Boolean(rule));
+                            (mode === "calendar"
+                              ? slot?.reservation_status === "reserved" || Boolean(rule)
+                              : Boolean(rule));
                           return (
                             <td key={date} className="p-0">
                               <button
@@ -497,8 +517,16 @@ export function ReservationsCalendar({
                                   mode === "fixed" && toneOfCell === "fixed"
                                     ? "bg-blue-600 text-white hover:bg-blue-700"
                                     : TONE_CLASS[toneOfCell],
-                                  reservedToo && (slot?.reservation_source === "fixed" || rule) && "ring-2 ring-inset ring-red-700",
-                                  reservedToo && slot?.reservation_source !== "fixed" && !rule && "ring-2 ring-inset ring-orange-700"
+                                  classWithExtra &&
+                                    mode === "calendar" &&
+                                    (slot?.reservation_source === "fixed" || rule) &&
+                                    "ring-2 ring-inset ring-red-700",
+                                  classWithExtra &&
+                                    mode === "calendar" &&
+                                    slot?.reservation_source !== "fixed" &&
+                                    !rule &&
+                                    "ring-2 ring-inset ring-orange-700",
+                                  classWithExtra && mode === "fixed" && rule && "ring-2 ring-inset ring-blue-700"
                                 )}
                                 onClick={() =>
                                   openCell({
@@ -525,7 +553,7 @@ export function ReservationsCalendar({
                                     Cancelada
                                   </span>
                                 ) : null}
-                                {reservedToo ? (
+                                {classWithExtra && name ? (
                                   <span className="max-w-full truncate font-medium">{playerLabel(name)}</span>
                                 ) : null}
                               </button>
@@ -558,9 +586,11 @@ export function ReservationsCalendar({
             <div className="space-y-3">
               <p className="text-sm">
                 {mode === "fixed"
-                  ? matchedBooking
-                    ? `Fijo · ${matchedBooking.player_name}`
-                    : "Disponible"
+                  ? target.slot
+                    ? cellTitle(target.slot, target.start, target.end)
+                    : matchedBooking
+                      ? `Fijo · ${matchedBooking.player_name}`
+                      : "Disponible"
                   : cellTitle(target.slot, target.start, target.end)}
               </p>
               {tone === "tournament" ? (
