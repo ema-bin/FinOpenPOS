@@ -279,7 +279,10 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   // Torneos
   "/api/ranking": crud("tournaments.manage"),
   "/api/ranking/player-breakdown": crud("tournaments.manage"),
-  "/api/ranking-point-rules": crud("tournaments.manage"),
+  "/api/ranking-point-rules": {
+    GET: read("tournaments.manage", "users.manage"),
+    PATCH: write("users.manage"),
+  },
   "/api/registration-pricing-settings": crud("tournaments.manage"),
   "/api/tournaments": crud("tournaments.manage"),
   "/api/tournaments/[id]": crud("tournaments.manage"),

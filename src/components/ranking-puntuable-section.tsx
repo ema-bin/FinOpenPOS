@@ -259,17 +259,19 @@ export function RankingPuntuableSection() {
     }
   );
 
-  const { data: pointRules = [], isLoading: loadingRules } = useQuery<
+  const { data: pointRules, isLoading: loadingRules, error: rulesError } = useQuery<
     TournamentRankingPointRule[]
   >({
     queryKey: ["ranking-point-rules"],
     queryFn: async () => {
       const res = await fetch("/api/ranking-point-rules");
-      if (!res.ok) throw new Error("Failed to fetch rules");
-      return res.json();
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || "No se pudieron leer los puntos");
+      return payload;
     },
     staleTime: 1000 * 60,
   });
+  const rules = pointRules ?? [];
 
   // Nota: el preview del popup se dibuja directamente en el canvas del DOM
   // (ver handleShareRanking). Este state se mantiene solo por compatibilidad.
@@ -1222,7 +1224,7 @@ export function RankingPuntuableSection() {
             Puntos por ronda
           </CardTitle>
           <CardDescription className="text-xs">
-            Puntos que se asignan por ronda al finalizar un torneo puntuable.
+            Puntos de este complejo. Se cambian en Configuración.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
@@ -1230,10 +1232,14 @@ export function RankingPuntuableSection() {
             <div className="flex justify-center py-6">
               <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : rulesError ? (
+            <p className="py-4 text-sm text-destructive">
+              {rulesError instanceof Error ? rulesError.message : "No se pudieron leer los puntos"}
+            </p>
           ) : (
             <>
             <div className="space-y-2 md:hidden">
-              {(pointRules as TournamentRankingPointRule[]).map((r) => (
+              {rules.map((r) => (
                 <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                   <span>{ROUND_LABELS[r.round_reached] ?? r.round_reached}</span>
                   <span className="font-medium">{r.points}</span>
@@ -1249,7 +1255,7 @@ export function RankingPuntuableSection() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(pointRules as TournamentRankingPointRule[]).map((r) => (
+                {rules.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="py-1.5 text-sm">
                       {ROUND_LABELS[r.round_reached] ?? r.round_reached}

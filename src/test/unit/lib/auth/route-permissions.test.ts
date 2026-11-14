@@ -312,6 +312,15 @@ describe("APIs por rol", () => {
     expect(canApi(CAJERO, "/api/products", "GET")).toBe(true);
   });
 
+  it("los puntos del ranking se ven en torneos y solo un admin los cambia", () => {
+    expect(canApi(CAJERO, "/api/ranking-point-rules", "GET")).toBe(true);
+    expect(canApi(CAJERO, "/api/ranking-point-rules", "PATCH")).toBe(false);
+    expect(canApi(ADMIN_CANCHAS, "/api/ranking-point-rules", "PATCH")).toBe(false);
+    const adminUsuarios = grants(["users.manage"]);
+    expect(canApi(adminUsuarios, "/api/ranking-point-rules", "GET")).toBe(true);
+    expect(canApi(adminUsuarios, "/api/ranking-point-rules", "PATCH")).toBe(true);
+  });
+
   it("los endpoints que hoy no validan sesión pasan a exigir permiso", () => {
     expect(canApi([], "/api/registration-pricing-settings", "GET")).toBe(false);
     expect(canApi([], "/api/advertisements/upload", "POST")).toBe(false);
