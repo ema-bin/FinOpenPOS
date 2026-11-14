@@ -2458,3 +2458,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 
 -- La ficha del complejo y el club_id de roles se aplican con scripts/add-clubs.sql
 -- (corre después de scripts/add-roles-permissions.sql).
+-- El club_id del resto de las tablas se aplica con scripts/add-club-id.sql.

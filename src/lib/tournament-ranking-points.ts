@@ -16,12 +16,27 @@ import {
 } from "@/lib/tournament-ranking-points-core";
 
 async function getRoundPointsMap(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  clubId: number
 ): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from("tournament_ranking_point_rules")
-    .select("round_reached, points");
-  if (error) throw new Error(`Failed to fetch ranking point rules: ${error.message}`);
+    .select("round_reached, points")
+    .eq("club_id", clubId);
+  if (error?.code === "42703") {
+    const legacy = await supabase
+      .from("tournament_ranking_point_rules")
+      .select("round_reached, points");
+    if (legacy.error) {
+      throw new Error(`Failed to fetch ranking point rules: ${legacy.error.message}`);
+    }
+    return mergeRoundPointsFromDb(
+      legacy.data as Array<{ round_reached: string; points: number }> | null
+    );
+  }
+  if (error) {
+    throw new Error(`Failed to fetch ranking point rules: ${error.message}`);
+  }
   return mergeRoundPointsFromDb(
     data as Array<{ round_reached: string; points: number }> | null
   );
@@ -31,16 +46,19 @@ export async function computeAndSaveTournamentRankingPoints(
   supabase: SupabaseClient,
   tournamentId: number
 ): Promise<{ saved: number }> {
-  const roundPoints = await getRoundPointsMap(supabase);
-
   const { data: tournament, error: tErr } = await supabase
     .from("tournaments")
-    .select("id, is_puntuable, is_grand_prix, category_id, start_date, end_date")
+    .select("id, club_id, is_puntuable, is_grand_prix, category_id, start_date, end_date")
     .eq("id", tournamentId)
     .single();
   if (tErr || !tournament) {
     throw new Error("Tournament not found");
   }
+  const clubId = Number(tournament.club_id);
+  if (!Number.isInteger(clubId) || clubId <= 0) {
+    throw new Error("Falta aplicar el script de club_id en la base.");
+  }
+  const roundPoints = await getRoundPointsMap(supabase, clubId);
   if (isMastersFormat(await readTournamentFormat(supabase, tournamentId))) {
     return { saved: 0 };
   }
