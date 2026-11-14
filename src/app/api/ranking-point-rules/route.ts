@@ -27,9 +27,15 @@ function missingClubColumn(error: { code?: string; message?: string } | null): b
   return error?.code === "42703" || /club_id/i.test(error?.message ?? "");
 }
 
+async function requireRulesRead() {
+  const tournaments = await requirePermission("tournaments.manage", "read");
+  if (tournaments.ok || tournaments.response.status === 401) return tournaments;
+  return requirePermission("users.manage", "read");
+}
+
 export async function GET() {
   try {
-    const auth = await requirePermission("tournaments.manage", "read");
+    const auth = await requireRulesRead();
     if (!auth.ok) return auth.response;
 
     const service = createServiceClient();
@@ -62,7 +68,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const auth = await requirePermission("tournaments.manage", "write");
+    const auth = await requirePermission("users.manage", "write");
     if (!auth.ok) return auth.response;
 
     const body = await request.json();

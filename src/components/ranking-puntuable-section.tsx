@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -53,7 +53,6 @@ import {
   splitMasterRanking,
 } from "@/lib/master-ranking-cutoff";
 import { toast } from "sonner";
-import { usePermissions } from "@/components/permissions-provider";
 
 const MASTER_MIN_TOURNAMENTS_KEY = "pcp-ranking-master-min-tournaments";
 const MASTER_FLYER_DATE_KEY = "pcp-ranking-master-flyer-date";
@@ -102,9 +101,6 @@ type PlayerBreakdownResponse = {
 };
 
 export function RankingPuntuableSection() {
-  const queryClient = useQueryClient();
-  const { can, loading: permsLoading } = usePermissions();
-  const canWrite = !permsLoading && can("tournaments.manage");
   const currentYear = new Date().getFullYear();
   const [shareKind, setShareKind] = useState<"ranking" | "master">("ranking");
   const [sharing, setSharing] = useState(false);
@@ -276,34 +272,6 @@ export function RankingPuntuableSection() {
     staleTime: 1000 * 60,
   });
   const rules = pointRules ?? [];
-  const [draftPoints, setDraftPoints] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (!pointRules) return;
-    const next: Record<string, string> = {};
-    for (const rule of pointRules) next[rule.round_reached] = String(rule.points);
-    setDraftPoints(next);
-  }, [pointRules]);
-  const saveRules = useMutation({
-    mutationFn: async () => {
-      const body = rules.map((rule) => ({
-        round_reached: rule.round_reached,
-        points: Number(draftPoints[rule.round_reached]),
-      }));
-      const res = await fetch("/api/ranking-point-rules", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || "No se pudieron guardar los puntos");
-      return payload;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ranking-point-rules"] });
-      toast.success("Puntos guardados");
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
 
   // Nota: el preview del popup se dibuja directamente en el canvas del DOM
   // (ver handleShareRanking). Este state se mantiene solo por compatibilidad.
@@ -1256,7 +1224,7 @@ export function RankingPuntuableSection() {
             Puntos por ronda
           </CardTitle>
           <CardDescription className="text-xs">
-            Puntos de este complejo. Se aplican al finalizar un torneo puntuable. Los ya cerrados no se recalculan.
+            Puntos de este complejo. Se cambian en Configuración.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
@@ -1272,24 +1240,9 @@ export function RankingPuntuableSection() {
             <>
             <div className="space-y-2 md:hidden">
               {rules.map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                   <span>{ROUND_LABELS[r.round_reached] ?? r.round_reached}</span>
-                  {canWrite ? (
-                    <Input
-                      type="number"
-                      min={0}
-                      className="h-8 w-20 text-right"
-                      value={draftPoints[r.round_reached] ?? ""}
-                      onChange={(event) =>
-                        setDraftPoints((current) => ({
-                          ...current,
-                          [r.round_reached]: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    <span className="font-medium">{r.points}</span>
-                  )}
+                  <span className="font-medium">{r.points}</span>
                 </div>
               ))}
             </div>
@@ -1308,40 +1261,13 @@ export function RankingPuntuableSection() {
                       {ROUND_LABELS[r.round_reached] ?? r.round_reached}
                     </TableCell>
                     <TableCell className="py-1.5 text-right text-sm font-medium">
-                      {canWrite ? (
-                        <Input
-                          type="number"
-                          min={0}
-                          className="ml-auto h-8 w-20 text-right"
-                          value={draftPoints[r.round_reached] ?? ""}
-                          onChange={(event) =>
-                            setDraftPoints((current) => ({
-                              ...current,
-                              [r.round_reached]: event.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        r.points
-                      )}
+                      {r.points}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             </div>
-            {canWrite ? (
-              <Button
-                type="button"
-                size="sm"
-                className="mt-3"
-                disabled={saveRules.isPending}
-                onClick={() => saveRules.mutate()}
-              >
-                {saveRules.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Guardar puntos
-              </Button>
-            ) : null}
             </>
           )}
         </CardContent>

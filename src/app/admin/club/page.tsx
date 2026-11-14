@@ -14,7 +14,18 @@ import { usePermissions } from "@/components/permissions-provider";
 import { WEEKDAY_LABELS } from "@/lib/class-time";
 import { hexToHsl, hslToHex } from "@/lib/clubs/color";
 import type { ClubSettings } from "@/lib/clubs/settings";
+import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { cn } from "@/lib/utils";
+
+const ROUND_LABELS: Record<string, string> = {
+  champion: "Campeón",
+  final: "Final",
+  semifinal: "Semifinal",
+  cuartos: "Cuartos",
+  octavos: "Octavos",
+  "16avos": "16avos",
+  groups: "Grupos (no clasifica)",
+};
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
@@ -103,25 +114,63 @@ export default function ClubSettingsPage() {
     queryFn: fetchClub,
   });
   const [draft, setDraft] = useState<ClubSettings | null>(null);
+  const { data: pointRules, error: pointsError } = useQuery<TournamentRankingPointRule[]>({
+    queryKey: ["ranking-point-rules"],
+    queryFn: async () => {
+      const response = await fetch("/api/ranking-point-rules");
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "No se pudieron leer los puntos");
+      return body;
+    },
+  });
+  const [pointDraft, setPointDraft] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
     if (data) setDraft(data);
   }, [data]);
 
+  useEffect(() => {
+    if (!pointRules) return;
+    const next: Record<string, string> = {};
+    for (const rule of pointRules) next[rule.round_reached] = String(rule.points);
+    setPointDraft(next);
+  }, [pointRules]);
+
   const save = useMutation({
-    mutationFn: async (value: ClubSettings) => {
+    mutationFn: async (value: {
+      settings: ClubSettings;
+      points: Record<string, string> | null;
+      rules: TournamentRankingPointRule[] | null;
+    }) => {
       const response = await fetch("/api/club", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(value),
+        body: JSON.stringify(value.settings),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? "No se pudo guardar");
+      if (value.rules && value.points) {
+        const pointsResponse = await fetch("/api/ranking-point-rules", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            value.rules.map((rule) => ({
+              round_reached: rule.round_reached,
+              points: Number(value.points?.[rule.round_reached]),
+            }))
+          ),
+        });
+        const pointsBody = await pointsResponse.json().catch(() => null);
+        if (!pointsResponse.ok) {
+          throw new Error(pointsBody?.error ?? "La ficha se guardó, pero no los puntos del ranking");
+        }
+      }
       return body as ClubSettings;
     },
     onSuccess: (saved) => {
       queryClient.setQueryData(["club-settings"], saved);
       queryClient.invalidateQueries({ queryKey: ["club-brand"] });
+      queryClient.invalidateQueries({ queryKey: ["ranking-point-rules"] });
       toast.success("Configuración guardada.");
     },
     onError: (saveError) => toast.error(saveError instanceof Error ? saveError.message : "No se pudo guardar"),
@@ -161,7 +210,7 @@ export default function ClubSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Configuración</h1>
         <p className="text-sm text-muted-foreground">
-          El logo y los colores se aplican al guardar. El horario, los módulos y el resto quedan guardados y todavía no cambian turnos, clases ni los procesos automáticos.
+          El logo, los colores y los puntos del ranking se aplican al guardar. El horario, los módulos y el resto quedan guardados y todavía no cambian turnos, clases ni los procesos automáticos.
         </p>
       </div>
 
@@ -344,17 +393,53 @@ export default function ClubSettingsPage() {
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_tournaments", checked)}
       >
-        <div className="max-w-xs space-y-1.5">
-          <Label htmlFor="club-discount">Descuento por categoría inferior (%)</Label>
-          <Input
-            id="club-discount"
-            type="number"
-            min={0}
-            max={100}
-            value={draft.registration_discount_percent}
-            disabled={!canWrite || !draft.module_tournaments}
-            onChange={(event) => set("registration_discount_percent", Number(event.target.value))}
-          />
+        <div className="space-y-4">
+          <div className="max-w-xs space-y-1.5">
+            <Label htmlFor="club-discount">Descuento por categoría inferior (%)</Label>
+            <Input
+              id="club-discount"
+              type="number"
+              min={0}
+              max={100}
+              value={draft.registration_discount_percent}
+              disabled={!canWrite || !draft.module_tournaments}
+              onChange={(event) => set("registration_discount_percent", Number(event.target.value))}
+            />
+          </div>
+          <div className="max-w-md space-y-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Puntos por ronda</p>
+              <p className="text-xs text-muted-foreground">
+                Se aplican al finalizar un torneo puntuable. Los ya cerrados no se recalculan.
+              </p>
+            </div>
+            {pointsError ? (
+              <p className="text-sm text-destructive">
+                {pointsError instanceof Error ? pointsError.message : "No se pudieron leer los puntos"}
+              </p>
+            ) : pointDraft && pointRules ? (
+              pointRules.map((rule) => (
+                <label key={rule.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span>{ROUND_LABELS[rule.round_reached] ?? rule.round_reached}</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-8 w-24 text-right"
+                    value={pointDraft[rule.round_reached] ?? ""}
+                    disabled={!canWrite || !draft.module_tournaments}
+                    aria-label={ROUND_LABELS[rule.round_reached] ?? rule.round_reached}
+                    onChange={(event) =>
+                      setPointDraft((current) =>
+                        current ? { ...current, [rule.round_reached]: event.target.value } : current
+                      )
+                    }
+                  />
+                </label>
+              ))
+            ) : (
+              <Loader2Icon className="h-4 w-4 animate-spin" />
+            )}
+          </div>
         </div>
       </ModuleSection>
 
@@ -399,7 +484,11 @@ export default function ClubSettingsPage() {
       </ModuleSection>
 
       {canWrite ? (
-        <Button type="button" onClick={() => save.mutate(draft)} disabled={save.isPending}>
+        <Button
+          type="button"
+          onClick={() => save.mutate({ settings: draft, points: pointDraft, rules: pointRules ?? null })}
+          disabled={save.isPending}
+        >
           {save.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
           Guardar
         </Button>
