@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import { ShareTournamentTitle } from "@/components/share-tournament-title";
+import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 import {
   ShareBracketMatchSlot,
   BracketTrophyIcon,
@@ -347,7 +348,7 @@ export const TournamentBracketShareCentered = React.forwardRef<
         isPuntuable={isPuntuable}
       />
       <div className="minimal-bracket-watermark" aria-hidden>
-        <img src="/PCP-logo.png" alt="" crossOrigin="anonymous" draggable={false} />
+        <img src={CLUB_LOGO_SRC} alt="" crossOrigin="anonymous" draggable={false} />
       </div>
       <div className="minimal-bracket-body" style={{ minHeight: bodyHeight }}>
         <div

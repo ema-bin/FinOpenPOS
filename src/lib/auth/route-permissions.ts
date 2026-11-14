@@ -334,6 +334,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/roles/[id]": { PATCH: write("users.manage"), DELETE: write("users.manage") },
   "/api/club": { GET: { kind: "authenticated" }, PATCH: write("users.manage") },
   "/api/club/logo": { POST: write("users.manage") },
+  "/api/club/logo-image": { GET: PUBLIC },
 
   "/api/tournament-matches/[id]/photo/upload": crud("tournaments.manage"),
   "/api/tournament-matches/[id]/result": crud("tournaments.manage"),

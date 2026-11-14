@@ -34,6 +34,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/components/permissions-provider";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
+import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 import type { Permission } from "@/lib/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -173,17 +174,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-2 text-lg font-semibold"
           >
             <div className="relative h-10 w-10 flex-shrink-0">
-              {clubBrand?.logo_url ? (
-                <img src={clubBrand.logo_url} alt={clubBrand.short_name} className="h-10 w-10 object-contain" />
-              ) : (
-                <Image
-                  src="/PCP-logo.png"
-                  alt="PCP Logo"
-                  fill
-                  className="object-contain"
-                  priority
-                />
-              )}
+              <img
+                src={CLUB_LOGO_SRC}
+                alt={clubBrand?.short_name ?? "Logo"}
+                className="h-10 w-10 object-contain"
+              />
             </div>
             <span className="sr-only">{clubBrand?.short_name ?? "Admin"}</span>
           </Link>
