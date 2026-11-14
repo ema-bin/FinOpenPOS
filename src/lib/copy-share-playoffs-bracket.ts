@@ -5,6 +5,7 @@ import {
   scaleCanvasToInstagramStory,
   scaleCanvasToShareWidth,
 } from "@/lib/share-image-export";
+import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 
 export type CopySharePlayoffsBracketOptions = {
   /** Vertical 1080×1920 — se lee mejor en WhatsApp al abrir en el celular. */
@@ -32,7 +33,7 @@ export async function copySharePlayoffsBracketToClipboard(
       logo.crossOrigin = "anonymous";
       logo.onload = () => resolve();
       logo.onerror = () => resolve();
-      logo.src = "/PCP-logo.png";
+      logo.src = CLUB_LOGO_SRC;
     });
 
     const dataUrl = await toPng(el, {

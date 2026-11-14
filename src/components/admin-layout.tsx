@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -23,6 +24,7 @@ import {
   TrophyIcon,
   ShieldIcon,
   KeyRoundIcon,
+  SettingsIcon,
   GraduationCapIcon,
   MenuIcon,
   XIcon,
@@ -32,6 +34,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/components/permissions-provider";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
+import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 import type { Permission } from "@/lib/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -57,6 +60,7 @@ const NAV_ITEMS: {
   { href: "/admin/tournaments", label: "Torneos", icon: TrophyIcon, permission: "tournaments.manage" },
   { href: "/admin/users", label: "Usuarios", icon: ShieldIcon, permission: "users.manage" },
   { href: "/admin/roles", label: "Roles", icon: KeyRoundIcon, permission: "users.manage" },
+  { href: "/admin/club", label: "Configuración", icon: SettingsIcon, permission: "users.manage" },
 ];
 
 function canSeeNav(
@@ -90,6 +94,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/monthly-sales-closure": "Cierre mensual",
   "/admin/users": "Usuarios",
   "/admin/roles": "Roles",
+  "/admin/club": "Configuración",
 };
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -103,6 +108,22 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const currentPathname = usePathname();
   const { canRead, loading: permsLoading } = usePermissions();
   const reservationsOn = isCourtReservationsEnabledClient();
+  const { data: clubBrand } = useQuery({
+    queryKey: ["club-brand"],
+    queryFn: async () => {
+      const response = await fetch("/api/club");
+      if (!response.ok) return null;
+      return response.json() as Promise<{
+        short_name: string;
+        logo_url: string | null;
+        primary_color: string;
+        accent_color: string;
+        on_primary_color: string;
+      }>;
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
   const navItems = NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn);
 
   useEffect(() => {
@@ -125,6 +146,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     });
   }, [currentPathname]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!clubBrand) return;
+    root.style.setProperty("--primary", clubBrand.primary_color);
+    root.style.setProperty("--ring", clubBrand.primary_color);
+    root.style.setProperty("--accent", clubBrand.accent_color);
+    root.style.setProperty("--primary-foreground", clubBrand.on_primary_color);
+  }, [clubBrand]);
+
   // elegir el key más específico que matchee el pathname
   const effectiveKey = mounted && pathname
     ? Object.keys(pageNames)
@@ -144,15 +174,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-2 text-lg font-semibold"
           >
             <div className="relative h-10 w-10 flex-shrink-0">
-              <Image
-                src="/PCP-logo.png"
-                alt="PCP Logo"
-                fill
-                className="object-contain"
-                priority
+              <img
+                src={CLUB_LOGO_SRC}
+                alt={clubBrand?.short_name ?? "Logo"}
+                className="h-10 w-10 object-contain"
               />
             </div>
-            <span className="sr-only">Admin Panel</span>
+            <span className="sr-only">{clubBrand?.short_name ?? "Admin"}</span>
           </Link>
           <h1 className="text-xl font-bold max-md:min-w-0 max-md:truncate">{title}</h1>
 

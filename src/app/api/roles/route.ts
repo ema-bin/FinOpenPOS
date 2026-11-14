@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { isPermission, normalizeAccess, type PermissionGrant } from "@/lib/auth/permissions";
 import { parseRoleWrite } from "@/lib/auth/role-edit";
+import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 
 type RoleRow = {
   id: number;
@@ -33,12 +34,14 @@ export async function GET() {
     if (!auth.ok) return auth.response;
 
     const service = createServiceClient();
+    const clubId = await clubIdForUser(service, auth.userId);
     const [rolesResult, assignmentsResult, actorResult] = await Promise.all([
       service
         .from("roles")
         .select("id, name, is_system, description, role_permissions(permission, access)")
+        .eq("club_id", clubId)
         .order("id"),
-      service.from("user_roles").select("user_id, role_id"),
+      service.from("user_roles").select("user_id, role_id").eq("club_id", clubId),
       service.from("user_roles").select("role_id").eq("user_id", auth.userId).maybeSingle(),
     ]);
 
@@ -68,6 +71,9 @@ export async function GET() {
       roles,
     });
   } catch (error) {
+    if (error instanceof ClubContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("GET /api/roles error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
@@ -85,9 +91,10 @@ export async function POST(request: Request) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const service = createServiceClient();
+    const clubId = await clubIdForUser(service, auth.userId);
     const { data: created, error } = await service
       .from("roles")
-      .insert({ name: parsed.value.name, is_system: false })
+      .insert({ name: parsed.value.name, is_system: false, club_id: clubId })
       .select("id, name, is_system")
       .single();
 
@@ -116,6 +123,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ...created, permissions }, { status: 201 });
   } catch (error) {
+    if (error instanceof ClubContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("POST /api/roles error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { parseRoleWrite, validateRoleDelete, validateRoleUpdate } from "@/lib/auth/role-edit";
+import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 
 type RouteParams = { params: { id: string } };
 
@@ -28,12 +29,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const service = createServiceClient();
+    const clubId = await clubIdForUser(service, auth.userId);
     const [roleResult, actorResult] = await Promise.all([
-      service.from("roles").select("id, is_system").eq("id", roleId).maybeSingle(),
+      service.from("roles").select("id, is_system, club_id").eq("id", roleId).maybeSingle(),
       service.from("user_roles").select("role_id").eq("user_id", auth.userId).maybeSingle(),
     ]);
     if (roleResult.error) return NextResponse.json({ error: roleResult.error.message }, { status: 500 });
-    if (!roleResult.data) return NextResponse.json({ error: "El rol no existe" }, { status: 404 });
+    if (!roleResult.data || Number(roleResult.data.club_id) !== clubId) {
+      return NextResponse.json({ error: "El rol no existe" }, { status: 404 });
+    }
     if (actorResult.error) return NextResponse.json({ error: actorResult.error.message }, { status: 500 });
 
     const decision = validateRoleUpdate({
@@ -77,6 +81,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return NextResponse.json({ id: roleId, ...parsed.value });
   } catch (error) {
+    if (error instanceof ClubContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("PATCH /api/roles/[id] error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
@@ -94,12 +101,15 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     if (roleId == null) return NextResponse.json({ error: "id inválido" }, { status: 400 });
 
     const service = createServiceClient();
+    const clubId = await clubIdForUser(service, auth.userId);
     const [roleResult, countResult] = await Promise.all([
-      service.from("roles").select("id, is_system").eq("id", roleId).maybeSingle(),
-      service.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role_id", roleId),
+      service.from("roles").select("id, is_system, club_id").eq("id", roleId).maybeSingle(),
+      service.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role_id", roleId).eq("club_id", clubId),
     ]);
     if (roleResult.error) return NextResponse.json({ error: roleResult.error.message }, { status: 500 });
-    if (!roleResult.data) return NextResponse.json({ error: "El rol no existe" }, { status: 404 });
+    if (!roleResult.data || Number(roleResult.data.club_id) !== clubId) {
+      return NextResponse.json({ error: "El rol no existe" }, { status: 404 });
+    }
     if (countResult.error) return NextResponse.json({ error: countResult.error.message }, { status: 500 });
 
     const decision = validateRoleDelete({
@@ -113,6 +123,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
+    if (error instanceof ClubContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("DELETE /api/roles/[id] error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },

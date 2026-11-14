@@ -11,8 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
 import { useFormState } from "react-dom";
+import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 
 export default function LoginPage() {
   const [loginState, loginFormAction] = useFormState(loginAction, null);
@@ -23,13 +23,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div className="flex flex-col items-center space-y-2">
-          <Image
-            src="/PCP-logo.png"
-            alt="PCP Logo"
-            width={120}
-            height={120}
-            className="object-contain"
-          />
+          <img src={CLUB_LOGO_SRC} alt="" width={120} height={120} className="h-[120px] w-[120px] object-contain" />
           <h2 className="text-2xl font-bold">Bienvenido</h2>
           <p className="text-muted-foreground">
             Ingresa tu email y contraseña para iniciar sesión.

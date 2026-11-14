@@ -110,7 +110,9 @@ describe("cobertura del mapa de páginas", () => {
       const req = resolvePageRequirement(sampleConcretePath(routePath));
       expect(req).not.toBeNull();
       expect(isAllowed(req, ["users.manage"]) && !isAllowed(req, ["dashboard.view"])).toBe(
-        routePath.startsWith("/admin/users") || routePath.startsWith("/admin/roles")
+        routePath.startsWith("/admin/users") ||
+        routePath.startsWith("/admin/roles") ||
+        routePath.startsWith("/admin/club")
       );
     }
   );
