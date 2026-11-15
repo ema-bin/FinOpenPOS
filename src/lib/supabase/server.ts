@@ -1,10 +1,12 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { clubIdFromAuthCookies } from '@/lib/clubs/session-club'
+import { scopeClubClient } from '@/lib/clubs/scope-club-client'
 
 export function createClient() {
   const cookieStore = cookies()
 
-  return createServerClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
     {
@@ -30,4 +32,7 @@ export function createClient() {
       },
     }
   )
+
+  const clubId = clubIdFromAuthCookies(cookieStore.getAll())
+  return clubId == null ? supabase : scopeClubClient(supabase, clubId)
 }
