@@ -80,7 +80,6 @@ export class ClassesRepository extends BaseRepository {
     const listed = await this.supabase
       .from("payment_methods")
       .select("id, name, scope, is_active, account")
-      .eq("user_uid", this.userId)
       .in("name", names);
     const hasAccount = !listed.error || !isMissingAccountColumn(listed.error);
     const { data, error } = hasAccount
@@ -88,7 +87,6 @@ export class ClassesRepository extends BaseRepository {
       : await this.supabase
           .from("payment_methods")
           .select("id, name, scope, is_active")
-          .eq("user_uid", this.userId)
           .in("name", names);
 
     if (error) throw this.fail(error);
@@ -131,7 +129,6 @@ export class ClassesRepository extends BaseRepository {
       const { data: methods, error: listError } = await this.supabase
         .from("payment_methods")
         .select("id, name, account")
-        .eq("user_uid", this.userId)
         .eq("scope", "CLASSES")
         .eq("is_active", true)
         .order("name");
@@ -146,7 +143,6 @@ export class ClassesRepository extends BaseRepository {
     const { data: methods, error: listError } = await this.supabase
       .from("payment_methods")
       .select("id, name")
-      .eq("user_uid", this.userId)
       .eq("scope", "CLASSES")
       .eq("is_active", true)
       .order("name");
@@ -274,8 +270,7 @@ export class ClassesRepository extends BaseRepository {
       const { error } = await this.supabase
         .from("payment_methods")
         .update({ account })
-        .eq("id", methodId)
-        .eq("user_uid", this.userId);
+        .eq("id", methodId);
       if (error) {
         if (isMissingAccountColumn(error)) throw new ClassRequestError(CLASSES_SQL_HINT, 503);
         throw this.fail(error);
@@ -1029,7 +1024,6 @@ export class ClassesRepository extends BaseRepository {
     const { data, error } = await this.supabase
       .from("class_month_closures")
       .select("professor_id")
-      .eq("user_uid", this.userId)
       .eq("year_month", yearMonth);
     if (error) {
       if (isMissingRelation(error) || isMissingClosureProfessor(error)) return [];
@@ -1061,7 +1055,6 @@ export class ClassesRepository extends BaseRepository {
     const { error } = await this.supabase
       .from("class_month_closures")
       .delete()
-      .eq("user_uid", this.userId)
       .eq("year_month", yearMonth)
       .eq("professor_id", professorId);
     if (error) {
@@ -1082,7 +1075,6 @@ export class ClassesRepository extends BaseRepository {
       .from("payment_methods")
       .select("id, name, scope, is_active")
       .eq("id", id)
-      .eq("user_uid", this.userId)
       .maybeSingle();
     if (error) throw this.fail(error);
     const isCash = data?.name === CLASS_CASH_PAYMENT_METHOD_NAME;
@@ -1098,7 +1090,6 @@ export class ClassesRepository extends BaseRepository {
       .from("payment_methods")
       .select("id, name, scope, is_active")
       .eq("id", id)
-      .eq("user_uid", this.userId)
       .maybeSingle();
     if (error) throw this.fail(error);
     const professorNames: readonly string[] = CLASS_PROFESSOR_PAYMENT_METHOD_NAMES;
