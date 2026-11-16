@@ -16,6 +16,7 @@ import { hexToHsl, hslToHex } from "@/lib/clubs/color";
 import type { ClubSettings } from "@/lib/clubs/settings";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { cn } from "@/lib/utils";
+import { ClubPaymentLists } from "@/components/club/ClubPaymentLists";
 
 const ROUND_LABELS: Record<string, string> = {
   champion: "Campeón",
@@ -482,6 +483,18 @@ export default function ClubSettingsPage() {
           </div>
         </div>
       </ModuleSection>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Medios de pago</CardTitle>
+          <CardDescription>
+            Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ClubPaymentLists canWrite={canWrite} />
+        </CardContent>
+      </Card>
 
       {canWrite ? (
         <Button

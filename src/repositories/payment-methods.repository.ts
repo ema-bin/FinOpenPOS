@@ -11,8 +11,8 @@ export class PaymentMethodsRepository extends BaseRepository {
       .from("payment_methods")
       .select("id, name, scope, is_active, consumes_slot_credit, created_at");
 
-    if (options.scope === "CLASSES") {
-      query = query.eq("scope", "CLASSES");
+    if (options.scope === "CLASSES" || options.scope === "TOURNAMENT") {
+      query = query.eq("scope", options.scope);
     } else if (options.scope) {
       query = query.or(`scope.eq.${options.scope},scope.eq.BOTH`);
     }
@@ -28,7 +28,9 @@ export class PaymentMethodsRepository extends BaseRepository {
     }
 
     const rows = (data ?? []) as PaymentMethodDB[];
-    if (!options.scope) return rows.filter((row) => row.scope !== "CLASSES");
+    if (!options.scope) {
+      return rows.filter((row) => row.scope !== "CLASSES" && row.scope !== "TOURNAMENT");
+    }
     return rows;
   }
 

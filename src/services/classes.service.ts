@@ -24,6 +24,7 @@ class ClassesService {
     paymentMethods: ClassPaymentMethodRef[];
     cashPaymentMethod: ClassPaymentMethodRef | null;
     cintiaPaymentMethod: ClassPaymentMethodRef | null;
+    classPaymentMethods: ClassPaymentMethodRef[];
   }> {
     const response = await fetch("/api/classes/professors");
     return parse(response, "No se pudieron cargar los profesores");

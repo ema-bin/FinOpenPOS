@@ -73,7 +73,8 @@ function payChoices(
   charge: ClassCharge,
   professors: Array<{ id: number; payment_method: ClassPaymentMethodRef | null }>,
   cintia: ClassPaymentMethodRef | null,
-  cash: ClassPaymentMethodRef | null
+  cash: ClassPaymentMethodRef | null,
+  classMethods: ClassPaymentMethodRef[]
 ): Array<{ id: number; label: string }> {
   const options: Array<{ id: number; label: string }> = [];
   if (cintia) options.push({ id: cintia.id, label: "Transferencia Cintia" });
@@ -83,6 +84,13 @@ function payChoices(
   }
   if (cash && !options.some((option) => option.id === cash.id)) {
     options.push({ id: cash.id, label: "Efectivo" });
+  }
+  if (!cintia && !cash) {
+    for (const method of classMethods) {
+      if (!options.some((option) => option.id === method.id)) {
+        options.push({ id: method.id, label: classPaymentMethodLabel(method.name) });
+      }
+    }
   }
   return options;
 }
@@ -197,7 +205,8 @@ export function ChargesTab() {
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
   }, [charges, professors, closedIds]);
-  const payingOptions = paying ? payChoices(paying, professors, cintia, cash) : [];
+  const classMethods = professorsQuery.data?.classPaymentMethods ?? [];
+  const payingOptions = paying ? payChoices(paying, professors, cintia, cash, classMethods) : [];
   const reminderUrl = reminding
     ? buildWhatsAppUrl(reminding.player?.phone, reminderMessage, defaultWhatsAppLinkTarget())
     : null;
@@ -397,11 +406,12 @@ export function ChargesTab() {
                       professors={professors}
                       cintia={cintia}
                       cash={cash}
+                      classMethods={classMethods}
                       payPending={payMutation.isPending}
                       editPending={editPaymentMutation.isPending}
                       onRemind={openReminder}
                       onPay={(next) => {
-                        const options = payChoices(next, professors, cintia, cash);
+                        const options = payChoices(next, professors, cintia, cash, classMethods);
                         setEditingPayment(false);
                         setPayAmount(String(next.amount));
                         setPaying(next);
@@ -477,7 +487,7 @@ export function ChargesTab() {
                           <Button
                             size="sm"
                             onClick={() => {
-                              const options = payChoices(charge, professors, cintia, cash);
+                              const options = payChoices(charge, professors, cintia, cash, classMethods);
                               setEditingPayment(false);
                               setPayAmount(String(charge.amount));
                               setPaying(charge);
@@ -493,7 +503,7 @@ export function ChargesTab() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              const options = payChoices(charge, professors, cintia, cash);
+                              const options = payChoices(charge, professors, cintia, cash, classMethods);
                               const current = charge.payment_method?.id;
                               setEditingPayment(true);
                               setPayAmount(String(charge.amount));
@@ -666,6 +676,7 @@ function ChargeActions({
   professors,
   cintia,
   cash,
+  classMethods,
   payPending,
   editPending,
   onRemind,
@@ -678,6 +689,7 @@ function ChargeActions({
   professors: Array<{ id: number; payment_method: ClassPaymentMethodRef | null }>;
   cintia: ClassPaymentMethodRef | null;
   cash: ClassPaymentMethodRef | null;
+  classMethods: ClassPaymentMethodRef[];
   payPending: boolean;
   editPending: boolean;
   onRemind: (charge: ClassCharge) => void;
@@ -708,7 +720,7 @@ function ChargeActions({
           variant="outline"
           disabled={editPending}
           onClick={() => {
-            const options = payChoices(charge, professors, cintia, cash);
+            const options = payChoices(charge, professors, cintia, cash, classMethods);
             const current = charge.payment_method?.id;
             onEdit(
               charge,

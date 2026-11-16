@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/permissions";
 import { loadRolePermissions } from "@/lib/auth/load-role-permissions";
 import { decodeJwtPayload, permissionsFromClaims } from "@/lib/auth/session-permissions";
+import { isPlatformClaim } from "@/lib/clubs/session-club";
 
 type PermissionsValue = {
   /** Todavía no se leyó la sesión: la UI muestra todo y el middleware ya bloquea la navegación. */
@@ -20,16 +21,20 @@ type PermissionsValue = {
   can: (permission: Permission) => boolean;
   /** Lectura. La escritura también cuenta. */
   canRead: (permission: Permission) => boolean;
+  /** Administra todos los complejos. No es un permiso del club. */
+  isPlatform: boolean;
 };
 
 const PermissionsContext = createContext<PermissionsValue>({
   loading: true,
   can: () => false,
   canRead: () => false,
+  isPlatform: false,
 });
 
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
   const [access, setAccess] = useState<EffectiveAccess>(EMPTY_ACCESS);
+  const [isPlatform, setIsPlatform] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,15 +42,15 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     let active = true;
 
     const apply = async (session: Session | null) => {
-      const fromToken = permissionsFromClaims(
-        session ? decodeJwtPayload(session.access_token) : null
-      );
+      const claims = session ? decodeJwtPayload(session.access_token) : null;
+      const fromToken = permissionsFromClaims(claims);
       let next = fromToken;
       if (next === null && session) {
         next = await loadRolePermissions(supabase, session.user.id);
         if (next === null) next = FULL_ACCESS;
       }
       if (!active) return;
+      setIsPlatform(isPlatformClaim(claims));
       setAccess(next ?? EMPTY_ACCESS);
       setLoading(false);
     };
@@ -67,8 +72,9 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       loading,
       can: (permission) => allows(access, permission, "write"),
       canRead: (permission) => allows(access, permission, "read"),
+      isPlatform,
     }),
-    [access, loading]
+    [access, isPlatform, loading]
   );
 
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;

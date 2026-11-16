@@ -48,11 +48,16 @@ describe("/api/roles", () => {
         }
         return {
           select: (columns: string) => {
-            if (columns === "club_id" || columns === "role_id") {
+            if (columns === "club_id" || columns === "role_id" || columns === "active_club_id") {
               return {
                 eq: () => ({
                   maybeSingle: async () => ({
-                    data: columns === "club_id" ? { club_id: 1 } : { role_id: 1 },
+                    data:
+                      columns === "club_id"
+                        ? { club_id: 1 }
+                        : columns === "role_id"
+                          ? { role_id: 1 }
+                          : null,
                     error: null,
                   }),
                 }),
@@ -86,6 +91,15 @@ describe("/api/roles", () => {
   it("POST 409 si el nombre ya existe", async () => {
     vi.mocked(createServiceClient).mockReturnValue({
       from: (table: string) => {
+        if (table === "platform_admins") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "user_roles") {
           return {
             select: () => ({
@@ -143,6 +157,15 @@ describe("/api/roles", () => {
   it("DELETE 400 si el rol tiene usuarios", async () => {
     vi.mocked(createServiceClient).mockReturnValue({
       from: (table: string) => {
+        if (table === "platform_admins") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
         if (table === "roles") {
           return {
             select: () => ({

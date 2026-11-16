@@ -25,6 +25,7 @@ import {
   ShieldIcon,
   KeyRoundIcon,
   SettingsIcon,
+  Building2Icon,
   GraduationCapIcon,
   MenuIcon,
   XIcon,
@@ -86,6 +87,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/reservations": "Reservas",
   "/admin/slot-packs": "Packs de turnos",
   "/admin/classes": "Clases",
+  "/admin/platform": "Complejos",
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",
   "/admin/advertisements": "Publicidades",
@@ -106,7 +108,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
-  const { canRead, loading: permsLoading } = usePermissions();
+  const { canRead, isPlatform, loading: permsLoading } = usePermissions();
   const { data: clubBrand } = useQuery({
     queryKey: ["club-brand"],
     queryFn: async () => {
@@ -126,7 +128,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   });
   const reservationsOn =
     isCourtReservationsEnabledClient() && clubBrand?.module_reservations !== false;
-  const navItems = NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn);
+  const navItems = [
+    ...NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn),
+    ...(isPlatform
+      ? [{ href: "/admin/platform", label: "Complejos", icon: Building2Icon, permission: "dashboard.view" as const }]
+      : []),
+  ];
 
   useEffect(() => {
     setMounted(true);

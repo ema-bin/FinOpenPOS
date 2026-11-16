@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       const scopes = scopeParam
         .split(',')
         .map((s) => s.trim().toUpperCase());
-      const valid = ['BAR', 'COURT', 'BOTH', 'CLASSES'];
+      const valid = ['BAR', 'COURT', 'BOTH', 'CLASSES', 'TOURNAMENT'];
       const filteredScopes = scopes.filter((s) => valid.includes(s));
       // Si hay scope válido, usar el primero (el repo maneja BOTH automáticamente)
       if (filteredScopes.length > 0) {
