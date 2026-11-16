@@ -210,7 +210,7 @@ export default function ClubSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Configuración</h1>
         <p className="text-sm text-muted-foreground">
-          Al guardar se aplican el logo, los colores, el horario de las canchas, los días de los turnos fijos, el cupo de las clases, el descuento de inscripción y los puntos del ranking. Los procesos automáticos usan la hora y la zona de este complejo, y no corren si el módulo está apagado.
+          Al guardar se aplican el logo, los colores, el horario de las canchas, los días de los turnos fijos, el cupo de las clases, el descuento de inscripción y los puntos del ranking. Los procesos automáticos se despiertan a las 03:00 de Argentina y entran si esa hora es la del complejo y el módulo está activo.
         </p>
       </div>
 
@@ -319,7 +319,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Reservas"
-        description="Se genera la semana siguiente ese día y a esa hora, en la zona del complejo. El corte general de la plataforma sigue arriba de esto."
+        description="La plataforma despierta los sábados a las 03:00 de Argentina. Este complejo entra si ese día y esa hora son los suyos, y Reservas está activo."
         active={draft.module_reservations}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_reservations", checked)}
@@ -452,7 +452,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Ventas"
-        description="El cierre automático corre a esta hora, en la zona del complejo. Si Ventas está apagado, no corre."
+        description="La plataforma despierta una vez por día a las 03:00 de Argentina. El cierre entra si esa es su hora y Ventas está activo."
         active={draft.module_buffet}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_buffet", checked)}

@@ -11,7 +11,7 @@ import {
 } from "@/lib/run-daily-sales-closure";
 
 /**
- * Cada hora. Cada club cierra en su hora y su zona, si Ventas y el cierre automático están activos.
+ * Una vez por día, 06:00 UTC (03:00 en Argentina). Cada club cierra si esa hora es la suya y Ventas está activo.
  */
 export async function GET(request: Request) {
   try {
