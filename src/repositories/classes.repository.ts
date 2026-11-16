@@ -112,6 +112,14 @@ export class ClassesRepository extends BaseRepository {
   }
 
   async ensureClassPaymentMethods(): Promise<ClassPaymentMethodRef[]> {
+    const existing = await this.supabase
+      .from("payment_methods")
+      .select("id")
+      .eq("scope", "CLASSES")
+      .limit(1);
+    if (existing.error) throw this.fail(existing.error);
+    if ((existing.data ?? []).length > 0) return this.listClassPaymentMethods();
+
     const names: string[] = [...CLASS_PAYMENT_METHOD_NAMES];
     const professorNames: readonly string[] = CLASS_PROFESSOR_PAYMENT_METHOD_NAMES;
     const listed = await this.supabase
@@ -162,20 +170,24 @@ export class ClassesRepository extends BaseRepository {
       }
     }
 
-    if (hasAccount) {
-      const { data: methods, error: listError } = await this.supabase
-        .from("payment_methods")
-        .select("id, name, account")
-        .eq("scope", "CLASSES")
-        .eq("is_active", true)
-        .order("name");
-      if (listError) throw this.fail(listError);
-      return (methods ?? []).map((row) => ({
+    return this.listClassPaymentMethods();
+  }
+
+  private async listClassPaymentMethods(): Promise<ClassPaymentMethodRef[]> {
+    const withAccount = await this.supabase
+      .from("payment_methods")
+      .select("id, name, account")
+      .eq("scope", "CLASSES")
+      .eq("is_active", true)
+      .order("name");
+    if (!withAccount.error) {
+      return (withAccount.data ?? []).map((row) => ({
         id: row.id,
         name: row.name,
         account: row.account,
       }));
     }
+    if (!isMissingAccountColumn(withAccount.error)) throw this.fail(withAccount.error);
 
     const { data: methods, error: listError } = await this.supabase
       .from("payment_methods")
@@ -196,12 +208,14 @@ export class ClassesRepository extends BaseRepository {
     paymentMethods: ClassPaymentMethodRef[];
     cashPaymentMethod: ClassPaymentMethodRef | null;
     cintiaPaymentMethod: ClassPaymentMethodRef | null;
+    classPaymentMethods: ClassPaymentMethodRef[];
   }> {
     const methods = await this.ensureClassPaymentMethods();
     const cashPaymentMethod = methods.find((method) => method.name === CLASS_CASH_PAYMENT_METHOD_NAME) ?? null;
     const cintiaPaymentMethod = methods.find((method) => method.name === CLASS_CINTIA_PAYMENT_METHOD_NAME) ?? null;
     const professorMethodNames: readonly string[] = CLASS_PROFESSOR_PAYMENT_METHOD_NAMES;
-    const paymentMethods = methods.filter((method) => professorMethodNames.includes(method.name));
+    const namedProfessors = methods.filter((method) => professorMethodNames.includes(method.name));
+    const paymentMethods = namedProfessors.length > 0 ? namedProfessors : methods;
     const { data, error } = await this.supabase
       .from("class_professors")
       .select(
@@ -241,7 +255,7 @@ export class ClassesRepository extends BaseRepository {
       };
     });
 
-    return { professors, paymentMethods, cashPaymentMethod, cintiaPaymentMethod };
+    return { professors, paymentMethods, cashPaymentMethod, cintiaPaymentMethod, classPaymentMethods: methods };
   }
 
   async createProfessor(input: {

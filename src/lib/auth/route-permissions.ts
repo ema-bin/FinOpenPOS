@@ -57,6 +57,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/users", requirement: read("users.manage") },
   { prefix: "/admin/roles", requirement: read("users.manage") },
   { prefix: "/admin/club", requirement: read("users.manage") },
+  { prefix: "/admin/platform", requirement: { kind: "authenticated" } },
 ];
 
 /** Orden en que se elige la sección de destino cuando no hay acceso a la pedida. */
@@ -338,6 +339,10 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/club": { GET: { kind: "authenticated" }, PATCH: write("users.manage") },
   "/api/club/logo": { POST: write("users.manage") },
   "/api/club/logo-image": { GET: PUBLIC },
+  "/api/club/payment-methods": { GET: read("users.manage"), POST: write("users.manage") },
+  "/api/club/payment-methods/[id]": { PATCH: write("users.manage") },
+  "/api/platform/clubs": { GET: { kind: "authenticated" }, POST: { kind: "authenticated" } },
+  "/api/platform/context": { POST: { kind: "authenticated" } },
 
   "/api/tournament-matches/[id]/photo/upload": crud("tournaments.manage"),
   "/api/tournament-matches/[id]/result": crud("tournaments.manage"),

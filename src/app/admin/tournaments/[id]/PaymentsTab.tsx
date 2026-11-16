@@ -37,6 +37,8 @@ async function fetchPayments(tournamentId: number) {
 }
 
 async function fetchPaymentMethods() {
+  const tournament = await paymentMethodsService.getAll(true, "TOURNAMENT");
+  if (tournament.length > 0) return tournament;
   return paymentMethodsService.getAll(true);
 }
 
