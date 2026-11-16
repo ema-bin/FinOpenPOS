@@ -188,8 +188,11 @@ export class CourtReservationsRepository extends BaseRepository {
     throwReservationRpcError(error);
   }
 
-  async applyDate(date: string): Promise<{ applied: number; skipped: number; conflicts: unknown[] }> {
-    const { data, error } = await this.supabase.rpc("apply_fixed_bookings", { p_date: date });
+  async applyDate(date: string, clubId?: number): Promise<{ applied: number; skipped: number; conflicts: unknown[] }> {
+    const { data, error } = await this.supabase.rpc("apply_fixed_bookings", {
+      p_date: date,
+      ...(clubId == null ? {} : { p_club_id: clubId }),
+    });
     throwReservationRpcError(error);
     const result = (data ?? {}) as { applied?: number; skipped?: number; conflicts?: unknown[] };
     return {
@@ -199,10 +202,16 @@ export class CourtReservationsRepository extends BaseRepository {
     };
   }
 
-  async startRun(weekStart: string, weekEnd: string): Promise<number> {
+  async startRun(weekStart: string, weekEnd: string, clubId?: number): Promise<number> {
     const { data, error } = await this.supabase
       .from("court_reservation_runs")
-      .insert({ user_uid: this.userId, week_start: weekStart, week_end: weekEnd, status: "running" })
+      .insert({
+        ...(clubId == null ? {} : { club_id: clubId }),
+        user_uid: this.userId,
+        week_start: weekStart,
+        week_end: weekEnd,
+        status: "running",
+      })
       .select("id")
       .single();
     throwReservationRpcError(error);

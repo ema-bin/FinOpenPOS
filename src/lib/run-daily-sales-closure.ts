@@ -11,12 +11,13 @@ export async function runDailySalesClosure(
     businessDate: string;
     actorUserUid: string;
     notes?: string | null;
+    clubId?: number;
   }
 ): Promise<{ closure: DailySalesClosureDTO; replaced: boolean }> {
-  const snapshot = await computeDailySalesSnapshot(supabase, input.businessDate);
+  const snapshot = await computeDailySalesSnapshot(supabase, input.businessDate, input.clubId);
   const repo = new DailySalesClosuresRepository(supabase);
   const notes = input.notes?.trim() || DEFAULT_CRON_NOTES;
-  return repo.save(input.actorUserUid, snapshot, notes);
+  return repo.save(input.actorUserUid, snapshot, notes, input.clubId);
 }
 
 export function getDailySalesClosureCronActorUid(): string {

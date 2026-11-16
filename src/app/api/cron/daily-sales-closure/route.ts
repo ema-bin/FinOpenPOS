@@ -21,22 +21,30 @@ export async function GET(request: Request) {
 
     const businessDate = getPreviousBusinessDate();
     const supabase = createServiceClient();
-    const { closure, replaced } = await runDailySalesClosure(supabase, {
-      businessDate,
-      actorUserUid: getDailySalesClosureCronActorUid(),
-    });
+    const { data: clubs, error } = await supabase.from("clubs").select("id").eq("is_active", true).order("id");
+    if (error) throw new Error(error.message);
 
-    console.info(
-      `[cron/daily-sales-closure] ${businessDate} ${replaced ? "corrected" : "created"} ` +
-        `total=${closure.total_sales}`
-    );
+    const results = [];
+    for (const club of clubs ?? []) {
+      const { closure, replaced } = await runDailySalesClosure(supabase, {
+        businessDate,
+        actorUserUid: getDailySalesClosureCronActorUid(),
+        clubId: club.id,
+      });
+      results.push({
+        clubId: club.id,
+        replaced,
+        revisionCount: closure.revision_count,
+        totalSales: closure.total_sales,
+      });
+    }
+
+    console.info(`[cron/daily-sales-closure] ${businessDate} clubs=${results.length}`);
 
     return NextResponse.json({
       ok: true,
       businessDate,
-      replaced,
-      revisionCount: closure.revision_count,
-      totalSales: closure.total_sales,
+      clubs: results,
     });
   } catch (err) {
     console.error("GET /api/cron/daily-sales-closure error:", err);

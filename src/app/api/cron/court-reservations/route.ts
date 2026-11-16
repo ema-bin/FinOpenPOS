@@ -8,7 +8,6 @@ import { nextMonday, todayInBuenosAires } from "@/lib/court-reservation-rules";
 import { generateReservationWeek } from "@/lib/generate-reservation-week";
 import { CourtSlotsRepository } from "@/repositories/court-slots.repository";
 import { CourtReservationsRepository } from "@/repositories/court-reservations.repository";
-import { CourtsRepository } from "@/repositories/courts.repository";
 
 /** Sábados 06:00 UTC = 03:00 en Argentina. Con el flag apagado no escribe nada. */
 export async function GET(request: Request) {
@@ -23,15 +22,28 @@ export async function GET(request: Request) {
     const monday = nextMonday(todayInBuenosAires());
     const supabase = createServiceClient();
     const actor = getDailySalesClosureCronActorUid();
-    const courts = await new CourtsRepository(supabase, actor).findAll(true);
-    const result = await generateReservationWeek({
-      slots: new CourtSlotsRepository(supabase, actor),
-      reservations: new CourtReservationsRepository(supabase, actor),
-      courtIds: courts.map((court) => court.id),
-      monday,
-    });
-    console.info(`[cron/court-reservations] ${result.weekStart}..${result.weekEnd}`);
-    return NextResponse.json({ ok: true, skipped: false, ...result });
+    const { data: clubs, error } = await supabase.from("clubs").select("id").eq("is_active", true).order("id");
+    if (error) throw new Error(error.message);
+
+    const results = [];
+    for (const club of clubs ?? []) {
+      const { data: courts, error: courtsError } = await supabase
+        .from("courts")
+        .select("id")
+        .eq("club_id", club.id)
+        .eq("is_active", true);
+      if (courtsError) throw new Error(courtsError.message);
+      const result = await generateReservationWeek({
+        slots: new CourtSlotsRepository(supabase, actor),
+        reservations: new CourtReservationsRepository(supabase, actor),
+        courtIds: (courts ?? []).map((court) => court.id),
+        monday,
+        clubId: club.id,
+      });
+      results.push({ clubId: club.id, ...result });
+    }
+    console.info(`[cron/court-reservations] clubs=${results.length}`);
+    return NextResponse.json({ ok: true, skipped: false, clubs: results });
   } catch (error) {
     console.error("GET /api/cron/court-reservations error:", error);
     return NextResponse.json(

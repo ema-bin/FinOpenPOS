@@ -45,12 +45,13 @@ function mapClosure(row: ClosureRow): DailySalesClosureDTO {
 export class DailySalesClosuresRepository {
   constructor(private supabase: SupabaseClient) {}
 
-  async findByBusinessDate(businessDate: string): Promise<DailySalesClosureDTO | null> {
-    const { data, error } = await this.supabase
+  async findByBusinessDate(businessDate: string, clubId?: number): Promise<DailySalesClosureDTO | null> {
+    let query = this.supabase
       .from("daily_sales_closures")
       .select("*")
-      .eq("business_date", businessDate)
-      .maybeSingle();
+      .eq("business_date", businessDate);
+    if (clubId != null) query = query.eq("club_id", clubId);
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw new Error(error.message);
     return data ? mapClosure(data as ClosureRow) : null;
@@ -132,8 +133,8 @@ export class DailySalesClosuresRepository {
     };
   }
 
-  async findWithDetails(businessDate: string): Promise<DailySalesClosureDTO | null> {
-    const closure = await this.findByBusinessDate(businessDate);
+  async findWithDetails(businessDate: string, clubId?: number): Promise<DailySalesClosureDTO | null> {
+    const closure = await this.findByBusinessDate(businessDate, clubId);
     if (!closure) return null;
     const details = await this.findDetails(closure.id);
     return { ...closure, ...details };
@@ -142,11 +143,12 @@ export class DailySalesClosuresRepository {
   async create(
     userUid: string,
     snapshot: DailySalesSnapshot,
-    notes?: string | null
+    notes?: string | null,
+    clubId?: number
   ): Promise<DailySalesClosureDTO> {
-    const closureId = await this.insertHeader(userUid, snapshot, notes, 1);
-    await this.insertDetails(closureId, snapshot);
-    return this.findWithDetails(snapshot.businessDate) as Promise<DailySalesClosureDTO>;
+    const closureId = await this.insertHeader(userUid, snapshot, notes, 1, clubId);
+    await this.insertDetails(closureId, snapshot, clubId);
+    return this.findWithDetails(snapshot.businessDate, clubId) as Promise<DailySalesClosureDTO>;
   }
 
   async replace(
@@ -154,7 +156,8 @@ export class DailySalesClosuresRepository {
     userUid: string,
     snapshot: DailySalesSnapshot,
     notes: string | null | undefined,
-    currentRevision: number
+    currentRevision: number,
+    clubId?: number
   ): Promise<DailySalesClosureDTO> {
     const { error: headerError } = await this.supabase
       .from("daily_sales_closures")
@@ -179,18 +182,19 @@ export class DailySalesClosuresRepository {
     if (headerError) throw new Error(headerError.message);
 
     await this.deleteDetails(closureId);
-    await this.insertDetails(closureId, snapshot);
-    return this.findWithDetails(snapshot.businessDate) as Promise<DailySalesClosureDTO>;
+    await this.insertDetails(closureId, snapshot, clubId);
+    return this.findWithDetails(snapshot.businessDate, clubId) as Promise<DailySalesClosureDTO>;
   }
 
   async save(
     userUid: string,
     snapshot: DailySalesSnapshot,
-    notes?: string | null
+    notes?: string | null,
+    clubId?: number
   ): Promise<{ closure: DailySalesClosureDTO; replaced: boolean }> {
-    const existing = await this.findByBusinessDate(snapshot.businessDate);
+    const existing = await this.findByBusinessDate(snapshot.businessDate, clubId);
     if (!existing) {
-      const closure = await this.create(userUid, snapshot, notes);
+      const closure = await this.create(userUid, snapshot, notes, clubId);
       return { closure, replaced: false };
     }
     const closure = await this.replace(
@@ -198,7 +202,8 @@ export class DailySalesClosuresRepository {
       userUid,
       snapshot,
       notes,
-      existing.revision_count ?? 1
+      existing.revision_count ?? 1,
+      clubId
     );
     return { closure, replaced: true };
   }
@@ -207,11 +212,13 @@ export class DailySalesClosuresRepository {
     userUid: string,
     snapshot: DailySalesSnapshot,
     notes: string | null | undefined,
-    revisionCount: number
+    revisionCount: number,
+    clubId?: number
   ): Promise<number> {
     const { data: header, error: headerError } = await this.supabase
       .from("daily_sales_closures")
       .insert({
+        ...(clubId == null ? {} : { club_id: clubId }),
         business_date: snapshot.businessDate,
         period_start: snapshot.periodStart,
         period_end: snapshot.periodEnd,
@@ -247,12 +254,14 @@ export class DailySalesClosuresRepository {
     }
   }
 
-  private async insertDetails(closureId: number, snapshot: DailySalesSnapshot): Promise<void> {
+  private async insertDetails(closureId: number, snapshot: DailySalesSnapshot, clubId?: number): Promise<void> {
+    const club = clubId == null ? {} : { club_id: clubId };
     if (snapshot.byPaymentMethod.length > 0) {
       const { error } = await this.supabase
         .from("daily_sales_closure_payment_methods")
         .insert(
           snapshot.byPaymentMethod.map((row) => ({
+            ...club,
             closure_id: closureId,
             payment_method_id: row.paymentMethodId,
             payment_method_name: row.paymentMethodName,
@@ -268,6 +277,7 @@ export class DailySalesClosuresRepository {
         .from("daily_sales_closure_products")
         .insert(
           snapshot.byProduct.map((row) => ({
+            ...club,
             closure_id: closureId,
             product_id: row.productId,
             product_name: row.productName,
@@ -285,6 +295,7 @@ export class DailySalesClosuresRepository {
         .from("daily_sales_closure_categories")
         .insert(
           snapshot.byCategory.map((row) => ({
+            ...club,
             closure_id: closureId,
             category_id: row.categoryId,
             category_name: row.categoryName,
