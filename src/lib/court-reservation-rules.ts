@@ -1,4 +1,5 @@
 import { addDaysIso, isIsoDate, weekdayOf } from "@/lib/class-time";
+import { todayInTimeZone } from "@/lib/clubs/schedule";
 
 /** Misma grilla que Generar turnos del día: 10:00 a 23:30 cada 90 minutos, más 23:30–01:00. */
 export const STANDARD_COURT_SLOTS: ReadonlyArray<{ start: string; end: string }> = [
@@ -14,19 +15,18 @@ export const STANDARD_COURT_SLOTS: ReadonlyArray<{ start: string; end: string }>
   { start: "23:30", end: "01:00" },
 ];
 
-export function isStandardCourtSlot(start: string, end: string): boolean {
+export function isStandardCourtSlot(
+  start: string,
+  end: string,
+  grid: readonly { start: string; end: string }[] = STANDARD_COURT_SLOTS
+): boolean {
   const startKey = start.slice(0, 5);
   const endKey = end.slice(0, 5);
-  return STANDARD_COURT_SLOTS.some((slot) => slot.start === startKey && slot.end === endKey);
+  return grid.some((slot) => slot.start === startKey && slot.end === endKey);
 }
 
 export function todayInBuenosAires(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+  return todayInTimeZone(now, "America/Argentina/Buenos_Aires");
 }
 
 /** Lunes de la semana que contiene la fecha. Domingo pertenece a la semana que termina ese día. */
@@ -55,12 +55,15 @@ export function weekDatesFromMonday(monday: string): string[] {
 /** 1 = lunes … 5 = viernes (mismo criterio que weekdayOf / PostgreSQL DOW). */
 export const FIXED_BOOKING_WEEKDAYS = [1, 2, 3, 4, 5] as const;
 
-export function isFixedBookingWeekday(weekday: number): boolean {
-  return FIXED_BOOKING_WEEKDAYS.includes(weekday as (typeof FIXED_BOOKING_WEEKDAYS)[number]);
+export function isFixedBookingWeekday(
+  weekday: number,
+  weekdays: readonly number[] = FIXED_BOOKING_WEEKDAYS
+): boolean {
+  return weekdays.includes(weekday);
 }
 
-export function fixedBookingGridDates(monday: string): string[] {
-  return weekDatesFromMonday(monday).filter((date) => isFixedBookingWeekday(weekdayOf(date)));
+export function fixedBookingGridDates(monday: string, weekdays: readonly number[] = FIXED_BOOKING_WEEKDAYS): string[] {
+  return weekDatesFromMonday(monday).filter((date) => isFixedBookingWeekday(weekdayOf(date), weekdays));
 }
 
 export type FixedApplyState = {

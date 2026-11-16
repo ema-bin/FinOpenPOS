@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
 import { courtReservationsService, courtSlotsService, playersService } from "@/services";
+import { buildCourtSlotGrid, todayInTimeZone } from "@/lib/clubs/schedule";
+import type { ClubSettings } from "@/lib/clubs/settings";
 import {
   fixedBookingGridDates,
   mondayOfWeek,
@@ -135,16 +137,38 @@ export function ReservationsCalendar({
   mode?: "calendar" | "fixed";
 }) {
   const queryClient = useQueryClient();
-  const today = todayInBuenosAires();
-  const [monday, setMonday] = useState(() => mondayOfWeek(today));
+  const { data: club } = useQuery({
+    queryKey: ["club-settings"],
+    queryFn: async () => {
+      const response = await fetch("/api/club");
+      if (!response.ok) return null;
+      return response.json() as Promise<ClubSettings>;
+    },
+    staleTime: 60_000,
+  });
+  const today = club ? todayInTimeZone(new Date(), club.timezone) : todayInBuenosAires();
+  const slotRows = useMemo(
+    () =>
+      club
+        ? buildCourtSlotGrid({
+            openTime: club.open_time,
+            closeTime: club.close_time,
+            durationMinutes: club.slot_duration_minutes,
+            overnight: club.overnight_slot,
+          })
+        : STANDARD_COURT_SLOTS,
+    [club]
+  );
+  const fixedWeekdays = club?.fixed_weekdays?.length ? club.fixed_weekdays : [1, 2, 3, 4, 5];
+  const [monday, setMonday] = useState(() => mondayOfWeek(todayInBuenosAires()));
   const [courtId, setCourtId] = useState<number | null>(null);
   const [target, setTarget] = useState<CellTarget | null>(null);
   const [playerId, setPlayerId] = useState<number | null>(null);
 
   const dates = useMemo(() => weekDatesFromMonday(monday), [monday]);
   const gridDates = useMemo(
-    () => (mode === "fixed" ? fixedBookingGridDates(monday) : dates),
-    [dates, mode, monday]
+    () => (mode === "fixed" ? fixedBookingGridDates(monday, fixedWeekdays) : dates),
+    [dates, mode, monday, fixedWeekdays]
   );
   const dayColumnCount = gridDates.length;
   const dayQueries = useQueries({
@@ -483,7 +507,7 @@ export function ReservationsCalendar({
                     </tr>
                   </thead>
                   <tbody>
-                    {STANDARD_COURT_SLOTS.map((hours) => (
+                    {slotRows.map((hours) => (
                       <tr key={hours.start}>
                         <th className="bg-background pr-0.5 text-right text-[9px] font-medium text-muted-foreground sm:pr-1 sm:text-[10px] md:text-[11px]">
                           <span className="tabular-nums">{hours.start}</span>

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
+import { clubIdForUser } from "@/lib/clubs/actor-club";
 
 export type RegistrationPricingSettings = {
   puntuable_lower_category_discount_percent: number;
@@ -11,6 +13,27 @@ const DEFAULT_SETTINGS: RegistrationPricingSettings = {
 export async function fetchRegistrationPricingSettings(
   supabase: SupabaseClient
 ): Promise<RegistrationPricingSettings> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const service = createServiceClient();
+      const clubId = await clubIdForUser(service, user.id);
+      const { data: club } = await service
+        .from("clubs")
+        .select("registration_discount_percent")
+        .eq("id", clubId)
+        .maybeSingle();
+      const percent = Number(club?.registration_discount_percent);
+      if (Number.isFinite(percent)) {
+        return { puntuable_lower_category_discount_percent: percent };
+      }
+    }
+  } catch {
+    // Si la ficha no se puede leer, sigue el valor histórico.
+  }
+
   const { data, error } = await supabase
     .from("registration_pricing_settings")
     .select("puntuable_lower_category_discount_percent")

@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { usePermissions } from "@/components/permissions-provider";
 import { dailySalesClosuresService } from "@/services/daily-sales-closures.service";
 import { getCurrentBusinessDate, getPreviousBusinessDate, formatBusinessDayLabel, enumerateBusinessDates } from "@/lib/business-day";
+import { currentBusinessDate, previousBusinessDate } from "@/lib/clubs/schedule";
 import type { DailySalesClosureDTO, DailySalesClosurePreviewDTO } from "@/models/dto/daily-sales-closure";
 import type {
   DailySalesClosuresBackfillResult,
@@ -294,6 +295,15 @@ export default function DailySalesClosurePage() {
   const queryClient = useQueryClient();
   const { can, loading: permsLoading } = usePermissions();
   const canWrite = !permsLoading && can("closures.daily");
+  const { data: clubClock } = useQuery({
+    queryKey: ["club-settings"],
+    queryFn: async () => {
+      const response = await fetch("/api/club");
+      if (!response.ok) return null;
+      return response.json() as Promise<{ timezone: string; daily_closure_hour: number }>;
+    },
+    staleTime: 60_000,
+  });
   const defaultDate = useMemo(() => getCurrentBusinessDate(), []);
   const defaultRangeTo = useMemo(() => getPreviousBusinessDate(), []);
   const defaultRangeFrom = useMemo(() => {
@@ -307,6 +317,20 @@ export default function DailySalesClosurePage() {
   const [historyDate, setHistoryDate] = useState<string | null>(null);
   const [rangeFrom, setRangeFrom] = useState(defaultRangeFrom);
   const [rangeTo, setRangeTo] = useState(defaultRangeTo);
+  useEffect(() => {
+    if (!clubClock) return;
+    const clock = { timeZone: clubClock.timezone, closureHour: clubClock.daily_closure_hour };
+    const today = currentBusinessDate(new Date(), clock);
+    const yesterday = previousBusinessDate(new Date(), clock);
+    setSelectedDate((current) => (current === defaultDate ? today : current));
+    setRangeTo((current) => (current === defaultRangeTo ? yesterday : current));
+    setRangeFrom((current) => {
+      if (current !== defaultRangeFrom) return current;
+      const end = new Date(`${yesterday}T12:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() - 29);
+      return end.toISOString().slice(0, 10);
+    });
+  }, [clubClock, defaultDate, defaultRangeFrom, defaultRangeTo]);
   const [rangeNotes, setRangeNotes] = useState("");
   const [rangeSkipExisting, setRangeSkipExisting] = useState(true);
   const [rangeConfirmOpen, setRangeConfirmOpen] = useState(false);

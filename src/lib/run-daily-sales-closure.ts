@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BusinessClock } from "@/lib/clubs/schedule";
 import { computeDailySalesSnapshot } from "@/lib/compute-daily-sales-snapshot";
 import { DailySalesClosuresRepository } from "@/repositories/daily-sales-closures.repository";
 import type { DailySalesClosureDTO } from "@/models/dto/daily-sales-closure";
@@ -12,9 +13,10 @@ export async function runDailySalesClosure(
     actorUserUid: string;
     notes?: string | null;
     clubId?: number;
+    clock?: BusinessClock;
   }
 ): Promise<{ closure: DailySalesClosureDTO; replaced: boolean }> {
-  const snapshot = await computeDailySalesSnapshot(supabase, input.businessDate, input.clubId);
+  const snapshot = await computeDailySalesSnapshot(supabase, input.businessDate, input.clubId, input.clock);
   const repo = new DailySalesClosuresRepository(supabase);
   const notes = input.notes?.trim() || DEFAULT_CRON_NOTES;
   return repo.save(input.actorUserUid, snapshot, notes, input.clubId);

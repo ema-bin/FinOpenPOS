@@ -107,7 +107,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
   const { canRead, loading: permsLoading } = usePermissions();
-  const reservationsOn = isCourtReservationsEnabledClient();
   const { data: clubBrand } = useQuery({
     queryKey: ["club-brand"],
     queryFn: async () => {
@@ -119,11 +118,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         primary_color: string;
         accent_color: string;
         on_primary_color: string;
+        module_reservations: boolean;
       }>;
     },
     staleTime: 60_000,
     retry: false,
   });
+  const reservationsOn =
+    isCourtReservationsEnabledClient() && clubBrand?.module_reservations !== false;
   const navItems = NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn);
 
   useEffect(() => {

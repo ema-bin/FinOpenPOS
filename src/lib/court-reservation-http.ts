@@ -1,11 +1,25 @@
 import { NextResponse } from "next/server";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { isIsoDate } from "@/lib/class-time";
-import { isFixedBookingWeekday, isStandardCourtSlot } from "@/lib/court-reservation-rules";
+import { buildCourtSlotGrid } from "@/lib/clubs/schedule";
+import { loadActorClubSchedule, type ClubSchedule } from "@/lib/clubs/load-club";
+import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { isFixedBookingWeekday, isStandardCourtSlot, STANDARD_COURT_SLOTS } from "@/lib/court-reservation-rules";
 import type { FixedBookingInput } from "@/repositories/court-reservations.repository";
 
 export function reservationsDisabled() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+export async function reservationsClosed(): Promise<NextResponse | null> {
+  if (!isCourtReservationsEnabledServer()) return reservationsDisabled();
+  try {
+    const club = await loadActorClubSchedule();
+    if (!club.moduleReservations) return reservationsDisabled();
+    return null;
+  } catch {
+    return reservationsDisabled();
+  }
 }
 
 export function reservationHttpError(error: unknown, fallback: string) {
@@ -26,8 +40,18 @@ export function reservationHttpError(error: unknown, fallback: string) {
 
 export function readFixedBooking(
   body: Record<string, unknown>,
-  id: number | null
+  id: number | null,
+  club?: Pick<ClubSchedule, "fixedWeekdays" | "openTime" | "closeTime" | "durationMinutes" | "overnight">
 ): FixedBookingInput | { error: string } {
+  const weekdays = club?.fixedWeekdays ?? [1, 2, 3, 4, 5];
+  const grid = club
+    ? buildCourtSlotGrid({
+        openTime: club.openTime,
+        closeTime: club.closeTime,
+        durationMinutes: club.durationMinutes,
+        overnight: club.overnight,
+      })
+    : STANDARD_COURT_SLOTS;
   const playerId = Number(body.player_id);
   const courtId = Number(body.court_id);
   const weekday = Number(body.weekday);
@@ -41,10 +65,10 @@ export function readFixedBooking(
     body.suspended_until == null || body.suspended_until === "" ? null : String(body.suspended_until);
   if (!Number.isInteger(playerId) || playerId <= 0) return { error: "Elegí un jugador" };
   if (!Number.isInteger(courtId) || courtId <= 0) return { error: "Elegí una cancha" };
-  if (!Number.isInteger(weekday) || !isFixedBookingWeekday(weekday)) {
-    return { error: "Los turnos fijos son de lunes a viernes" };
+  if (!Number.isInteger(weekday) || !isFixedBookingWeekday(weekday, weekdays)) {
+    return { error: "Ese día no está habilitado para turnos fijos" };
   }
-  if (!isStandardCourtSlot(start, end)) return { error: "El horario tiene que coincidir con un turno de la grilla" };
+  if (!isStandardCourtSlot(start, end, grid)) return { error: "El horario tiene que coincidir con un turno de la grilla" };
   if (!isIsoDate(validFrom)) return { error: "La vigencia no es válida" };
   if (validUntil && !isIsoDate(validUntil)) return { error: "La vigencia no es válida" };
   if ((suspendedFrom == null) !== (suspendedUntil == null)) {

@@ -210,7 +210,7 @@ export default function ClubSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Configuración</h1>
         <p className="text-sm text-muted-foreground">
-          El logo, los colores y los puntos del ranking se aplican al guardar. El horario, los módulos y el resto quedan guardados y todavía no cambian turnos, clases ni los procesos automáticos.
+          Al guardar se aplican el logo, los colores, el horario de las canchas, los días de los turnos fijos, el cupo de las clases, el descuento de inscripción y los puntos del ranking. Los procesos automáticos usan la hora y la zona de este complejo, y no corren si el módulo está apagado.
         </p>
       </div>
 
@@ -257,7 +257,7 @@ export default function ClubSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Horario de canchas</CardTitle>
-          <CardDescription>La grilla de turnos sigue usando 10:00 a 01:00 hasta la fase en que lea esta ficha.</CardDescription>
+          <CardDescription>Los turnos que se generen después de guardar usan este horario. Los días que ya tienen turnos no se rehacen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
@@ -319,7 +319,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Reservas"
-        description="La hora es la del complejo. El cron de la plataforma sigue en su horario actual."
+        description="Se genera la semana siguiente ese día y a esa hora, en la zona del complejo. El corte general de la plataforma sigue arriba de esto."
         active={draft.module_reservations}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_reservations", checked)}
@@ -452,7 +452,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Ventas"
-        description="La hora del cierre es la del complejo. El cron de la plataforma sigue en su horario actual."
+        description="El cierre automático corre a esta hora, en la zona del complejo. Si Ventas está apagado, no corre."
         active={draft.module_buffet}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_buffet", checked)}

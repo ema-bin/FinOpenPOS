@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ReservationsScreen } from "@/components/reservations/ReservationsScreen";
 
-export default function ReservationsPage() {
-  if (!isCourtReservationsEnabledServer()) notFound();
+export default async function ReservationsPage() {
+  if (await reservationsClosed()) notFound();
   return <ReservationsScreen />;
 }

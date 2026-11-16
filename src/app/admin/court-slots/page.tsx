@@ -37,7 +37,17 @@ export default function CourtSlotsPage() {
   const canSeePacks =
     !permsLoading &&
     (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
-  const reservationsOn = isCourtReservationsEnabledClient();
+  const { data: clubSettings } = useQuery({
+    queryKey: ["club-settings"],
+    queryFn: async () => {
+      const response = await fetch("/api/club");
+      if (!response.ok) return null;
+      return response.json() as Promise<{ module_reservations: boolean }>;
+    },
+    staleTime: 60_000,
+  });
+  const reservationsOn =
+    isCourtReservationsEnabledClient() && clubSettings?.module_reservations !== false;
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();

@@ -1,15 +1,14 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ClassRequestError } from "@/lib/class-request-error";
 import { setClassOnSlot } from "@/lib/court-class-slot";
 
 /** Cancela una clase de ese horario. Las otras clases del día quedan. */
 export async function POST(request: Request) {
-  if (!isCourtReservationsEnabledServer()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const body = await request.json();
     const slotId = Number(body.slot_id);
