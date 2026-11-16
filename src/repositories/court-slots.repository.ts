@@ -320,8 +320,9 @@ export class CourtSlotsRepository extends BaseRepository {
   /**
    * Create multiple court slots in bulk
    */
-  async createMany(inputs: CreateCourtSlotInput[]): Promise<CourtSlotWithCourt[]> {
+  async createMany(inputs: CreateCourtSlotInput[], clubId?: number): Promise<CourtSlotWithCourt[]> {
     const slots = inputs.map((input) => ({
+      ...(clubId == null ? {} : { club_id: clubId }),
       court_id: input.court_id,
       slot_date: input.slot_date,
       start_time: input.start_time,
@@ -488,10 +489,10 @@ export class CourtSlotsRepository extends BaseRepository {
       endHour: string;
       durationMinutes: number;
     },
-    courtIds: number[]
+    courtIds: number[],
+    clubId?: number
   ): Promise<CourtSlotWithCourt[]> {
-    // Check if slots already exist
-    const existingSlots = await this.findByDate(date);
+    const existingSlots = (await this.findByDate(date)).filter((slot) => courtIds.includes(slot.court_id));
     if (existingSlots.length > 0) {
       return existingSlots;
     }
@@ -562,7 +563,7 @@ export class CourtSlotsRepository extends BaseRepository {
       }
     }
 
-    return await this.createMany(slotsToCreate);
+    return await this.createMany(slotsToCreate, clubId);
   }
 }
 

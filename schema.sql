@@ -2460,3 +2460,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 -- (corre después de scripts/add-roles-permissions.sql).
 -- El club_id del resto de las tablas se aplica con scripts/add-club-id.sql.
 -- La sesión y el trigger de escrituras se aplican con scripts/add-club-session.sql.
+-- El aislamiento de lecturas se aplica con scripts/add-club-rls.sql.

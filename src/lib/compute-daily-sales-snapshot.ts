@@ -153,13 +153,14 @@ export async function loadDiscountedCantinaBreakdown(
 
 export async function computeDailySalesSnapshot(
   supabase: SupabaseClient,
-  businessDate: string
+  businessDate: string,
+  clubId?: number
 ): Promise<DailySalesSnapshot> {
   const { start, end } = getBusinessDayRange(businessDate);
   const periodStart = start.toISOString();
   const periodEnd = end.toISOString();
 
-  const { data: transactions, error: txError } = await supabase
+  let transactionsQuery = supabase
     .from("transactions")
     .select(
       `
@@ -173,6 +174,8 @@ export async function computeDailySalesSnapshot(
     .not("order_id", "is", null)
     .gte("created_at", periodStart)
     .lt("created_at", periodEnd);
+  if (clubId != null) transactionsQuery = transactionsQuery.eq("club_id", clubId);
+  const { data: transactions, error: txError } = await transactionsQuery;
 
   if (txError) throw new Error(txError.message);
 
@@ -197,12 +200,14 @@ export async function computeDailySalesSnapshot(
     paymentMap.set(key, current);
   }
 
-  const { data: closedOrders, error: closedError } = await supabase
+  let closedQuery = supabase
     .from("orders")
     .select("id, total_amount, discount_percentage, discount_amount")
     .eq("status", "closed")
     .gte("closed_at", periodStart)
     .lt("closed_at", periodEnd);
+  if (clubId != null) closedQuery = closedQuery.eq("club_id", clubId);
+  const { data: closedOrders, error: closedError } = await closedQuery;
 
   if (closedError) throw new Error(closedError.message);
 
@@ -237,10 +242,9 @@ export async function computeDailySalesSnapshot(
     }
   }
 
-  const { data: openOrders, error: openError } = await supabase
-    .from("orders")
-    .select("total_amount")
-    .eq("status", "open");
+  let openQuery = supabase.from("orders").select("total_amount").eq("status", "open");
+  if (clubId != null) openQuery = openQuery.eq("club_id", clubId);
+  const { data: openOrders, error: openError } = await openQuery;
 
   if (openError) throw new Error(openError.message);
 
