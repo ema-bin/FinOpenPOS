@@ -1,4 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
+import { clubIdForUser } from "@/lib/clubs/actor-club";
+import { todayInTimeZone } from "@/lib/clubs/schedule";
 import { BaseRepository } from "./base-repository";
 import type {
   ClassCharge,
@@ -31,11 +34,12 @@ import {
   isYearMonth,
   normalizeTime,
   rangesOverlap,
-  todayInArgentina,
   weekdayOf,
 } from "@/lib/class-time";
 
 type DbError = { message: string; code?: string };
+
+type ClassClub = { limit: number; timeZone: string };
 
 function asNumber(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -63,6 +67,39 @@ function isMissingAccountColumn(error: DbError): boolean {
 }
 
 export class ClassesRepository extends BaseRepository {
+  private classClubPromise: Promise<ClassClub> | null = null;
+
+  private classClub(): Promise<ClassClub> {
+    if (!this.classClubPromise) {
+      this.classClubPromise = (async () => {
+        try {
+          const service = createServiceClient();
+          const clubId = await clubIdForUser(service, this.userId);
+          const { data } = await service
+            .from("clubs")
+            .select("class_player_limit, timezone")
+            .eq("id", clubId)
+            .maybeSingle();
+          const limit = Number(data?.class_player_limit);
+          return {
+            limit: Number.isInteger(limit) && limit >= 1 ? limit : CLASS_PLAYER_LIMIT,
+            timeZone: typeof data?.timezone === "string" && data.timezone ? data.timezone : "America/Argentina/Buenos_Aires",
+          };
+        } catch {
+          return { limit: CLASS_PLAYER_LIMIT, timeZone: "America/Argentina/Buenos_Aires" };
+        }
+      })();
+    }
+    return this.classClubPromise;
+  }
+
+  private async classPlayerLimit(): Promise<number> {
+    return (await this.classClub()).limit;
+  }
+
+  private async classToday(): Promise<string> {
+    return todayInTimeZone(new Date(), (await this.classClub()).timeZone);
+  }
   constructor(supabase: SupabaseClient, userId: string) {
     super(supabase, userId);
   }
@@ -382,8 +419,9 @@ export class ClassesRepository extends BaseRepository {
       throw new ClassRequestError("Elegí una cancha");
     }
     const playerIds = Array.from(new Set(input.playerIds ?? []));
-    if (playerIds.length > CLASS_PLAYER_LIMIT) {
-      throw new ClassRequestError("Una clase tiene como máximo 5 jugadores");
+    const playerLimit = await this.classPlayerLimit();
+    if (playerIds.length > playerLimit) {
+      throw new ClassRequestError(`Una clase tiene como máximo ${playerLimit} jugadores`);
     }
     const start = this.requireStart(input.startTime);
     this.requireWeekday(input.weekday);
@@ -407,7 +445,7 @@ export class ClassesRepository extends BaseRepository {
     if (error) throw this.fail(error);
 
     if (playerIds.length > 0) {
-      const startedOn = todayInArgentina();
+      const startedOn = await this.classToday();
       const { error: enrollError } = await this.supabase.from("class_enrollments").insert(
         playerIds.map((playerId) => ({
           user_uid: this.userId,
@@ -460,7 +498,7 @@ export class ClassesRepository extends BaseRepository {
       .eq("id", id);
     if (error) throw this.fail(error);
 
-    const today = todayInArgentina();
+    const today = await this.classToday();
     if (!isActive || weekday !== current.weekday) {
       const { error: dropError } = await this.supabase
         .from("class_sessions")
@@ -506,15 +544,16 @@ export class ClassesRepository extends BaseRepository {
       .eq("schedule_id", scheduleId)
       .is("ended_on", null);
     if (countError) throw this.fail(countError);
-    if ((openRows?.length ?? 0) >= CLASS_PLAYER_LIMIT) {
-      throw new ClassRequestError("La clase ya tiene 5 jugadores");
+    const playerLimit = await this.classPlayerLimit();
+    if ((openRows?.length ?? 0) >= playerLimit) {
+      throw new ClassRequestError(`La clase ya tiene ${playerLimit} jugadores`);
     }
 
     const { error } = await this.supabase.from("class_enrollments").insert({
       user_uid: this.userId,
       schedule_id: scheduleId,
       player_id: playerId,
-      started_on: todayInArgentina(),
+      started_on: await this.classToday(),
     });
     if (error) {
       if (error.code === "23503") throw new ClassRequestError("Jugador no encontrado");
@@ -523,7 +562,7 @@ export class ClassesRepository extends BaseRepository {
   }
 
   async endEnrollment(id: number): Promise<void> {
-    const today = todayInArgentina();
+    const today = await this.classToday();
     const { data: current, error: readError } = await this.supabase
       .from("class_enrollments")
       .select("id, started_on")
@@ -642,8 +681,9 @@ export class ClassesRepository extends BaseRepository {
   async setSessionPlayers(id: number, playerIds: number[]): Promise<void> {
     await this.requireSession(id);
     const uniqueIds = Array.from(new Set(playerIds));
-    if (uniqueIds.length > CLASS_PLAYER_LIMIT) {
-      throw new ClassRequestError("Una clase tiene como máximo 5 jugadores");
+    const playerLimit = await this.classPlayerLimit();
+    if (uniqueIds.length > playerLimit) {
+      throw new ClassRequestError(`Una clase tiene como máximo ${playerLimit} jugadores`);
     }
     const { error: deleteError } = await this.supabase
       .from("class_session_players")

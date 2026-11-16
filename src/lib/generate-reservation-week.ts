@@ -2,21 +2,25 @@ import { CourtSlotsRepository } from "@/repositories/court-slots.repository";
 import { CourtReservationsRepository } from "@/repositories/court-reservations.repository";
 import { weekDatesFromMonday } from "@/lib/court-reservation-rules";
 
-const SLOT_CONFIG = { startHour: "10:00", endHour: "01:00", durationMinutes: 90 };
-
 export async function generateReservationWeek(input: {
   slots: CourtSlotsRepository;
   reservations: CourtReservationsRepository;
   courtIds: number[];
   monday: string;
   clubId?: number;
+  slotConfig: {
+    startHour: string;
+    endHour: string;
+    durationMinutes: number;
+    overnight?: boolean;
+  };
 }) {
   const dates = weekDatesFromMonday(input.monday);
   const runId = await input.reservations.startRun(dates[0], dates[6], input.clubId);
   try {
     const days = [];
     for (const date of dates) {
-      await input.slots.generateSlotsForDate(date, SLOT_CONFIG, input.courtIds, input.clubId);
+      await input.slots.generateSlotsForDate(date, input.slotConfig, input.courtIds, input.clubId);
       const applied = await input.reservations.applyDate(date, input.clubId);
       days.push({ date, ...applied });
     }

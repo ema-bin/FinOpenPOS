@@ -1,27 +1,29 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { courtSlotConfig, loadActorClubSchedule } from "@/lib/clubs/load-club";
+import { reservationsClosed } from "@/lib/court-reservation-http";
 import { generateReservationWeek } from "@/lib/generate-reservation-week";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { isIsoDate, weekdayOf } from "@/lib/class-time";
 
 export async function POST(request: Request) {
-  if (!isCourtReservationsEnabledServer()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const monday = String((await request.json()).monday ?? "");
     if (!isIsoDate(monday) || weekdayOf(monday) !== 1) {
       return NextResponse.json({ error: "La semana tiene que empezar un lunes" }, { status: 400 });
     }
     const repos = await createRepositories();
+    const club = await loadActorClubSchedule();
     const courts = await repos.courts.findAll(true);
     const result = await generateReservationWeek({
       slots: repos.courtSlots,
       reservations: repos.courtReservations,
       courtIds: courts.map((court) => court.id),
       monday,
+      slotConfig: courtSlotConfig(club),
     });
     return NextResponse.json(result);
   } catch (error) {

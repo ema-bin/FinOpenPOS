@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { BaseRepository } from "./base-repository";
 import type { CourtSlotDB, CreateCourtSlotInput, CourtSlotWithCourt } from "@/models/db/court";
+import { buildCourtSlotGrid } from "@/lib/clubs/schedule";
 import { throwSlotRpcError } from "@/lib/slot-credit-rpc";
 
 export class CourtSlotsRepository extends BaseRepository {
@@ -488,6 +489,7 @@ export class CourtSlotsRepository extends BaseRepository {
       startHour: string;
       endHour: string;
       durationMinutes: number;
+      overnight?: boolean;
     },
     courtIds: number[],
     clubId?: number
@@ -497,53 +499,15 @@ export class CourtSlotsRepository extends BaseRepository {
       return existingSlots;
     }
 
-    // Generate time slots
-    const [year, month, day] = date.split('-').map(Number);
-    const [startH, startM] = config.startHour.split(':').map(Number);
-    const [endH, endM] = config.endHour.split(':').map(Number);
-
-    // Detectar si endHour cruza la medianoche (endHour < startHour, ej: 01:00 < 10:00)
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-    const crossesMidnight = endMinutes < startMinutes;
-
-    // Si cruza la medianoche, generar slots hasta 23:30 y luego agregar el slot adicional
-    const effectiveEndHour = crossesMidnight ? "23:30" : config.endHour;
-
-    let current = new Date(year, month - 1, day, startH, startM, 0);
-    const [effectiveEndH, effectiveEndM] = effectiveEndHour.split(':').map(Number);
-    const dayEnd = new Date(year, month - 1, day, effectiveEndH, effectiveEndM, 0);
-
-    const toTimeString = (d: Date) => {
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    };
-
-    const timeSlots: { start: string; end: string }[] = [];
-
-    while (current <= dayEnd) {
-      const next = new Date(current.getTime() + config.durationMinutes * 60 * 1000);
-      if (next > dayEnd) {
-        next.setTime(dayEnd.getTime());
-      }
-
-      timeSlots.push({
-        start: toTimeString(current),
-        end: toTimeString(next),
-      });
-
-      if (next >= dayEnd) break;
-      current = next;
-    }
-
-    // Si cruza la medianoche, agregar el slot adicional de 23:30 a 01:00
-    if (crossesMidnight) {
-      timeSlots.push({
-        start: "23:30",
-        end: config.endHour, // Será "01:00"
-      });
-    }
+    const closeMinutes = config.endHour.split(":").map(Number);
+    const openMinutes = config.startHour.split(":").map(Number);
+    const closeIsNextDay = closeMinutes[0] * 60 + closeMinutes[1] <= openMinutes[0] * 60 + openMinutes[1];
+    const timeSlots = buildCourtSlotGrid({
+      openTime: config.startHour,
+      closeTime: config.endHour,
+      durationMinutes: config.durationMinutes,
+      overnight: config.overnight ?? closeIsNextDay,
+    });
 
     if (timeSlots.length === 0) {
       throw new Error("No time slots generated with current config");

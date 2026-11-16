@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { courtSlotConfig, loadActorClubSchedule } from "@/lib/clubs/load-club";
+import { todayInTimeZone } from "@/lib/clubs/schedule";
 
 type GenerateBody = {
   date?: string; // YYYY-MM-DD
@@ -12,20 +14,9 @@ export async function POST(request: Request) {
     const repos = await createRepositories();
     const body = (await request.json()) as GenerateBody;
     
-    // Asegurar que la fecha se interprete correctamente en zona horaria local
-    let slotDate: string;
-    if (body.date) {
-      slotDate = body.date;
-    } else {
-      // Crear fecha en zona horaria local, no UTC
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      slotDate = `${year}-${month}-${day}`;
-    }
+    const club = await loadActorClubSchedule();
+    const slotDate = body.date || todayInTimeZone(new Date(), club.timezone);
 
-    // Get active courts
     const courts = await repos.courts.findAll(true);
     if (courts.length === 0) {
       return NextResponse.json(
@@ -34,18 +25,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate slots (incluye el slot adicional de 23:30 a 01:00 si endHour es 01:00)
     const slots = await repos.courtSlots.generateSlotsForDate(
       slotDate,
-      {
-        startHour: "10:00",
-        endHour: "01:00",
-        durationMinutes: 90,
-      },
+      courtSlotConfig(club),
       courts.map((c) => c.id)
     );
 
-    if (isCourtReservationsEnabledServer()) {
+    if (isCourtReservationsEnabledServer() && club.moduleReservations) {
       try {
         await repos.courtReservations.applyDate(slotDate);
       } catch (applyError) {

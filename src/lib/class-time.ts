@@ -32,8 +32,8 @@ export function snapClassStart(minutesFromMidnight: number): string {
 /** Cupo de una clase. En el calendario, los lugares que sobran se muestran como "N libres". */
 export const CLASS_PLAYER_LIMIT = 5;
 
-export function freeClassSpots(playerCount: number): number {
-  return Math.max(0, CLASS_PLAYER_LIMIT - playerCount);
+export function freeClassSpots(playerCount: number, limit = CLASS_PLAYER_LIMIT): number {
+  return Math.max(0, limit - playerCount);
 }
 
 export function pad2(value: number): string {

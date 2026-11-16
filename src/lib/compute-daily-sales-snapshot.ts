@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getBusinessDayRange, getBusinessDayStart } from "@/lib/business-day";
+import { businessClockForClient } from "@/lib/clubs/load-club";
+import { businessDayRange, currentBusinessDate, type BusinessClock } from "@/lib/clubs/schedule";
 import { summarizeDiscountedLines, type DiscountableLine } from "@/lib/discounted-sale-lines";
 
 export type DailySalesSnapshotPaymentMethod = {
@@ -107,7 +108,8 @@ function mapOrderItems(items: unknown[]): DiscountableLine[] {
 /** Productos y categorías de la cantina, con el descuento de cada venta ya aplicado. */
 export async function loadDiscountedCantinaBreakdown(
   supabase: SupabaseClient,
-  businessDates: readonly string[]
+  businessDates: readonly string[],
+  clock?: BusinessClock
 ): Promise<{
   byProduct: DailySalesSnapshotProduct[];
   byCategory: DailySalesSnapshotCategory[];
@@ -115,8 +117,9 @@ export async function loadDiscountedCantinaBreakdown(
   if (businessDates.length === 0) return { byProduct: [], byCategory: [] };
 
   const sorted = [...businessDates].sort();
-  const periodStart = getBusinessDayRange(sorted[0]).start.toISOString();
-  const periodEnd = getBusinessDayRange(sorted[sorted.length - 1]).end.toISOString();
+  const resolved = await businessClockForClient(supabase, clock);
+  const periodStart = businessDayRange(sorted[0], resolved).start.toISOString();
+  const periodEnd = businessDayRange(sorted[sorted.length - 1], resolved).end.toISOString();
   const allowed = new Set(businessDates);
 
   const { data: orders, error } = await supabase
@@ -130,7 +133,7 @@ export async function loadDiscountedCantinaBreakdown(
 
   const included = (orders ?? []).filter((order) => {
     if (!order.closed_at) return false;
-    const businessDate = getBusinessDayStart(new Date(order.closed_at)).toISOString().slice(0, 10);
+    const businessDate = currentBusinessDate(new Date(order.closed_at), resolved);
     return allowed.has(businessDate);
   });
 
@@ -154,9 +157,11 @@ export async function loadDiscountedCantinaBreakdown(
 export async function computeDailySalesSnapshot(
   supabase: SupabaseClient,
   businessDate: string,
-  clubId?: number
+  clubId?: number,
+  clock?: BusinessClock
 ): Promise<DailySalesSnapshot> {
-  const { start, end } = getBusinessDayRange(businessDate);
+  const resolved = await businessClockForClient(supabase, clock);
+  const { start, end } = businessDayRange(businessDate, resolved);
   const periodStart = start.toISOString();
   const periodEnd = end.toISOString();
 

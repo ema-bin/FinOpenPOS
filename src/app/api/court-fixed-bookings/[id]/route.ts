@@ -1,21 +1,22 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { loadActorClubSchedule } from "@/lib/clubs/load-club";
 import {
   readFixedBooking,
   reservationHttpError,
-  reservationsDisabled,
+  reservationsClosed,
 } from "@/lib/court-reservation-http";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  if (!isCourtReservationsEnabledServer()) return reservationsDisabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const id = Number(params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: "No se encontró el turno fijo" }, { status: 400 });
     }
-    const parsed = readFixedBooking(await request.json(), id);
+    const parsed = readFixedBooking(await request.json(), id, await loadActorClubSchedule());
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const repos = await createRepositories();
     await repos.courtReservations.saveFixedBooking(parsed);
@@ -26,7 +27,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  if (!isCourtReservationsEnabledServer()) return reservationsDisabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const id = Number(params.id);
     if (!Number.isInteger(id) || id <= 0) {

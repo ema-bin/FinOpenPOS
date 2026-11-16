@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
 import { isIsoDate } from "@/lib/class-time";
-import { reservationHttpError, reservationsDisabled } from "@/lib/court-reservation-http";
+import { reservationHttpError, reservationsClosed } from "@/lib/court-reservation-http";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  if (!isCourtReservationsEnabledServer()) return reservationsDisabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const id = Number(params.id);
     const date = String((await request.json()).date ?? "");

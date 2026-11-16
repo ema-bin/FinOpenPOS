@@ -105,6 +105,16 @@ export function CalendarTab() {
     queryKey: ["classes", "professors"],
     queryFn: () => classesService.listProfessors(),
   });
+  const clubQuery = useQuery({
+    queryKey: ["club-settings"],
+    queryFn: async () => {
+      const response = await fetch("/api/club");
+      if (!response.ok) return null;
+      return response.json() as Promise<{ class_player_limit: number }>;
+    },
+    staleTime: 60_000,
+  });
+  const playerLimit = clubQuery.data?.class_player_limit || CLASS_PLAYER_LIMIT;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["classes", "schedules"] });
@@ -237,6 +247,7 @@ export function CalendarTab() {
                 weekday={mobileDay}
                 schedules={visible.filter((schedule) => schedule.weekday === mobileDay)}
                 selectedId={selectedId}
+                playerLimit={playerLimit}
                 onSelect={setSelectedId}
                 onCreate={canWrite ? (startTime) => setDraft({ weekday: mobileDay, startTime }) : undefined}
               />
@@ -267,6 +278,7 @@ export function CalendarTab() {
                 weekday={weekday}
                 schedules={visible.filter((schedule) => schedule.weekday === weekday)}
                 selectedId={selectedId}
+                playerLimit={playerLimit}
                 onSelect={setSelectedId}
                 onCreate={canWrite ? (startTime) => setDraft({ weekday, startTime }) : undefined}
               />
@@ -275,6 +287,7 @@ export function CalendarTab() {
         </div>
 
         <ClassDetail
+          playerLimit={playerLimit}
           schedule={selected}
           courts={courtsQuery.data ?? []}
           professors={(professorsQuery.data?.professors ?? []).filter(
@@ -307,6 +320,7 @@ export function CalendarTab() {
         defaultCourtId={courtFilter === "all" ? "" : courtFilter}
         saving={createMutation.isPending}
         onClose={() => setDraft(null)}
+        playerLimit={playerLimit}
         onCreate={(input) => createMutation.mutate(input)}
       />
     </div>
@@ -317,12 +331,14 @@ function DayColumn({
   weekday,
   schedules,
   selectedId,
+  playerLimit,
   onSelect,
   onCreate,
 }: {
   weekday: number;
   schedules: ClassSchedule[];
   selectedId: number | null;
+  playerLimit: number;
   onSelect: (id: number) => void;
   onCreate?: (startTime: string) => void;
 }) {
@@ -349,7 +365,7 @@ function DayColumn({
       {placed.map(({ schedule, lane, lanes }) => {
         const start = minutesOf(schedule.start_time);
         const top = ((start - CLASS_GRID_START_MINUTES) / 60) * HOUR_PX + 1;
-        const free = freeClassSpots(schedule.enrollments.length);
+        const free = freeClassSpots(schedule.enrollments.length, playerLimit);
         return (
           <button
             key={schedule.id}
@@ -399,6 +415,7 @@ function ClassDetail({
   onRemoveClass,
   removing,
   readOnly = false,
+  playerLimit,
 }: {
   schedule: ClassSchedule | null;
   courts: CourtOption[];
@@ -415,6 +432,7 @@ function ClassDetail({
   onRemoveClass: () => void;
   removing: boolean;
   readOnly?: boolean;
+  playerLimit: number;
 }) {
   const savedWeekday = schedule ? String(schedule.weekday) : "";
   const savedTime = schedule ? formatTimeShort(schedule.start_time) : "";
@@ -440,8 +458,8 @@ function ClassDetail({
     );
   }
 
-  const free = freeClassSpots(schedule.enrollments.length);
-  const full = schedule.enrollments.length >= CLASS_PLAYER_LIMIT;
+  const free = freeClassSpots(schedule.enrollments.length, playerLimit);
+  const full = schedule.enrollments.length >= playerLimit;
   const timeOk = classFitsInDay(startTime);
   const dirty =
     weekday !== savedWeekday ||
@@ -573,6 +591,7 @@ function CreateClassDialog({
   professors,
   defaultCourtId,
   saving,
+  playerLimit,
   onClose,
   onCreate,
 }: {
@@ -581,6 +600,7 @@ function CreateClassDialog({
   professors: Array<{ id: number; name: string }>;
   defaultCourtId: string;
   saving: boolean;
+  playerLimit: number;
   onClose: () => void;
   onCreate: (input: {
     professorId: number;
@@ -652,7 +672,7 @@ function CreateClassDialog({
             </Select>
             <div>
               <p className="mb-1 text-xs uppercase text-muted-foreground">
-                Jugadores ({players.length}/{CLASS_PLAYER_LIMIT})
+                Jugadores ({players.length}/{playerLimit})
               </p>
               {players.length === 0 ? (
                 <p className="text-muted-foreground">Todavía no hay nadie.</p>
@@ -676,7 +696,7 @@ function CreateClassDialog({
                 </ul>
               )}
             </div>
-            {players.length < CLASS_PLAYER_LIMIT && (
+            {players.length < playerLimit && (
               <PlayerSearch
                 excludeIds={players.map((player) => player.id)}
                 onPick={(player) => setPlayers((current) => [...current, player])}

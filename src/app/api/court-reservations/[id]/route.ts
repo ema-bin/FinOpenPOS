@@ -1,12 +1,8 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ReservationError } from "@/lib/court-reservation-rpc";
-
-function disabled() {
-  return NextResponse.json({ error: "Not found" }, { status: 404 });
-}
 
 function httpError(error: unknown, fallback: string) {
   if (error instanceof ReservationError) {
@@ -25,7 +21,8 @@ function httpError(error: unknown, fallback: string) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  if (!isCourtReservationsEnabledServer()) return disabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const slotId = Number(params.id);
     const playerId = Number((await request.json()).player_id);
@@ -41,7 +38,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  if (!isCourtReservationsEnabledServer()) return disabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const slotId = Number(params.id);
     if (!Number.isInteger(slotId) || slotId <= 0) {

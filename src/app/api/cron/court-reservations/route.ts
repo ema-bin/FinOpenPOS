@@ -4,12 +4,14 @@ import { NextResponse } from "next/server";
 import { isAuthorizedCronRequest, getDailySalesClosureCronActorUid } from "@/lib/run-daily-sales-closure";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
-import { nextMonday, todayInBuenosAires } from "@/lib/court-reservation-rules";
+import { nextMonday } from "@/lib/court-reservation-rules";
+import { zonedParts } from "@/lib/clubs/schedule";
+import { courtSlotConfig, loadClubSchedule } from "@/lib/clubs/load-club";
 import { generateReservationWeek } from "@/lib/generate-reservation-week";
 import { CourtSlotsRepository } from "@/repositories/court-slots.repository";
 import { CourtReservationsRepository } from "@/repositories/court-reservations.repository";
 
-/** Sábados 06:00 UTC = 03:00 en Argentina. Con el flag apagado no escribe nada. */
+/** Sábados 06:00 UTC (03:00 en Argentina). El flag apagado no escribe nada. Cada club entra si ese día y esa hora son los suyos. */
 export async function GET(request: Request) {
   try {
     if (!isAuthorizedCronRequest(request)) {
@@ -19,14 +21,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    const monday = nextMonday(todayInBuenosAires());
     const supabase = createServiceClient();
     const actor = getDailySalesClosureCronActorUid();
+    const now = new Date();
     const { data: clubs, error } = await supabase.from("clubs").select("id").eq("is_active", true).order("id");
     if (error) throw new Error(error.message);
 
     const results = [];
-    for (const club of clubs ?? []) {
+    for (const row of clubs ?? []) {
+      const club = await loadClubSchedule(supabase, row.id);
+      const local = zonedParts(now, club.timezone);
+      if (!club.moduleReservations || !club.autoReservationWeek) {
+        results.push({ clubId: club.id, skipped: "module" });
+        continue;
+      }
+      if (local.weekday !== club.reservationWeekWeekday || local.hour !== club.reservationWeekHour) {
+        results.push({ clubId: club.id, skipped: "hour" });
+        continue;
+      }
       const { data: courts, error: courtsError } = await supabase
         .from("courts")
         .select("id")
@@ -37,8 +49,9 @@ export async function GET(request: Request) {
         slots: new CourtSlotsRepository(supabase, actor),
         reservations: new CourtReservationsRepository(supabase, actor),
         courtIds: (courts ?? []).map((court) => court.id),
-        monday,
+        monday: nextMonday(local.date),
         clubId: club.id,
+        slotConfig: courtSlotConfig(club),
       });
       results.push({ clubId: club.id, ...result });
     }

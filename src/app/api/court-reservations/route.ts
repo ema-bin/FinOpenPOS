@@ -1,14 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
-import { isCourtReservationsEnabledServer } from "@/lib/court-reservations-flag";
+import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { blocksForCourtSlot, classesTouchingSlot } from "@/lib/class-occupancy";
 import { isIsoDate } from "@/lib/class-time";
-
-function disabled() {
-  return NextResponse.json({ error: "Not found" }, { status: 404 });
-}
 
 function httpError(error: unknown, fallback: string) {
   if (error instanceof ReservationError) {
@@ -28,7 +24,8 @@ function httpError(error: unknown, fallback: string) {
 }
 
 export async function GET(request: Request) {
-  if (!isCourtReservationsEnabledServer()) return disabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const date = new URL(request.url).searchParams.get("date") ?? "";
     if (!isIsoDate(date)) {
@@ -54,7 +51,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isCourtReservationsEnabledServer()) return disabled();
+  const closed = await reservationsClosed();
+  if (closed) return closed;
   try {
     const body = await request.json();
     const slotId = Number(body.slot_id);
