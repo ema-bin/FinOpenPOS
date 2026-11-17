@@ -39,10 +39,10 @@ class SupabaseStorageService {
     const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "jpg";
     const key = `signage/${clubId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const { data, error } = await this.client.storage
-      .from("advertisements")
+      .from("digital_signage")
       .upload(key, file, { cacheControl: "86400" });
     if (error || !data) throw error ?? new Error("Upload failed");
-    const { data: publicData } = this.client.storage.from("advertisements").getPublicUrl(data.path);
+    const { data: publicData } = this.client.storage.from("digital_signage").getPublicUrl(data.path);
     return publicData.publicUrl;
   }
 
