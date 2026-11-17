@@ -79,7 +79,7 @@ export async function createClub(
   try {
     await copyRoles(service, Number(source.id), clubId, adminId, actorId);
     await copyTemplates(service, Number(source.id), clubId, adminId);
-    await copyRankingRules(service, Number(source.id), clubId);
+    await copyRankingRules(service, Number(source.id), clubId, input.points);
     await insertCourts(service, clubId, adminId, input.courts);
     await insertPayments(service, clubId, adminId, input);
   } catch (error) {
@@ -171,16 +171,26 @@ async function copyTemplates(service: SupabaseClient, sourceId: number, clubId: 
   if (insertError) throw new ClubAltaError(insertError.message, 500);
 }
 
-async function copyRankingRules(service: SupabaseClient, sourceId: number, clubId: number) {
+async function copyRankingRules(
+  service: SupabaseClient,
+  sourceId: number,
+  clubId: number,
+  points?: { round_reached: string; points: number }[]
+) {
+  const chosen = new Map((points ?? []).map((rule) => [rule.round_reached, rule.points]));
   const { data, error } = await service
     .from("tournament_ranking_point_rules")
     .select("round_reached, points, display_order")
     .eq("club_id", sourceId);
   if (error) throw new ClubAltaError(error.message, 500);
-  if ((data ?? []).length === 0) return;
-  const { error: insertError } = await service.from("tournament_ranking_point_rules").insert(
-    (data ?? []).map((row) => ({ ...row, club_id: clubId }))
-  );
+  const rows = (data ?? []).map((row) => ({
+    round_reached: row.round_reached,
+    points: chosen.get(row.round_reached as string) ?? row.points,
+    display_order: row.display_order,
+    club_id: clubId,
+  }));
+  if (rows.length === 0) return;
+  const { error: insertError } = await service.from("tournament_ranking_point_rules").insert(rows);
   if (insertError) throw new ClubAltaError(insertError.message, 500);
 }
 

@@ -32,10 +32,10 @@ export function RegistrationPricingSettingsSection() {
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-1">
-      <h3 className="text-sm font-semibold">Descuento por categoría inferior</h3>
+      <h3 className="text-sm font-semibold">Descuento por categoría superior</h3>
       <p className="text-sm">{data.registration_discount_percent}%</p>
       <p className="text-xs text-muted-foreground">
-        En un torneo puntuable de una categoría, quien juega en una categoría más baja paga la cuota menos este porcentaje. Se cambia en Configuración.
+        Descuento para el jugador que se anota en una categoría superior a la suya. Se cambia en Configuración.
       </p>
     </div>
   );
