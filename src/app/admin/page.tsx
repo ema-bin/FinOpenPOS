@@ -21,6 +21,7 @@ import {
   AlertTriangleIcon,
   DollarSignIcon,
   ImageIcon,
+  MonitorIcon,
   ClipboardListIcon,
   ShieldIcon,
   KeyRoundIcon,
@@ -30,6 +31,7 @@ import { adminService } from "@/services";
 import { formatDate } from "@/lib/date-utils";
 import { usePermissions } from "@/components/permissions-provider";
 import { moduleOn, useClubBrand } from "@/components/club/use-club-modules";
+import { isDigitalSignageEnabledClient } from "@/lib/signage-flag";
 
 export default function Page() {
   const router = useRouter();
@@ -388,6 +390,20 @@ export default function Page() {
             <CardContent>
               <CardDescription className="text-xs">
                 Integra los cierres diarios del mes
+              </CardDescription>
+            </CardContent>
+          </Card>}
+
+          {isDigitalSignageEnabledClient() && canRead("signage.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/signage")}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <MonitorIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Cartelería</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Pantallas de promociones del complejo
               </CardDescription>
             </CardContent>
           </Card>}

@@ -27,6 +27,7 @@ import {
   Building2Icon,
   GraduationCapIcon,
   MenuIcon,
+  MonitorIcon,
   XIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
@@ -34,6 +35,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/components/permissions-provider";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
+import { isDigitalSignageEnabledClient } from "@/lib/signage-flag";
 import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
 import { moduleOn, useClubBrand } from "@/components/club/use-club-modules";
 import type { Permission } from "@/lib/auth/permissions";
@@ -91,6 +93,7 @@ const pageNames: { [key: string]: string } = {
   "/admin/tournaments": "Torneos",
   "/admin/tournaments/[id]": "Torneo",
   "/admin/advertisements": "Publicidades",
+  "/admin/signage": "Cartelería",
   "/admin/balance": "Balance",
   "/admin/daily-sales-closure": "Cierre de caja",
   "/admin/monthly-sales-closure": "Cierre mensual",
@@ -125,6 +128,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }),
     ...(isPlatform
       ? [{ href: "/admin/platform", label: "Complejos", icon: Building2Icon, permission: "dashboard.view" as const }]
+      : []),
+    ...(isDigitalSignageEnabledClient()
+      ? [{ href: "/admin/signage", label: "Cartelería", icon: MonitorIcon, permission: "signage.manage" as const }]
       : []),
   ];
 

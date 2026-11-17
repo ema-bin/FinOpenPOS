@@ -54,6 +54,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/tournaments", requirement: read("tournaments.manage") },
   { prefix: "/admin/players", requirement: read("players.manage") },
   { prefix: "/admin/advertisements", requirement: read("advertisements.manage") },
+  { prefix: "/admin/signage", requirement: read("signage.manage") },
   { prefix: "/admin/users", requirement: read("users.manage") },
   { prefix: "/admin/roles", requirement: read("users.manage") },
   { prefix: "/admin/club", requirement: read("users.manage") },
@@ -78,6 +79,7 @@ export const LANDING_PAGES: ReadonlyArray<{ path: string; permission: Permission
   { path: "/admin/daily-sales-closure", permission: "closures.daily" },
   { path: "/admin/monthly-sales-closure", permission: "closures.monthly" },
   { path: "/admin/advertisements", permission: "advertisements.manage" },
+  { path: "/admin/signage", permission: "signage.manage" },
   { path: "/admin/users", permission: "users.manage" },
 ];
 
@@ -272,6 +274,18 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
     DELETE: write("advertisements.manage"),
   },
   "/api/advertisements/upload": { POST: write("advertisements.manage") },
+  "/api/signage/promotions": { GET: read("signage.manage"), POST: write("signage.manage") },
+  "/api/signage/promotions/[id]": { PATCH: write("signage.manage"), DELETE: write("signage.manage") },
+  "/api/signage/upload": { POST: write("signage.manage") },
+  "/api/signage/playlists": { GET: read("signage.manage"), POST: write("signage.manage") },
+  "/api/signage/playlists/[id]": { PATCH: write("signage.manage"), DELETE: write("signage.manage") },
+  "/api/signage/playlists/[id]/items": { PUT: write("signage.manage") },
+  "/api/signage/screens": { GET: read("signage.manage"), POST: write("signage.manage") },
+  "/api/signage/screens/[id]": { PATCH: write("signage.manage") },
+  "/api/signage/screens/[id]/override": { POST: write("signage.manage"), DELETE: write("signage.manage") },
+  "/api/signage/schedules": { GET: read("signage.manage"), POST: write("signage.manage") },
+  "/api/signage/schedules/[id]": { PATCH: write("signage.manage"), DELETE: write("signage.manage") },
+  "/api/signage/play/[token]": { GET: PUBLIC },
 
   // Mensajes de WhatsApp (invitaciones de torneo; recordatorios de deuda a futuro)
   "/api/whatsapp-message-templates": crud("tournaments.manage", "sales.operate"),

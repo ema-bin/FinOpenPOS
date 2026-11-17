@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   "tournaments.manage": { label: "Torneos", group: "Torneos", mode: "both" },
   "players.manage": { label: "Pantalla de clientes (editar y borrar)", group: "Clientes", mode: "both" },
   "advertisements.manage": { label: "Publicidades", group: "Publicidades", mode: "both" },
+  "signage.manage": { label: "Cartelería", group: "Cartelería", mode: "both" },
   "users.manage": { label: "Usuarios y roles", group: "Administración", mode: "both" },
 } as const satisfies Record<string, { label: string; group: string; mode: "read" | "write" | "both" }>;
 

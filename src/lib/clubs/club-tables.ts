@@ -55,6 +55,12 @@ export const CLUB_SCOPED_TABLES: ReadonlySet<string> = new Set([
   "court_fixed_bookings",
   "court_fixed_booking_exceptions",
   "court_reservation_runs",
+  "signage_promotions",
+  "signage_playlists",
+  "signage_playlist_items",
+  "signage_screens",
+  "signage_schedules",
+  "signage_overrides",
   "roles",
   "user_roles",
 ]);
