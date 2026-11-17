@@ -11,6 +11,7 @@ export type ClubAltaInput = {
     tournaments: string[];
   };
   admin: { email: string; password: string; name: string };
+  points?: { round_reached: string; points: number }[];
 };
 
 export type ParseAltaResult = { ok: true; value: ClubAltaInput } | { ok: false; error: string };
@@ -59,6 +60,9 @@ export function parseClubAlta(raw: unknown): ParseAltaResult {
   const invalid = lists.find(failed);
   if (invalid) return { ok: false, error: invalid.error };
 
+  const points = parsePoints((body as { points?: unknown }).points);
+  if (points && "error" in points) return { ok: false, error: points.error };
+
   const admin = (body.admin ?? {}) as { email?: unknown; password?: unknown; name?: unknown };
   const user = parseCreateUserInput({ ...admin, roleId: 1 });
   if (!user.ok) return user;
@@ -76,6 +80,26 @@ export function parseClubAlta(raw: unknown): ParseAltaResult {
         tournaments: tournamentPayments as string[],
       },
       admin: { email: user.value.email, password: user.value.password, name: user.value.name },
+      ...(points ? { points } : {}),
     },
   };
+}
+
+const ROUNDS = new Set(["groups", "16avos", "octavos", "cuartos", "semifinal", "final", "champion"]);
+
+function parsePoints(value: unknown): { round_reached: string; points: number }[] | { error: string } | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) return { error: "Los puntos del ranking tienen que ser una lista" };
+  const list: { round_reached: string; points: number }[] = [];
+  for (const item of value) {
+    const row = (item ?? {}) as { round_reached?: unknown; points?: unknown };
+    const round = String(row.round_reached ?? "");
+    if (!ROUNDS.has(round)) return { error: `Ronda inválida: ${round}` };
+    const points = Number(row.points);
+    if (!Number.isInteger(points) || points < 0 || points > 10000) {
+      return { error: `Puntos inválidos para ${round}` };
+    }
+    list.push({ round_reached: round, points });
+  }
+  return list;
 }

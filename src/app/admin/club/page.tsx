@@ -17,6 +17,7 @@ import type { ClubSettings } from "@/lib/clubs/settings";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { cn } from "@/lib/utils";
 import { ClubPaymentLists } from "@/components/club/ClubPaymentLists";
+import { TimezoneSelect } from "@/components/club/TimezoneSelect";
 
 const ROUND_LABELS: Record<string, string> = {
   champion: "Campeón",
@@ -29,6 +30,15 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+const TABS = [
+  { id: "ficha", label: "Ficha" },
+  { id: "canchas", label: "Canchas" },
+  { id: "clases", label: "Clases" },
+  { id: "torneos", label: "Torneos" },
+  { id: "ventas", label: "Ventas" },
+  { id: "pagos", label: "Medios de pago" },
+] as const;
 
 async function fetchClub(): Promise<ClubSettings> {
   const response = await fetch("/api/club");
@@ -115,6 +125,7 @@ export default function ClubSettingsPage() {
     queryFn: fetchClub,
   });
   const [draft, setDraft] = useState<ClubSettings | null>(null);
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("ficha");
   const { data: pointRules, error: pointsError } = useQuery<TournamentRankingPointRule[]>({
     queryKey: ["ranking-point-rules"],
     queryFn: async () => {
@@ -211,14 +222,30 @@ export default function ClubSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Configuración</h1>
         <p className="text-sm text-muted-foreground">
-          Al guardar se aplican el logo, los colores, el horario de las canchas, los días de los turnos fijos, el cupo de las clases, el descuento de inscripción y los puntos del ranking. Los procesos automáticos se despiertan a las 03:00 de Argentina y entran si esa hora es la del complejo y el módulo está activo.
+          Al guardar se aplican el logo, los colores, el horario, los turnos fijos, las clases, los torneos y las ventas. Los medios de pago se guardan en su pestaña.
         </p>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`rounded-md border px-3 py-2 text-left text-sm ${
+              tab === item.id ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "ficha" ? (
       <Card>
         <CardHeader>
           <CardTitle>Identidad</CardTitle>
-          <CardDescription>Nombre y logo que se ven en el panel.</CardDescription>
+          <CardDescription>Nombre, logo y zona horaria del complejo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -229,6 +256,15 @@ export default function ClubSettingsPage() {
             <div className="space-y-1.5">
               <Label htmlFor="club-short">Nombre corto</Label>
               <Input id="club-short" value={draft.short_name} disabled={!canWrite} onChange={(event) => set("short_name", event.target.value)} />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="club-tz">Zona horaria</Label>
+              <TimezoneSelect
+                id="club-tz"
+                value={draft.timezone}
+                disabled={!canWrite}
+                onChange={(value) => set("timezone", value)}
+              />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -254,17 +290,16 @@ export default function ClubSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {tab === "canchas" ? (
+      <>
       <Card>
         <CardHeader>
           <CardTitle>Horario de canchas</CardTitle>
           <CardDescription>Los turnos que se generen después de guardar usan este horario. Los días que ya tienen turnos no se rehacen.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="club-tz">Zona horaria</Label>
-            <Input id="club-tz" value={draft.timezone} disabled={!canWrite} onChange={(event) => set("timezone", event.target.value)} />
-          </div>
           <div className="space-y-1.5">
             <Label htmlFor="club-open">Apertura</Label>
             <Input id="club-open" type="time" value={draft.open_time} disabled={!canWrite} onChange={(event) => set("open_time", event.target.value)} />
@@ -320,7 +355,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Reservas"
-        description="La plataforma despierta los sábados a las 03:00 de Argentina. Este complejo entra si ese día y esa hora son los suyos, y Reservas está activo."
+        description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 03:00."
         active={draft.module_reservations}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_reservations", checked)}
@@ -368,6 +403,17 @@ export default function ClubSettingsPage() {
       </ModuleSection>
 
       <ModuleSection
+        title="Packs"
+        description="Packs de turnos de cancha."
+        active={draft.module_packs}
+        canWrite={canWrite}
+        onActiveChange={(checked) => set("module_packs", checked)}
+      />
+      </>
+      ) : null}
+
+      {tab === "clases" ? (
+      <ModuleSection
         title="Clases"
         active={draft.module_classes}
         canWrite={canWrite}
@@ -386,17 +432,19 @@ export default function ClubSettingsPage() {
           />
         </div>
       </ModuleSection>
+      ) : null}
 
+      {tab === "torneos" ? (
       <ModuleSection
         title="Torneos"
-        description="En un torneo puntuable de una categoría, quien juega en una categoría más baja paga la cuota menos este porcentaje."
+        description="Descuento para el jugador que se anota en una categoría superior a la suya."
         active={draft.module_tournaments}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_tournaments", checked)}
       >
         <div className="space-y-4">
           <div className="max-w-xs space-y-1.5">
-            <Label htmlFor="club-discount">Descuento por categoría inferior (%)</Label>
+            <Label htmlFor="club-discount">Descuento por categoría superior (%)</Label>
             <Input
               id="club-discount"
               type="number"
@@ -443,17 +491,12 @@ export default function ClubSettingsPage() {
           </div>
         </div>
       </ModuleSection>
+      ) : null}
 
-      <ModuleSection
-        title="Packs"
-        active={draft.module_packs}
-        canWrite={canWrite}
-        onActiveChange={(checked) => set("module_packs", checked)}
-      />
-
+      {tab === "ventas" ? (
       <ModuleSection
         title="Ventas"
-        description="La plataforma despierta una vez por día a las 03:00 de Argentina. El cierre entra si esa es su hora y Ventas está activo."
+        description="Cada día, una tarea programada hace el cierre de caja a la hora que elijas. Por ahora solo puede correr a las 03:00."
         active={draft.module_buffet}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_buffet", checked)}
@@ -483,7 +526,9 @@ export default function ClubSettingsPage() {
           </div>
         </div>
       </ModuleSection>
+      ) : null}
 
+      {tab === "pagos" ? (
       <Card>
         <CardHeader>
           <CardTitle>Medios de pago</CardTitle>
@@ -495,6 +540,7 @@ export default function ClubSettingsPage() {
           <ClubPaymentLists canWrite={canWrite} />
         </CardContent>
       </Card>
+      ) : null}
 
       {canWrite ? (
         <Button

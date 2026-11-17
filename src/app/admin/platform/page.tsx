@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -12,8 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { WEEKDAY_LABELS } from "@/lib/class-time";
+import { hexToHsl, hslToHex } from "@/lib/clubs/color";
 import type { ClubSettings } from "@/lib/clubs/settings";
+import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
+import { TimezoneSelect } from "@/components/club/TimezoneSelect";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 type ClubRow = { id: number; name: string; short_name: string; is_active: boolean };
 
@@ -44,13 +48,19 @@ const EMPTY_SETTINGS: Omit<ClubSettings, "id"> = {
   reservation_week_hour: 3,
 };
 
-const MODULES: { key: "module_reservations" | "module_classes" | "module_tournaments" | "module_packs" | "module_buffet"; label: string }[] = [
-  { key: "module_reservations", label: "Reservas" },
-  { key: "module_classes", label: "Clases" },
-  { key: "module_tournaments", label: "Torneos" },
-  { key: "module_packs", label: "Packs" },
-  { key: "module_buffet", label: "Ventas" },
-];
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+const ROUND_LABELS: Record<string, string> = {
+  champion: "Campeón",
+  final: "Final",
+  semifinal: "Semifinal",
+  cuartos: "Cuartos",
+  octavos: "Octavos",
+  "16avos": "16avos",
+  groups: "Grupos (no clasifica)",
+};
+
+const STEPS = ["Ficha", "Canchas", "Clases", "Torneos", "Ventas", "Medios de pago", "Primer admin"] as const;
 
 function lines(value: string): string[] {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -78,6 +88,25 @@ export default function PlatformPage() {
   const [courts, setCourts] = useState("");
   const [payments, setPayments] = useState({ courts: "", buffet: "", classes: "", tournaments: "" });
   const [admin, setAdmin] = useState({ name: "", email: "", password: "" });
+  const [pointDraft, setPointDraft] = useState<Record<string, string> | null>(null);
+
+  const pointRules = useQuery({
+    queryKey: ["ranking-point-rules"],
+    enabled: wizard,
+    queryFn: async () => {
+      const response = await fetch("/api/ranking-point-rules");
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "No se pudieron leer los puntos");
+      return body as TournamentRankingPointRule[];
+    },
+  });
+
+  useEffect(() => {
+    if (!pointRules.data || pointDraft) return;
+    const next: Record<string, string> = {};
+    for (const rule of pointRules.data) next[rule.round_reached] = String(rule.points);
+    setPointDraft(next);
+  }, [pointRules.data, pointDraft]);
 
   const clubs = useQuery({
     queryKey: ["platform-clubs"],
@@ -104,6 +133,12 @@ export default function PlatformPage() {
             tournaments: lines(payments.tournaments),
           },
           admin,
+          points: pointRules.data && pointDraft
+            ? pointRules.data.map((rule) => ({
+                round_reached: rule.round_reached,
+                points: Number(pointDraft[rule.round_reached]),
+              }))
+            : undefined,
         }),
       });
       const body = await response.json().catch(() => null);
@@ -154,117 +189,312 @@ export default function PlatformPage() {
       </div>
 
       {wizard ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo complejo</CardTitle>
-            <CardDescription>
-              {step === 0 && "Ficha. El logo y los colores se ajustan después, dentro del complejo."}
-              {step === 1 && "Una cancha por línea."}
-              {step === 2 && "Un medio por línea. El mismo nombre puede estar en más de una lista."}
-              {step === 3 && "La primera persona del complejo. Tiene que ser un email nuevo."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {step === 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-name">Nombre</Label>
-                  <Input id="alta-name" value={settings.name} onChange={(event) => set("name", event.target.value)} />
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {STEPS.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStep(index)}
+                className={`rounded-md border px-3 py-2 text-left text-sm ${
+                  step === index ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {step === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Identidad</CardTitle>
+                <CardDescription>Nombre, colores y zona horaria del complejo. El logo se carga en Configuración, cuando el complejo ya existe.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-name">Nombre</Label>
+                    <Input id="alta-name" value={settings.name} onChange={(event) => set("name", event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-short">Nombre corto</Label>
+                    <Input id="alta-short" value={settings.short_name} onChange={(event) => set("short_name", event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="alta-tz">Zona horaria</Label>
+                    <TimezoneSelect id="alta-tz" value={settings.timezone} onChange={(value) => set("timezone", value)} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-short">Nombre corto</Label>
-                  <Input id="alta-short" value={settings.short_name} onChange={(event) => set("short_name", event.target.value)} />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <ColorField label="Principal" hsl={settings.primary_color} onChange={(value) => set("primary_color", value)} />
+                  <ColorField label="Acento" hsl={settings.accent_color} onChange={(value) => set("accent_color", value)} />
+                  <ColorField label="Texto sobre principal" hsl={settings.on_primary_color} onChange={(value) => set("on_primary_color", value)} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-open">Apertura</Label>
-                  <Input id="alta-open" type="time" value={settings.open_time} onChange={(event) => set("open_time", event.target.value)} />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === 1 ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Canchas</CardTitle>
+                  <CardDescription>Una cancha por línea. Los precios se cargan después, dentro del complejo.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Textarea rows={4} value={courts} placeholder={"Cancha 1\nCancha 2"} onChange={(event) => setCourts(event.target.value)} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Horario de canchas</CardTitle>
+                  <CardDescription>Los turnos que se generen después de guardar usan este horario. Los días que ya tienen turnos no se rehacen.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-open">Apertura</Label>
+                    <Input id="alta-open" type="time" value={settings.open_time} onChange={(event) => set("open_time", event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-close">Cierre</Label>
+                    <Input id="alta-close" type="time" value={settings.close_time} onChange={(event) => set("close_time", event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-duration">Duración del turno (minutos)</Label>
+                    <Input
+                      id="alta-duration"
+                      type="number"
+                      min={15}
+                      max={240}
+                      value={settings.slot_duration_minutes}
+                      onChange={(event) => set("slot_duration_minutes", Number(event.target.value))}
+                    />
+                  </div>
+                  <label className="flex items-center justify-between gap-3 text-sm sm:col-span-2">
+                    Turno que cruza medianoche
+                    <Switch checked={settings.overnight_slot} onCheckedChange={(checked) => set("overnight_slot", checked)} />
+                  </label>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Turnos fijos</CardTitle>
+                  <CardDescription>Días en los que se puede dejar un horario para todas las semanas.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3">
+                    {WEEKDAY_LABELS.map((label, weekday) => (
+                      <label key={label} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={settings.fixed_weekdays.includes(weekday)}
+                          onCheckedChange={(checked) => {
+                            const next = checked
+                              ? [...settings.fixed_weekdays, weekday]
+                              : settings.fixed_weekdays.filter((day) => day !== weekday);
+                            set("fixed_weekdays", next.sort((a, b) => a - b));
+                          }}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <AltaModule
+                title="Reservas"
+                description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 03:00."
+                active={settings.module_reservations}
+                onActiveChange={(checked) => set("module_reservations", checked)}
+              >
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    Generar la semana siguiente
+                    <Switch
+                      checked={settings.auto_reservation_week}
+                      disabled={!settings.module_reservations}
+                      onCheckedChange={(checked) => set("auto_reservation_week", checked)}
+                    />
+                  </label>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="alta-week-day">Día</Label>
+                      <select
+                        id="alta-week-day"
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                        value={settings.reservation_week_weekday}
+                        disabled={!settings.module_reservations}
+                        onChange={(event) => set("reservation_week_weekday", Number(event.target.value))}
+                      >
+                        {WEEKDAY_LABELS.map((label, weekday) => (
+                          <option key={label} value={weekday}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="alta-week-hour">Hora</Label>
+                      <select
+                        id="alta-week-hour"
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                        value={settings.reservation_week_hour}
+                        disabled={!settings.module_reservations}
+                        onChange={(event) => set("reservation_week_hour", Number(event.target.value))}
+                      >
+                        {HOURS.map((hour) => (
+                          <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-close">Cierre</Label>
-                  <Input id="alta-close" type="time" value={settings.close_time} onChange={(event) => set("close_time", event.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-duration">Duración del turno (min)</Label>
-                  <Input
-                    id="alta-duration"
-                    type="number"
-                    min={15}
-                    max={240}
-                    value={settings.slot_duration_minutes}
-                    onChange={(event) => set("slot_duration_minutes", Number(event.target.value))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-limit">Cupo de la clase</Label>
-                  <Input
-                    id="alta-limit"
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settings.class_player_limit}
-                    onChange={(event) => set("class_player_limit", Number(event.target.value))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="alta-discount">Descuento de inscripción (%)</Label>
+              </AltaModule>
+
+              <AltaModule
+                title="Packs"
+                description="Packs de turnos de cancha."
+                active={settings.module_packs}
+                onActiveChange={(checked) => set("module_packs", checked)}
+              />
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <AltaModule
+              title="Clases"
+              active={settings.module_classes}
+              onActiveChange={(checked) => set("module_classes", checked)}
+            >
+              <div className="max-w-xs space-y-1.5">
+                <Label htmlFor="alta-limit">Cupo de alumnos</Label>
+                <Input
+                  id="alta-limit"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={settings.class_player_limit}
+                  disabled={!settings.module_classes}
+                  onChange={(event) => set("class_player_limit", Number(event.target.value))}
+                />
+              </div>
+            </AltaModule>
+          ) : null}
+
+          {step === 3 ? (
+            <AltaModule
+              title="Torneos"
+              description="Descuento para el jugador que se anota en una categoría superior a la suya."
+              active={settings.module_tournaments}
+              onActiveChange={(checked) => set("module_tournaments", checked)}
+            >
+              <div className="space-y-4">
+                <div className="max-w-xs space-y-1.5">
+                  <Label htmlFor="alta-discount">Descuento por categoría superior (%)</Label>
                   <Input
                     id="alta-discount"
                     type="number"
                     min={0}
                     max={100}
                     value={settings.registration_discount_percent}
+                    disabled={!settings.module_tournaments}
                     onChange={(event) => set("registration_discount_percent", Number(event.target.value))}
                   />
                 </div>
-                <label className="flex items-center justify-between gap-3 text-sm sm:col-span-2">
-                  Turno que cruza medianoche
-                  <Switch checked={settings.overnight_slot} onCheckedChange={(checked) => set("overnight_slot", checked)} />
+                <div className="max-w-md space-y-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Puntos por ronda</p>
+                    <p className="text-xs text-muted-foreground">
+                      Se aplican al finalizar un torneo puntuable. Los ya cerrados no se recalculan.
+                    </p>
+                  </div>
+                  {pointRules.isError ? (
+                    <p className="text-sm text-destructive">
+                      {pointRules.error instanceof Error ? pointRules.error.message : "No se pudieron leer los puntos"}
+                    </p>
+                  ) : pointDraft && pointRules.data ? (
+                    pointRules.data.map((rule) => (
+                      <label key={rule.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span>{ROUND_LABELS[rule.round_reached] ?? rule.round_reached}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-8 w-24 text-right"
+                          value={pointDraft[rule.round_reached] ?? ""}
+                          disabled={!settings.module_tournaments}
+                          aria-label={ROUND_LABELS[rule.round_reached] ?? rule.round_reached}
+                          onChange={(event) =>
+                            setPointDraft((current) =>
+                              current ? { ...current, [rule.round_reached]: event.target.value } : current
+                            )
+                          }
+                        />
+                      </label>
+                    ))
+                  ) : (
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                  )}
+                </div>
+              </div>
+            </AltaModule>
+          ) : null}
+
+          {step === 4 ? (
+            <AltaModule
+              title="Ventas"
+              description="Cada día, una tarea programada hace el cierre de caja a la hora que elijas. Por ahora solo puede correr a las 03:00."
+              active={settings.module_buffet}
+              onActiveChange={(checked) => set("module_buffet", checked)}
+            >
+              <div className="space-y-4">
+                <label className="flex items-center justify-between gap-3 text-sm">
+                  Cierre de caja diario
+                  <Switch
+                    checked={settings.auto_daily_closure}
+                    disabled={!settings.module_buffet}
+                    onCheckedChange={(checked) => set("auto_daily_closure", checked)}
+                  />
                 </label>
-                <div className="flex flex-wrap gap-3 sm:col-span-2">
-                  {WEEKDAY_LABELS.map((label, weekday) => (
-                    <label key={label} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={settings.fixed_weekdays.includes(weekday)}
-                        onCheckedChange={(checked) => {
-                          const next = checked
-                            ? [...settings.fixed_weekdays, weekday]
-                            : settings.fixed_weekdays.filter((day) => day !== weekday);
-                          set("fixed_weekdays", next.sort((a, b) => a - b));
-                        }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  {MODULES.map((module) => (
-                    <label key={module.key} className="flex items-center justify-between gap-3 text-sm">
-                      {module.label}
-                      <Switch
-                        checked={Boolean(settings[module.key])}
-                        onCheckedChange={(checked) => set(module.key, checked)}
-                      />
-                    </label>
-                  ))}
+                <div className="max-w-xs space-y-1.5">
+                  <Label htmlFor="alta-closure-hour">Hora del cierre</Label>
+                  <select
+                    id="alta-closure-hour"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                    value={settings.daily_closure_hour}
+                    disabled={!settings.module_buffet}
+                    onChange={(event) => set("daily_closure_hour", Number(event.target.value))}
+                  >
+                    {HOURS.map((hour) => (
+                      <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            ) : null}
+            </AltaModule>
+          ) : null}
 
-            {step === 1 ? (
-              <Textarea rows={6} value={courts} placeholder={"Cancha 1\nCancha 2"} onChange={(event) => setCourts(event.target.value)} />
-            ) : null}
-
-            {step === 2 ? (
+          {step === 5 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos.
+              </p>
               <div className="grid gap-4 sm:grid-cols-2">
-                <ListField label="Canchas" value={payments.courts} onChange={(value) => setPayments((current) => ({ ...current, courts: value }))} />
-                <ListField label="Cantina" value={payments.buffet} onChange={(value) => setPayments((current) => ({ ...current, buffet: value }))} />
-                <ListField label="Clases" value={payments.classes} onChange={(value) => setPayments((current) => ({ ...current, classes: value }))} />
-                <ListField label="Torneos" value={payments.tournaments} onChange={(value) => setPayments((current) => ({ ...current, tournaments: value }))} />
+                <ListField label="Canchas" hint="Turnos y packs. Un medio por línea." value={payments.courts} onChange={(value) => setPayments((current) => ({ ...current, courts: value }))} />
+                <ListField label="Cantina" hint="Ventas y compras. Un medio por línea." value={payments.buffet} onChange={(value) => setPayments((current) => ({ ...current, buffet: value }))} />
+                <ListField label="Clases" hint="Cobros de las clases. Un medio por línea." value={payments.classes} onChange={(value) => setPayments((current) => ({ ...current, classes: value }))} />
+                <ListField label="Torneos" hint="Inscripción. Un medio por línea." value={payments.tournaments} onChange={(value) => setPayments((current) => ({ ...current, tournaments: value }))} />
               </div>
-            ) : null}
+            </div>
+          ) : null}
 
-            {step === 3 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+          {step === 6 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Primer admin</CardTitle>
+                <CardDescription>La primera persona del complejo. El email no puede existir en otro complejo.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="alta-admin-name">Nombre</Label>
                   <Input id="alta-admin-name" value={admin.name} onChange={(event) => setAdmin((current) => ({ ...current, name: event.target.value }))} />
@@ -277,26 +507,26 @@ export default function PlatformPage() {
                   <Label htmlFor="alta-admin-password">Contraseña</Label>
                   <Input id="alta-admin-password" type="password" value={admin.password} onChange={(event) => setAdmin((current) => ({ ...current, password: event.target.value }))} />
                 </div>
-              </div>
-            ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
-            <div className="flex justify-between gap-2">
-              <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((current) => current - 1)}>
-                Atrás
+          <div className="flex justify-between gap-2">
+            <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((current) => current - 1)}>
+              Atrás
+            </Button>
+            {step < STEPS.length - 1 ? (
+              <Button type="button" onClick={() => setStep((current) => current + 1)}>
+                Siguiente
               </Button>
-              {step < 3 ? (
-                <Button type="button" onClick={() => setStep((current) => current + 1)}>
-                  Siguiente
-                </Button>
-              ) : (
-                <Button type="button" disabled={create.isPending} onClick={() => create.mutate()}>
-                  {create.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Crear
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            ) : (
+              <Button type="button" disabled={create.isPending} onClick={() => create.mutate()}>
+                {create.isPending ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Crear
+              </Button>
+            )}
+          </div>
+        </div>
       ) : null}
 
       <div className="space-y-3">
@@ -327,11 +557,75 @@ export default function PlatformPage() {
   );
 }
 
-function ListField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function AltaModule({
+  title,
+  description,
+  active,
+  onActiveChange,
+  children,
+}: {
+  title: string;
+  description?: string;
+  active: boolean;
+  onActiveChange: (active: boolean) => void;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Textarea rows={4} value={value} placeholder={"Efectivo\nTransferencia"} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+        <div className={cn("space-y-1.5", !active && "opacity-40")}>
+          <CardTitle>{title}</CardTitle>
+          {description ? <CardDescription>{description}</CardDescription> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          <span className="text-sm text-muted-foreground">Activo</span>
+          <Switch checked={active} onCheckedChange={onActiveChange} aria-label={`${title} activo`} />
+        </div>
+      </CardHeader>
+      {children ? <CardContent className={cn(!active && "pointer-events-none opacity-40")}>{children}</CardContent> : null}
+    </Card>
+  );
+}
+
+function ColorField({ label, hsl, onChange }: { label: string; hsl: string; onChange: (next: string) => void }) {
+  const hex = hslToHex(hsl) ?? "#000000";
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm">
+      <span>{label}</span>
+      <input
+        type="color"
+        value={hex}
+        aria-label={label}
+        className="h-9 w-14 cursor-pointer rounded border bg-transparent p-1"
+        onChange={(event) => {
+          const next = hexToHsl(event.target.value);
+          if (next) onChange(next);
+        }}
+      />
+    </label>
+  );
+}
+
+function ListField({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{label}</CardTitle>
+        <CardDescription>{hint}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Textarea rows={4} value={value} placeholder={"Efectivo\nTransferencia"} onChange={(event) => onChange(event.target.value)} />
+      </CardContent>
+    </Card>
   );
 }
