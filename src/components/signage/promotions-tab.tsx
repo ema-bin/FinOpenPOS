@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -58,6 +58,7 @@ export function PromotionsTab({ canWrite }: { canWrite: boolean }) {
   const [form, setForm] = useState(EMPTY);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [promoToDelete, setPromoToDelete] = useState<SignagePromotion | null>(null);
   const imageUrlRef = useRef("");
   const query = useQuery({
     queryKey: ["signage-promotions"],
@@ -178,13 +179,40 @@ export function PromotionsTab({ canWrite }: { canWrite: boolean }) {
             </button>
             <div className="flex gap-2 px-3 pb-3">
               <Button type="button" size="sm" variant="outline" onClick={() => edit(promo)}>Editar</Button>
-              <Button type="button" size="sm" variant="outline" disabled={!canWrite} onClick={() => remove.mutate(promo.id)}>Eliminar</Button>
+              <Button type="button" size="sm" variant="outline" disabled={!canWrite} onClick={() => setPromoToDelete(promo)}>Eliminar</Button>
             </div>
           </article>
         ))}
       </div>
       {query.isError ? <p className="text-sm text-destructive">{query.error instanceof Error ? query.error.message : "No se pudieron cargar las promociones"}</p> : null}
       {rows.length === 0 && !query.isLoading ? <p className="text-sm text-muted-foreground">Todavía no hay promociones. La primera va a aparecer acá como un cartel.</p> : null}
+
+      <Dialog open={promoToDelete !== null} onOpenChange={(next) => { if (!next && !remove.isPending) setPromoToDelete(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar promoción</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  ¿Querés eliminar la promoción{" "}
+                  <strong className="text-foreground">{promoToDelete?.name}</strong>?
+                </p>
+                <p>Esta acción no se puede deshacer.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPromoToDelete(null)} disabled={remove.isPending}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending || !promoToDelete}
+              onClick={() => promoToDelete && remove.mutate(promoToDelete.id, { onSuccess: () => setPromoToDelete(null) })}
+            >
+              Eliminar promoción
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(next) => { if (!uploading) setOpen(next); }}>
         <DialogContent
