@@ -49,7 +49,7 @@ export function SignagePlayer({
           <p className="text-center text-3xl font-semibold">{fallback.name}</p>
         </div>
       ) : (
-        <div key={current.id} className="flex h-full" style={transition === "fade" ? { animation: "signage-fade 700ms ease" } : undefined}>
+        <div key={`${current.id}-${current.imageUrl}`} className="flex h-full" style={transition === "fade" ? { animation: "signage-fade 700ms ease" } : undefined}>
           {current.contentType === "promo_card" ? (
             <>
               <div className="flex w-[62%] items-center justify-center bg-black">

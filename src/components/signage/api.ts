@@ -1,5 +1,5 @@
 export async function signageApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const response = await fetch(path, { cache: "no-store", ...init });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body && typeof body.error === "string" ? body.error : "No se pudo completar";

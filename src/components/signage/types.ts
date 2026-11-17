@@ -10,6 +10,7 @@ export type SignagePromotion = {
   endsOn: string | null;
   isActive: boolean;
   contentType: "full_image" | "promo_card";
+  updatedAt?: string;
 };
 
 export type SignagePlaylistItem = {
