@@ -58,9 +58,9 @@ export function moduleForPath(pathname: string): ClubModule | null {
   return rule?.module ?? null;
 }
 
-export async function isClubModuleOpen(module: ClubModule): Promise<boolean> {
+export async function isClubModuleOpen(clubModule: ClubModule): Promise<boolean> {
   const club = await loadActorClubSchedule();
-  return Boolean(club[FLAG[module]]);
+  return Boolean(club[FLAG[clubModule]]);
 }
 
 /** Si el interruptor de esta petición está apagado, responde 404. */
@@ -71,7 +71,7 @@ export async function assertRequestModule(): Promise<void> {
   } catch {
     return;
   }
-  const module = moduleForPath(path);
-  if (!module) return;
-  if (!(await isClubModuleOpen(module))) notFound();
+  const clubModule = moduleForPath(path);
+  if (!clubModule) return;
+  if (!(await isClubModuleOpen(clubModule))) notFound();
 }
