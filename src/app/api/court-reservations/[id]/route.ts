@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ReservationError } from "@/lib/court-reservation-rpc";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 function httpError(error: unknown, fallback: string) {
   if (error instanceof ReservationError) {
@@ -21,6 +22,7 @@ function httpError(error: unknown, fallback: string) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {
@@ -38,6 +40,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {

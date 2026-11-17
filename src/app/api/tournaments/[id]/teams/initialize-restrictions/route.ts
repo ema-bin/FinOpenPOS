@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { backfillTeamScheduleRestrictions } from "@/lib/backfill-team-schedule-restrictions";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -10,6 +11,7 @@ type RouteParams = { params: { id: string } };
  * una fila por cada slot con can_play=true para los slots que aún no tienen fila. Idempotente.
  */
 export async function POST(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

@@ -8,12 +8,14 @@ import {
   filterNewSlots,
   normalizeSlotTime,
 } from "@/lib/expand-tournament-group-slots";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 const EDITABLE_STATUSES = new Set(["draft", "schedule_review"]);
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

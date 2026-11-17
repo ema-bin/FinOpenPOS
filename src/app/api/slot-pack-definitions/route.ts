@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { slotCreditHttpError } from "@/lib/slot-credit-rpc";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 function readDefinition(body: {
   name?: unknown;
@@ -26,6 +27,7 @@ function readDefinition(body: {
 }
 
 export async function GET() {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const definitions = await repos.slotCredits.listDefinitions();
@@ -37,6 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const parsed = readDefinition(await request.json());

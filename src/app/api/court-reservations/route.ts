@@ -5,6 +5,7 @@ import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { blocksForCourtSlot, classesTouchingSlot } from "@/lib/class-occupancy";
 import { isIsoDate } from "@/lib/class-time";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 function httpError(error: unknown, fallback: string) {
   if (error instanceof ReservationError) {
@@ -24,6 +25,7 @@ function httpError(error: unknown, fallback: string) {
 }
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {
@@ -51,6 +53,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {

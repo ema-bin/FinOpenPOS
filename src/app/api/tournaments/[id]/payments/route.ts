@@ -5,10 +5,12 @@ import {
   batchComputePlayerRegistrationPricing,
   fetchRegistrationPricingSettings,
 } from "@/lib/registration-pricing";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function GET(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const tournamentId = Number(params.id);
@@ -164,6 +166,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {
@@ -256,6 +259,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

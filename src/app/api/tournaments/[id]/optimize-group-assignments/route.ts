@@ -8,10 +8,12 @@ import {
   type OptimizeGroupTeam,
 } from "@/lib/optimize-group-team-assignments";
 import { swapTournamentTeams } from "@/lib/tournament-team-swap";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function POST(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

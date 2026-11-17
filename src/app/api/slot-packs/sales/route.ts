@@ -2,10 +2,12 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { slotCreditHttpError } from "@/lib/slot-credit-rpc";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const url = new URL(request.url);

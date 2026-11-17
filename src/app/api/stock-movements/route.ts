@@ -2,8 +2,10 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
  * }
  */
 export async function POST(request: Request) {
+  await assertRequestModule();
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

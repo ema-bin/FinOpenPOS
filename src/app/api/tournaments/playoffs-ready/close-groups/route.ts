@@ -17,8 +17,10 @@ import {
   parseTournamentSlotPlans,
   playoffSlotIntervalFromMinutes,
 } from "@/lib/playoff-schedule-slots";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function POST(req: Request) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

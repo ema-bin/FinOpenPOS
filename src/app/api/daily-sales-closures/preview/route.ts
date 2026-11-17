@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusinessDate } from "@/lib/business-day";
 import { computeDailySalesSnapshot } from "@/lib/compute-daily-sales-snapshot";
 import { DailySalesClosuresRepository } from "@/repositories/daily-sales-closures.repository";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 function parseBusinessDate(value: string | null): string | null {
   if (!value?.trim()) return null;
@@ -13,6 +14,7 @@ function parseBusinessDate(value: string | null): string | null {
 }
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

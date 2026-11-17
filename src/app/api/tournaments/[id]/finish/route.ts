@@ -2,10 +2,12 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { computeAndSaveTournamentRankingPoints } from "@/lib/tournament-ranking-points";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function POST(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

@@ -2,10 +2,12 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type Params = { params: { id: string } };
 
 export async function GET(_request: Request, { params }: Params) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const id = Number(params.id);
@@ -39,6 +41,7 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PATCH(request: Request, { params }: Params) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const id = Number(params.id);
@@ -89,6 +92,7 @@ export async function PATCH(request: Request, { params }: Params) {
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const id = Number(params.id);

@@ -4,10 +4,12 @@ import { createRepositories } from "@/lib/repository-factory";
 import { validateCategoryEligibility, validateSuma13DamasEligibility } from "@/lib/tournament-category-eligibility";
 import { isMastersFormat } from "@/lib/tournament-format";
 import { MASTERS_TEAM_COUNT } from "@/lib/masters-tournament";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function GET(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);
@@ -31,6 +33,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);
@@ -161,6 +164,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);
@@ -215,6 +219,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);

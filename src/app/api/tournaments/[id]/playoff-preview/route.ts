@@ -11,6 +11,7 @@ import { computeQualifiedTeamsFromStandings } from "@/lib/tournament-group-stand
 import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import type { ScheduleConfig, ScheduleDay } from "@/models/dto/tournament";
 import type { TournamentMatch } from "@/models/db/tournament";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -176,6 +177,7 @@ function assignTimeSlots(
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

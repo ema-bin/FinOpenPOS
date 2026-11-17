@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string; teamId: string } };
 
@@ -9,6 +10,7 @@ type RouteParams = { params: { id: string; teamId: string } };
  * para los slots que aún no tienen fila. Idempotente.
  */
 export async function POST(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();

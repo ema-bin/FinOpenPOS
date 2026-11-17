@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { supabaseStorageService } from "@/services/supabase-storage.service";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -14,6 +15,7 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);
@@ -69,6 +71,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);

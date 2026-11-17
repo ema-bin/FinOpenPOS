@@ -2,10 +2,12 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { slotCreditHttpError } from "@/lib/slot-credit-rpc";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type Params = { params: { id: string } };
 
 export async function PATCH(request: Request, { params }: Params) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const definitionId = Number(params.id);

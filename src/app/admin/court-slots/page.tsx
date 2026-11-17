@@ -25,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { usePermissions } from "@/components/permissions-provider";
 import { playersService, slotCreditsService, courtReservationsService } from "@/services";
 import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
+import { moduleOn, useClubBrand } from "@/components/club/use-club-modules";
 import { creditSaveError, seatsFromSlot } from "@/lib/slot-credits";
 import type { SlotChanges } from "@/components/court-slots/SeatEditors";
 import Link from "next/link";
@@ -34,20 +35,13 @@ export default function CourtSlotsPage() {
   const canEditPricing = !permsLoading && can("courts.pricing");
   const canEditSlots = !permsLoading && can("courts.operate");
   const canSeeReservations = !permsLoading && canRead("courts.reservations");
+  const { data: clubBrand } = useClubBrand();
   const canSeePacks =
     !permsLoading &&
+    moduleOn(clubBrand, "module_packs") &&
     (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
-  const { data: clubSettings } = useQuery({
-    queryKey: ["club-settings"],
-    queryFn: async () => {
-      const response = await fetch("/api/club");
-      if (!response.ok) return null;
-      return response.json() as Promise<{ module_reservations: boolean }>;
-    },
-    staleTime: 60_000,
-  });
   const reservationsOn =
-    isCourtReservationsEnabledClient() && clubSettings?.module_reservations !== false;
+    isCourtReservationsEnabledClient() && moduleOn(clubBrand, "module_reservations");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();

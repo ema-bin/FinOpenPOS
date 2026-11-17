@@ -5,8 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { aggregateMonthlySalesClosure } from "@/lib/aggregate-monthly-sales-closure";
 import { getCurrentYearMonth, parseYearMonth } from "@/lib/month-period";
 import { MonthlySalesClosuresRepository } from "@/repositories/monthly-sales-closures.repository";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

@@ -17,10 +17,12 @@ import {
 import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
 import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
 import type { ScheduleConfig } from "@/models/dto/tournament";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

@@ -6,12 +6,14 @@ import {
   enrichOrderWithPaymentSummary,
   type OrderForPaymentResponse,
 } from "@/lib/order-response-with-payments";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string; itemId: string } };
 
 // ✏️ PATCH /api/orders/:id/items/:itemId
 // body: { quantity }
 export async function PATCH(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const orderId = Number(params.id);
@@ -76,6 +78,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
 // 🗑️ DELETE /api/orders/:id/items/:itemId
 export async function DELETE(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const orderId = Number(params.id);

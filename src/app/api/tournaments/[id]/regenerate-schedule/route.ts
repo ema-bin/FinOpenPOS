@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
 import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
 import type { ScheduleConfig } from "@/models/dto/tournament";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -36,6 +37,7 @@ function rangesOverlap(
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

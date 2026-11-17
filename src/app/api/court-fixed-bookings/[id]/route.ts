@@ -7,8 +7,10 @@ import {
   reservationHttpError,
   reservationsClosed,
 } from "@/lib/court-reservation-http";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {
@@ -27,6 +29,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {

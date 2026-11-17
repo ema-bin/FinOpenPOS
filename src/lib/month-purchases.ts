@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { addDaysIso } from "@/lib/class-time";
+import { businessClockForClient } from "@/lib/clubs/load-club";
+import { DEFAULT_BUSINESS_CLOCK, zonedDateTimeToUtc } from "@/lib/clubs/schedule";
 import { getMonthDateRange } from "@/lib/month-period";
 
 export type MonthPurchase = {
@@ -9,12 +12,17 @@ export type MonthPurchase = {
   totalAmount: number;
 };
 
-/** Límites del mes calendario en Argentina, en ISO UTC. */
-export function argentinaMonthBounds(yearMonth: string): { from: string; to: string } {
+/** Límites del mes calendario en la zona del complejo, en ISO UTC. */
+export function argentinaMonthBounds(
+  yearMonth: string,
+  timeZone = DEFAULT_BUSINESS_CLOCK.timeZone
+): { from: string; to: string } {
   const { startDate, endDate } = getMonthDateRange(yearMonth);
+  const start = zonedDateTimeToUtc(startDate, 0, timeZone);
+  const nextMonth = zonedDateTimeToUtc(addDaysIso(endDate, 1), 0, timeZone);
   return {
-    from: new Date(`${startDate}T00:00:00-03:00`).toISOString(),
-    to: new Date(`${endDate}T23:59:59.999-03:00`).toISOString(),
+    from: start.toISOString(),
+    to: new Date(nextMonth.getTime() - 1).toISOString(),
   };
 }
 
@@ -22,9 +30,9 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function argentinaDate(iso: string): string {
+function argentinaDate(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -36,7 +44,8 @@ export async function listCompletedPurchasesInMonth(
   supabase: SupabaseClient,
   yearMonth: string
 ): Promise<MonthPurchase[]> {
-  const { from, to } = argentinaMonthBounds(yearMonth);
+  const timeZone = (await businessClockForClient(supabase)).timeZone;
+  const { from, to } = argentinaMonthBounds(yearMonth, timeZone);
   const { data, error } = await supabase
     .from("purchases")
     .select(
@@ -61,7 +70,7 @@ export async function listCompletedPurchasesInMonth(
     const method = Array.isArray(row.payment_method) ? row.payment_method[0] : row.payment_method;
     return {
       id: row.id as number,
-      date: argentinaDate(row.created_at as string),
+      date: argentinaDate(row.created_at as string, timeZone),
       supplierName: (supplier as { name?: string } | null)?.name ?? "Sin proveedor",
       paymentMethodName: (method as { name?: string } | null)?.name ?? null,
       totalAmount: roundMoney(Number(row.total_amount) || 0),

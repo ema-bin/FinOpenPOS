@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertRequestModule } from "@/lib/clubs/modules";
 import { createRepositories } from "@/lib/repository-factory";
 import { CLASSES_SQL_HINT } from "./class-payment-methods";
 import { ClassRequestError } from "./class-request-error";
@@ -17,6 +18,7 @@ export async function withClasses(
   logLabel: string,
   handler: (repos: Repositories) => Promise<Response>
 ): Promise<Response> {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     return await handler(repos);

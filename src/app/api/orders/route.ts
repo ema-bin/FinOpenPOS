@@ -3,8 +3,10 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { createRepositories } from '@/lib/repository-factory';
 import type { OrderStatus } from '@/models/db/order';
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const url = new URL(request.url);
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const { playerId } = await request.json();

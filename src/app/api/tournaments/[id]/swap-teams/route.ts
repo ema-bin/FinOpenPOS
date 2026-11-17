@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { swapTournamentTeams } from "@/lib/tournament-team-swap";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -10,6 +11,7 @@ type RouteParams = { params: { id: string } };
  * Intercambia una pareja por otra: reemplaza todas las referencias de team1 por team2 y viceversa.
  */
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },
