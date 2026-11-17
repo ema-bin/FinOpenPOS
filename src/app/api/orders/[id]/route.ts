@@ -4,10 +4,12 @@ import { createRepositories } from '@/lib/repository-factory';
 import { createClient } from '@/lib/supabase/server';
 import { enrichOrderWithPaymentSummary } from '@/lib/order-response-with-payments';
 import type { OrderForPaymentResponse } from '@/lib/order-response-with-payments';
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function GET(_request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const supabase = createClient();
@@ -49,6 +51,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const supabase = createClient();

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -9,6 +10,7 @@ type RouteParams = { params: { id: string } };
  * Solo funciona si no hay ningún resultado de ningún partido cargado.
  */
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

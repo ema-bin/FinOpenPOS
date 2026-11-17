@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function POST(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const purchaseId = Number(params.id);

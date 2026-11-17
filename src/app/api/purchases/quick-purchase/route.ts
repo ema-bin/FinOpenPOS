@@ -8,9 +8,11 @@ import {
 } from "@/lib/quick-purchase-entities";
 import { roundMoney } from "@/lib/order-payment-helpers";
 import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 /** Compra rápida: solo monto + método de pago → proveedor/producto "Varios". */
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const body = await request.json();

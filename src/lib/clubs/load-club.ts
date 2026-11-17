@@ -16,6 +16,9 @@ export type ClubSchedule = {
   classPlayerLimit: number;
   registrationDiscountPercent: number;
   moduleReservations: boolean;
+  moduleClasses: boolean;
+  moduleTournaments: boolean;
+  modulePacks: boolean;
   moduleBuffet: boolean;
   autoDailyClosure: boolean;
   dailyClosureHour: number;
@@ -27,7 +30,8 @@ export type ClubSchedule = {
 const COLUMNS = `
   id, timezone, open_time, close_time, slot_duration_minutes, overnight_slot, fixed_weekdays,
   class_player_limit, registration_discount_percent,
-  module_reservations, module_buffet, auto_daily_closure, daily_closure_hour,
+  module_reservations, module_classes, module_tournaments, module_packs, module_buffet,
+  auto_daily_closure, daily_closure_hour,
   auto_reservation_week, reservation_week_weekday, reservation_week_hour
 `;
 
@@ -44,6 +48,9 @@ function fromRow(row: Record<string, unknown>): ClubSchedule {
     classPlayerLimit: Number(row.class_player_limit) || 5,
     registrationDiscountPercent: Number(row.registration_discount_percent) || 0,
     moduleReservations: Boolean(row.module_reservations),
+    moduleClasses: Boolean(row.module_classes),
+    moduleTournaments: Boolean(row.module_tournaments),
+    modulePacks: Boolean(row.module_packs),
     moduleBuffet: Boolean(row.module_buffet),
     autoDailyClosure: Boolean(row.auto_daily_closure),
     dailyClosureHour: Number.isInteger(Number(row.daily_closure_hour)) ? Number(row.daily_closure_hour) : 3,

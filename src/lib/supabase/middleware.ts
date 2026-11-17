@@ -43,6 +43,7 @@ function withSessionCookies(response: NextResponse, sessionResponse: NextRespons
 }
 
 export async function updateSession(request: NextRequest) {
+  request.headers.set("x-pcp-path", request.nextUrl.pathname);
   let supabaseResponse = NextResponse.next({
     request,
   })

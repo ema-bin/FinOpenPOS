@@ -4,10 +4,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DailySalesClosuresRepository } from "@/repositories/daily-sales-closures.repository";
 import { loadDiscountedCantinaBreakdown } from "@/lib/compute-daily-sales-snapshot";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteContext = { params: { date: string } };
 
 export async function GET(_request: Request, { params }: RouteContext) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

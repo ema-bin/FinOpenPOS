@@ -6,8 +6,10 @@ import {
   BulkPlayoffsPlanError,
   planBulkPlayoffsPreview,
 } from "@/lib/plan-bulk-playoffs-preview";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function POST(req: Request) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

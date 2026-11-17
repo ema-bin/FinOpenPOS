@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { quickPurchaseCreatedAt } from "@/lib/quick-purchase-date";
 import type { PurchaseStatus } from "@/models/db/purchase";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const url = new URL(request.url);
@@ -30,6 +32,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const body = await request.json();

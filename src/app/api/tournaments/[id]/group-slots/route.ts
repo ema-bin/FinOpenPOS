@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { expandRangesToSlots } from "@/lib/expand-tournament-group-slots";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function GET(_req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -43,6 +45,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);

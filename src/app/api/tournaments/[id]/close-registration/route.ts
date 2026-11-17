@@ -9,10 +9,12 @@ import {
 import { buildDefaultGroupOfFourMatchPayloads } from "@/lib/group-of-four-pairings";
 import { closeMastersRegistration } from "@/lib/masters-registration";
 import { isMastersFormat, readTournamentFormat } from "@/lib/tournament-format";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

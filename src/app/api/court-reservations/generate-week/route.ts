@@ -6,8 +6,10 @@ import { reservationsClosed } from "@/lib/court-reservation-http";
 import { generateReservationWeek } from "@/lib/generate-reservation-week";
 import { ReservationError } from "@/lib/court-reservation-rpc";
 import { isIsoDate, weekdayOf } from "@/lib/class-time";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {

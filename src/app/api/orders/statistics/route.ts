@@ -7,6 +7,7 @@ import {
   type DiscountableLine,
   type DiscountableOrder,
 } from '@/lib/discounted-sale-lines';
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export interface OrderStatisticsItem {
   productId: number;
@@ -23,6 +24,7 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 }
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();

@@ -6,12 +6,14 @@ import {
   enrichOrderWithPaymentSummary,
   type OrderForPaymentResponse,
 } from "@/lib/order-response-with-payments";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
 // 🚀 POST /api/orders/:id/items
 // body: { productId, quantity }
 export async function POST(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const orderId = Number(params.id);

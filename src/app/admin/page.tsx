@@ -29,17 +29,23 @@ import { useQuery } from "@tanstack/react-query";
 import { adminService } from "@/services";
 import { formatDate } from "@/lib/date-utils";
 import { usePermissions } from "@/components/permissions-provider";
+import { moduleOn, useClubBrand } from "@/components/club/use-club-modules";
 
 export default function Page() {
   const router = useRouter();
   const { canRead, loading: permsLoading } = usePermissions();
-  const showSales = !permsLoading && canRead("sales.operate");
+  const { data: clubBrand } = useClubBrand();
+  const buffetOn = moduleOn(clubBrand, "module_buffet");
+  const packsOn = moduleOn(clubBrand, "module_packs");
+  const tournamentsOn = moduleOn(clubBrand, "module_tournaments");
+  const showSales = !permsLoading && canRead("sales.operate") && buffetOn;
   const showSalesReports = showSales && canRead("sales.reports");
   const showCourts = !permsLoading && canRead("courts.operate");
   const showPacks =
     !permsLoading &&
+    packsOn &&
     (canRead("packs.define") || canRead("packs.sell") || canRead("packs.credits"));
-  const showTournaments = !permsLoading && canRead("tournaments.manage");
+  const showTournaments = !permsLoading && canRead("tournaments.manage") && tournamentsOn;
 
   // Queries para datos del dashboard
   const { data: salesData, isLoading: loadingSales } = useQuery({
@@ -311,7 +317,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {canRead("products.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
+          {buffetOn && canRead("products.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/products")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <PackageIcon className="h-4 w-4 text-muted-foreground" />
@@ -325,7 +331,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {canRead("purchases.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
+          {buffetOn && canRead("purchases.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/purchases")}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <TruckIcon className="h-4 w-4 text-muted-foreground" />
@@ -352,7 +358,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {canRead("closures.daily") && <Card
+          {buffetOn && canRead("closures.daily") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/daily-sales-closure")}
           >
@@ -369,7 +375,7 @@ export default function Page() {
             </CardContent>
           </Card>}
 
-          {canRead("closures.monthly") && <Card
+          {buffetOn && canRead("closures.monthly") && <Card
             className="hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => router.push("/admin/monthly-sales-closure")}
           >

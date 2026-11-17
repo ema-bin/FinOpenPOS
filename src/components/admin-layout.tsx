@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -36,6 +35,7 @@ import { usePermissions } from "@/components/permissions-provider";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { isCourtReservationsEnabledClient } from "@/lib/court-reservations-flag";
 import { CLUB_LOGO_SRC } from "@/lib/clubs/logo";
+import { moduleOn, useClubBrand } from "@/components/club/use-club-modules";
 import type { Permission } from "@/lib/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -109,27 +109,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   // Usar usePathname normalmente - Next.js debería manejarlo
   const currentPathname = usePathname();
   const { canRead, isPlatform, loading: permsLoading } = usePermissions();
-  const { data: clubBrand } = useQuery({
-    queryKey: ["club-brand"],
-    queryFn: async () => {
-      const response = await fetch("/api/club");
-      if (!response.ok) return null;
-      return response.json() as Promise<{
-        short_name: string;
-        logo_url: string | null;
-        primary_color: string;
-        accent_color: string;
-        on_primary_color: string;
-        module_reservations: boolean;
-      }>;
-    },
-    staleTime: 60_000,
-    retry: false,
-  });
+  const { data: clubBrand } = useClubBrand();
   const reservationsOn =
-    isCourtReservationsEnabledClient() && clubBrand?.module_reservations !== false;
+    isCourtReservationsEnabledClient() && moduleOn(clubBrand, "module_reservations");
   const navItems = [
-    ...NAV_ITEMS.filter((item) => item.href !== "/admin/reservations" || reservationsOn),
+    ...NAV_ITEMS.filter((item) => {
+      if (item.href === "/admin/reservations") return reservationsOn;
+      if (item.href === "/admin/classes") return moduleOn(clubBrand, "module_classes");
+      if (item.href === "/admin/tournaments") return moduleOn(clubBrand, "module_tournaments");
+      if (item.href === "/admin/slot-packs") return moduleOn(clubBrand, "module_packs");
+      if (item.href === "/admin/orders" || item.href === "/admin/purchases") {
+        return moduleOn(clubBrand, "module_buffet");
+      }
+      return true;
+    }),
     ...(isPlatform
       ? [{ href: "/admin/platform", label: "Complejos", icon: Building2Icon, permission: "dashboard.view" as const }]
       : []),
@@ -189,7 +182,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 className="h-10 w-10 object-contain"
               />
             </div>
-            <span className="sr-only">{clubBrand?.short_name ?? "Admin"}</span>
+            {clubBrand?.short_name ? (
+              <span className="max-w-[9rem] truncate text-sm font-semibold">{clubBrand.short_name}</span>
+            ) : null}
           </Link>
           <h1 className="text-xl font-bold max-md:min-w-0 max-md:truncate">{title}</h1>
 

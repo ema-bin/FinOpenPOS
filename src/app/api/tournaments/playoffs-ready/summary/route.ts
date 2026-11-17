@@ -4,8 +4,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPlayoffMatchesPlan } from "@/lib/playoff-matches-plan";
 import { playoffSlotIntervalFromMinutes } from "@/lib/playoff-schedule-slots";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export async function GET() {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

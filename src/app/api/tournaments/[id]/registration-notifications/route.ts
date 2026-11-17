@@ -8,12 +8,14 @@ import {
   buildDefaultRegistrationInviteMessage,
 } from "@/lib/tournament-registration-notifications";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 const FEMALE_GENDER_VALUES = new Set(["female", "f", "femenino", "mujer"]);
 
 type RouteParams = { params: { id: string } };
 
 export async function GET(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

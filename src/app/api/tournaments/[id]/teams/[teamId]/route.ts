@@ -2,10 +2,12 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import { validateCategoryEligibility, validateSuma13DamasEligibility } from "@/lib/tournament-category-eligibility";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string; teamId: string } };
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const tournamentId = Number(params.id);

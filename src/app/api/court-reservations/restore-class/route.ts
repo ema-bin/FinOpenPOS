@@ -4,9 +4,11 @@ import { createRepositories } from "@/lib/repository-factory";
 import { reservationsClosed } from "@/lib/court-reservation-http";
 import { ClassRequestError } from "@/lib/class-request-error";
 import { setClassOnSlot } from "@/lib/court-class-slot";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 /** Vuelve a dejar una clase cancelada en su horario. */
 export async function POST(request: Request) {
+  await assertRequestModule();
   const closed = await reservationsClosed();
   if (closed) return closed;
   try {

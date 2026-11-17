@@ -6,10 +6,12 @@ import { parseYearMonth } from "@/lib/month-period";
 import { listCompletedPurchasesInMonth, sumPurchases } from "@/lib/month-purchases";
 import { MonthlySalesClosuresRepository } from "@/repositories/monthly-sales-closures.repository";
 import { loadDiscountedCantinaBreakdown } from "@/lib/compute-daily-sales-snapshot";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteContext = { params: { yearMonth: string } };
 
 export async function GET(_request: Request, { params }: RouteContext) {
+  await assertRequestModule();
   try {
     const supabase = createClient();
     const {

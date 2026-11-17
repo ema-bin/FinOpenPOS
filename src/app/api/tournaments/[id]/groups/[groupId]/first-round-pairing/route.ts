@@ -9,10 +9,12 @@ import {
   pairingFromPreset,
   type GroupOfFourPairingPreset,
 } from "@/lib/group-of-four-pairings";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string; groupId: string } };
 
 export async function PATCH(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

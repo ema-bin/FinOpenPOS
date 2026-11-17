@@ -16,6 +16,7 @@ import {
   sumPayments,
 } from "@/lib/order-payment-helpers";
 import { requirePermission } from "@/lib/auth/require-permission";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -117,6 +118,7 @@ async function getOrderWithItems(
 // body: { paymentMethodId, amount?, discount_percentage?, discount_amount? }
 // Registra un pago en dinero. Si el saldo queda en cero, cierra la cuenta.
 export async function POST(request: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

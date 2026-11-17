@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildScheduleDaysFromSlots } from "@/lib/build-schedule-days-from-slots";
 import { scheduleGroupMatches } from "@/lib/tournament-scheduler";
 import { buildTeamsNeedSameDayCloseSet } from "@/lib/team-same-day-match-constraint";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 function normalizeTimeHHMM(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -35,6 +36,7 @@ function rangesOverlap(
 }
 
 export async function POST(req: NextRequest) {
+  await assertRequestModule();
   const body = await req.json().catch(() => ({})) as {
     courtIds?: unknown;
     slotIds?: unknown;

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isGroupTestToolsEnabledServer } from "@/lib/group-test-tools";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 type RouteParams = { params: { id: string } };
 
@@ -11,6 +12,7 @@ type RouteParams = { params: { id: string } };
  * Requiere ENABLE_GROUP_TEST_TOOLS o NEXT_PUBLIC_ENABLE_GROUP_TEST_TOOLS.
  */
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   if (!isGroupTestToolsEnabledServer()) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

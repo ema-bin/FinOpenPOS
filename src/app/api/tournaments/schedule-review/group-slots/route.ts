@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

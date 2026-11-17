@@ -12,11 +12,13 @@ import {
   roundMoney,
   sumPayments,
 } from "@/lib/order-payment-helpers";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 // POST /api/orders/quick-sale
 // body: { playerId, items: [{ productId, quantity }], paymentMethodId }
 // Crea una orden, agrega items y la paga en una sola transacción
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const body = await request.json();

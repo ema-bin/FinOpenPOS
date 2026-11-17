@@ -9,6 +9,7 @@ import {
   buildStandingsInsertRows,
   type StandingsMatchInput,
 } from "@/lib/tournament-group-standings";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 async function standingsRowsForGroup(
   supabase: SupabaseClient,
@@ -52,6 +53,7 @@ function getNextRounds(round: string): string[] {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },
@@ -619,6 +621,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(req: Request, { params }: RouteParams) {
+  await assertRequestModule();
   const supabase = createClient();
   const {
     data: { user },

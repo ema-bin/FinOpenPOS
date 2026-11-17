@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 import type { TournamentStatus } from "@/models/db/tournament";
+import { assertRequestModule } from "@/lib/clubs/modules";
 
 const ALLOWED_STATUSES: TournamentStatus[] = [
   "draft",
@@ -13,6 +14,7 @@ const ALLOWED_STATUSES: TournamentStatus[] = [
 ];
 
 export async function GET(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const statusParam = (request as any).nextUrl.searchParams.get("status");
@@ -46,6 +48,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  await assertRequestModule();
   try {
     const repos = await createRepositories();
     const body = await request.json();
