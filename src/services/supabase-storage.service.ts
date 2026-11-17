@@ -1,5 +1,23 @@
 import { createClient as createSupabaseClient, SupabaseClient } from "@supabase/supabase-js";
 
+const SIGNAGE_BUCKET = "digital_signage";
+
+/** promotions/{clubId}/{archivo} dentro de digital_signage. Null si la URL no es de Storage. */
+export function promotionStorageKey(storedUrl: string): string | null {
+  const marker = "/storage/v1/object/public/";
+  let pathname = storedUrl;
+  try {
+    pathname = new URL(storedUrl).pathname;
+  } catch {
+    return null;
+  }
+  const start = pathname.indexOf(marker);
+  if (start === -1) return null;
+  const parts = decodeURIComponent(pathname.slice(start + marker.length)).split("/").filter(Boolean);
+  if (parts.length < 4 || !/^\d+$/.test(parts[2])) return null;
+  return `promotions/${parts[2]}/${parts.slice(3).join("/")}`;
+}
+
 class SupabaseStorageService {
   private _client: SupabaseClient | null = null;
 
@@ -37,13 +55,21 @@ class SupabaseStorageService {
   async uploadSignageImage(file: File, clubId: number): Promise<string> {
     const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase();
     const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "jpg";
-    const key = `signage/${clubId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const key = `promotions/${clubId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const { data, error } = await this.client.storage
-      .from("digital_signage")
+      .from(SIGNAGE_BUCKET)
       .upload(key, file, { cacheControl: "86400" });
     if (error || !data) throw error ?? new Error("Upload failed");
-    const { data: publicData } = this.client.storage.from("digital_signage").getPublicUrl(data.path);
+    const { data: publicData } = this.client.storage.from(SIGNAGE_BUCKET).getPublicUrl(data.path);
     return publicData.publicUrl;
+  }
+
+  /** URL pública en digital_signage/promotions. Si no es un archivo de Storage, se deja igual. */
+  promotionImageUrl(storedUrl: string): string {
+    const key = promotionStorageKey(storedUrl);
+    if (!key) return storedUrl;
+    const { data } = this.client.storage.from(SIGNAGE_BUCKET).getPublicUrl(key);
+    return data.publicUrl;
   }
 
   async uploadClubLogo(file: File): Promise<string> {

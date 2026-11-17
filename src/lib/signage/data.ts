@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadClubSchedule } from "@/lib/clubs/load-club";
 import { createServiceClient } from "@/lib/supabase/service";
 import { SignageError, isMissingSignageTable } from "@/lib/signage/guard";
+import { supabaseStorageService } from "@/services/supabase-storage.service";
 import {
   localSignageClock,
   promotionIsLive,
@@ -78,7 +79,7 @@ function promoOf(row: Row) {
     name: String(row.name),
     title: String(row.title ?? ""),
     description: row.description == null ? "" : String(row.description),
-    imageUrl: String(row.image_url),
+    imageUrl: supabaseStorageService.promotionImageUrl(String(row.image_url)),
     price: row.price == null ? null : Number(row.price),
     highlight: row.highlight == null ? "" : String(row.highlight),
     startsOn: row.starts_on ? String(row.starts_on).slice(0, 10) : null,
@@ -114,7 +115,7 @@ export async function savePromotion(supabase: SupabaseClient, userId: string, bo
     name,
     title,
     description: text(body.description, "la descripción", 500, false) || null,
-    image_url: imageUrl,
+    image_url: supabaseStorageService.promotionImageUrl(imageUrl),
     price,
     highlight: text(body.highlight, "el destacado", 80, false) || null,
     starts_on: startsOn,
