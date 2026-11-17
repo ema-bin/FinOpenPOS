@@ -10,22 +10,32 @@ import { ScreensTab } from "@/components/signage/screens-tab";
 const TABS = [
   ["promotions", "Promociones"],
   ["playlists", "Listas"],
-  ["schedule", "Programación"],
   ["screens", "Pantallas"],
 ] as const;
 
+type Tab = (typeof TABS)[number][0] | "schedule";
+
 export function SignageAdmin() {
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("promotions");
+  const [tab, setTab] = useState<Tab>("promotions");
   const { can, loading } = usePermissions();
   const canWrite = !loading && can("signage.manage");
 
   return (
     <div className="grid gap-4 p-4">
-      <div>
-        <h2 className="text-lg font-semibold">Cartelería</h2>
-        <p className="text-sm text-muted-foreground">Promociones, listas y horarios de las pantallas del complejo.</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Cartelería</h2>
+          <p className="text-sm text-muted-foreground">Promociones, listas y pantallas del complejo.</p>
+        </div>
+        <button
+          type="button"
+          className={`text-xs underline-offset-4 hover:underline ${tab === "schedule" ? "font-medium text-foreground" : "text-muted-foreground"}`}
+          onClick={() => setTab(tab === "schedule" ? "promotions" : "schedule")}
+        >
+          Horarios
+        </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         {TABS.map(([id, label]) => (
           <button
             key={id}
@@ -39,8 +49,8 @@ export function SignageAdmin() {
       </div>
       {tab === "promotions" ? <PromotionsTab canWrite={canWrite} /> : null}
       {tab === "playlists" ? <PlaylistsTab canWrite={canWrite} /> : null}
-      {tab === "schedule" ? <ScheduleTab canWrite={canWrite} /> : null}
       {tab === "screens" ? <ScreensTab canWrite={canWrite} /> : null}
+      {tab === "schedule" ? <ScheduleTab canWrite={canWrite} /> : null}
     </div>
   );
 }
