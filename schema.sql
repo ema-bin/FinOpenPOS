@@ -2463,3 +2463,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 -- El aislamiento de lecturas se aplica con scripts/add-club-rls.sql.
 -- La grilla y los días fijos de la ficha se aplican con scripts/club-schedule-live.sql.
 -- El alta de otro complejo se aplica con scripts/add-club-alta.sql.
+-- La cartelería digital se aplica con scripts/add-signage.sql.

@@ -34,6 +34,18 @@ class SupabaseStorageService {
     return publicData.publicUrl;
   }
 
+  async uploadSignageImage(file: File, clubId: number): Promise<string> {
+    const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase();
+    const ext = ["png", "jpg", "jpeg", "webp"].includes(rawExt) ? rawExt : "jpg";
+    const key = `signage/${clubId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { data, error } = await this.client.storage
+      .from("advertisements")
+      .upload(key, file, { cacheControl: "86400" });
+    if (error || !data) throw error ?? new Error("Upload failed");
+    const { data: publicData } = this.client.storage.from("advertisements").getPublicUrl(data.path);
+    return publicData.publicUrl;
+  }
+
   async uploadClubLogo(file: File): Promise<string> {
     const rawExt = (file.name.split(".").pop() ?? "png").toLowerCase();
     const ext = ["png", "jpg", "jpeg", "webp", "svg"].includes(rawExt) ? rawExt : "png";
