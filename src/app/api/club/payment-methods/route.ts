@@ -15,9 +15,18 @@ export async function GET() {
     const clubId = await clubIdForUser(service, auth.userId);
     const { data, error } = await service
       .from("payment_methods")
-      .select("id, name, scope, is_active")
+      .select("id, name, scope, is_active, is_mercadopago")
       .eq("club_id", clubId)
       .order("name", { ascending: true });
+    if (missingMercadoPagoColumn(error)) {
+      const plain = await service
+        .from("payment_methods")
+        .select("id, name, scope, is_active")
+        .eq("club_id", clubId)
+        .order("name", { ascending: true });
+      if (plain.error) return NextResponse.json({ error: plain.error.message }, { status: 500 });
+      return NextResponse.json((plain.data ?? []).map((row) => ({ ...row, is_mercadopago: false })));
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data ?? []);
   } catch (error) {
@@ -78,4 +87,9 @@ function failure(error: unknown) {
   const message = error instanceof Error ? error.message : "Internal server error";
   const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
   return NextResponse.json({ error: message }, { status });
+}
+
+function missingMercadoPagoColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703" || error.code === "PGRST204" || /is_mercadopago/i.test(error.message ?? "");
 }

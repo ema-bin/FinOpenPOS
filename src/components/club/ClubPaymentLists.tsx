@@ -14,7 +14,11 @@ const LISTS = [
   { scope: "TOURNAMENT", label: "Torneos" },
 ] as const;
 
-type Method = { id: number; name: string; scope: string; is_active: boolean };
+type Method = { id: number; name: string; scope: string; is_active: boolean; is_mercadopago?: boolean };
+
+function acceptsMercadoPago(scope: string) {
+  return scope === "COURT" || scope === "BOTH";
+}
 
 export function ClubPaymentLists({ canWrite }: { canWrite: boolean }) {
   const queryClient = useQueryClient();
@@ -60,6 +64,20 @@ export function ClubPaymentLists({ canWrite }: { canWrite: boolean }) {
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo actualizar"),
   });
 
+  const mercadoPago = useMutation({
+    mutationFn: async ({ id, is_mercadopago }: { id: number; is_mercadopago: boolean }) => {
+      const response = await fetch(`/api/club/payment-methods/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_mercadopago }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "No se pudo actualizar");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["club-payment-methods"] }),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo actualizar"),
+  });
+
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {LISTS.map((list) => {
@@ -74,14 +92,26 @@ export function ClubPaymentLists({ canWrite }: { canWrite: boolean }) {
           <div key={list.scope} className="space-y-2">
             <p className="text-sm font-medium">{list.label}</p>
             {rows.map((method) => (
-              <label key={method.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className={method.is_active ? "" : "text-muted-foreground"}>{method.name}</span>
-                <Switch
-                  checked={method.is_active}
-                  disabled={!canWrite || toggle.isPending}
-                  onCheckedChange={(checked) => toggle.mutate({ id: method.id, is_active: checked })}
-                />
-              </label>
+              <div key={method.id} className="space-y-1 text-sm">
+                <label className="flex items-center justify-between gap-2">
+                  <span className={method.is_active ? "" : "text-muted-foreground"}>{method.name}</span>
+                  <Switch
+                    checked={method.is_active}
+                    disabled={!canWrite || toggle.isPending}
+                    onCheckedChange={(checked) => toggle.mutate({ id: method.id, is_active: checked })}
+                  />
+                </label>
+                {list.scope === "COURT" && acceptsMercadoPago(method.scope) ? (
+                  <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    Mercado Pago
+                    <Switch
+                      checked={method.is_mercadopago === true}
+                      disabled={!canWrite || mercadoPago.isPending}
+                      onCheckedChange={(checked) => mercadoPago.mutate({ id: method.id, is_mercadopago: checked })}
+                    />
+                  </label>
+                ) : null}
+              </div>
             ))}
             {canWrite ? (
               <form

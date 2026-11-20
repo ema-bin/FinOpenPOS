@@ -2465,3 +2465,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 -- El alta de otro complejo se aplica con scripts/add-club-alta.sql.
 -- La cartelería digital se aplica con scripts/add-signage.sql.
 -- El historial de tarifas de cancha se aplica con scripts/add-court-pricing-history.sql.
+-- El token cifrado de Mercado Pago se aplica con scripts/add-payment-method-credentials.sql.
+-- La marca de medio Mercado Pago se aplica con scripts/add-payment-method-mercadopago.sql.

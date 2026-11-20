@@ -533,7 +533,7 @@ export default function ClubSettingsPage() {
         <CardHeader>
           <CardTitle>Medios de pago</CardTitle>
           <CardDescription>
-            Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos.
+            Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos. En canchas, Mercado Pago marca el medio que pide el access token en el balance.
           </CardDescription>
         </CardHeader>
         <CardContent>
