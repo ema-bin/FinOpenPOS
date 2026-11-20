@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { courtSlotsService } from "@/services/court-slots.service";
 import type { CourtPricingDB } from "@/models/db/court";
+import { ORIGINAL_TARIFF_FROM } from "@/lib/court-pricing-history";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
 interface PricingRule {
@@ -26,6 +27,21 @@ interface PricingRule {
 interface Court {
   id: number;
   name: string;
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function formatDay(value: string) {
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function historyLabel(row: CourtPricingDB) {
+  const until = row.valid_until ? formatDay(row.valid_until) : "";
+  if (!row.valid_from || row.valid_from.slice(0, 10) === ORIGINAL_TARIFF_FROM) {
+    return `Hasta el ${until}`;
+  }
+  return `Del ${formatDay(row.valid_from)} al ${until}`;
 }
 
 interface CourtPricingDialogProps {
@@ -41,9 +57,12 @@ export function CourtPricingDialog({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rules, setRules] = useState<PricingRule[]>([]);
+  const [history, setHistory] = useState<CourtPricingDB[]>([]);
+  const [validFrom, setValidFrom] = useState("");
 
   useEffect(() => {
     if (open) {
+      setValidFrom("");
       loadPricing();
     }
   }, [open, court.id]);
@@ -51,7 +70,11 @@ export function CourtPricingDialog({
   async function loadPricing() {
     try {
       setLoading(true);
-      const pricing = await courtSlotsService.getPricing();
+      const [pricing, past] = await Promise.all([
+        courtSlotsService.getPricing(),
+        courtSlotsService.getPricingHistory(court.id),
+      ]);
+      setHistory(past);
       const courtPricing = pricing.filter((p) => p.court_id === court.id);
       
       if (courtPricing.length > 0) {
@@ -75,10 +98,14 @@ export function CourtPricingDialog({
   }
 
   async function handleSave() {
+    if (!DATE.test(validFrom)) {
+      toast.error("Elegí el día a partir del cual cambia la tarifa.");
+      return;
+    }
     try {
       setSaving(true);
-      await courtSlotsService.upsertPricingForCourtId(court.id, rules);
-      toast.success("Precios actualizados correctamente");
+      await courtSlotsService.upsertPricingForCourtId(court.id, rules, validFrom);
+      toast.success("Tarifa guardada");
       setOpen(false);
       onUpdate?.();
     } catch (error) {
@@ -120,7 +147,7 @@ export function CourtPricingDialog({
         <DialogHeader>
           <DialogTitle>Precios por jugador - {court.name}</DialogTitle>
           <DialogDescription>
-            Configurá los precios por rango horario para {court.name}
+            Elegí el día a partir del cual cambia la tarifa de {court.name}. Desde esa fecha se cobra el precio nuevo. Los días anteriores conservan el anterior.
           </DialogDescription>
         </DialogHeader>
 
@@ -130,6 +157,15 @@ export function CourtPricingDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            <div>
+              <Label className="text-xs">A partir del</Label>
+              <Input
+                type="date"
+                value={validFrom}
+                onChange={(e) => setValidFrom(e.target.value)}
+                required
+              />
+            </div>
             <div className="space-y-3">
               {rules.map((rule, index) => (
                 <div
@@ -199,11 +235,25 @@ export function CourtPricingDialog({
               Agregar rango horario
             </Button>
 
+            {history.length > 0 && (
+              <div className="space-y-2 border-t pt-4">
+                <h3 className="text-sm font-semibold">Tarifas anteriores</h3>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {history.map((row) => (
+                    <p key={row.id}>
+                      {historyLabel(row)} · {row.start_time.slice(0, 5)} a {row.end_time.slice(0, 5)} · $
+                      {Number(row.price_per_player).toLocaleString("es-AR")}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={saving || rules.length === 0}>
+              <Button onClick={handleSave} disabled={saving || rules.length === 0 || !DATE.test(validFrom)}>
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

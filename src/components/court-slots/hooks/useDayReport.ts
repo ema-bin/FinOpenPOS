@@ -1,15 +1,32 @@
 import { useMemo } from "react";
 import type { CourtSlotDTO } from "@/models/dto/court";
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
-import { getPricePerPlayer, formatTime, getCourtType } from "@/lib/court-slots-utils";
+import { getPricePerPlayer, formatTime } from "@/lib/court-slots-utils";
 import { methodConsumesCredit } from "@/lib/slot-credits";
 import { useCourtPricing } from "./useCourtPricing";
 
+export type PlayedByCourt = Array<{
+  courtId: number | null;
+  courtName: string;
+  times: string[];
+}>;
+
+export type UnpaidByCourt = Array<{
+  courtId: number | null;
+  courtName: string;
+  items: Array<{ timeRange: string; unpaidCount: number }>;
+}>;
+
+function courtKey(courtId: number | null | undefined, courtName: string) {
+  return courtId != null ? `id:${courtId}` : `name:${courtName}`;
+}
+
 export function useDayReport(
   localSlots: CourtSlotDTO[],
-  paymentMethods: PaymentMethodDTO[]
+  paymentMethods: PaymentMethodDTO[],
+  onDate: string
 ) {
-  const { pricing } = useCourtPricing();
+  const { pricing } = useCourtPricing(onDate);
   const dayReport = useMemo(() => {
     if (!localSlots.length) {
       return {
@@ -20,6 +37,7 @@ export function useDayReport(
         totalUnpaidPlayers: 0,
         unpaidSlots: [] as Array<{
           id: number;
+          courtId: number | null;
           courtName: string;
           timeRange: string;
           unpaidCount: number;
@@ -55,8 +73,9 @@ export function useDayReport(
       { name: string; uses: number; totalAmount: number }
     >();
 
-    const unpaidSlots: Array<{
+        const unpaidSlots: Array<{
       id: number;
+      courtId: number | null;
       courtName: string;
       timeRange: string;
       unpaidCount: number;
@@ -117,6 +136,7 @@ export function useDayReport(
           totalUnpaidPlayers += unpaidCount;
           unpaidSlots.push({
             id: slot.id,
+            courtId: slot.court?.id ?? null,
             courtName: slot.court?.name ?? "Sin cancha",
             timeRange: `${formatTime(slot.start_time)} - ${formatTime(slot.end_time)}`,
             unpaidCount,
@@ -195,52 +215,57 @@ export function useDayReport(
     [localSlots]
   );
 
-  const playedByCourtType = useMemo(() => {
-    const groups: Record<string, string[]> = {
-      C1: [],
-      C2: [],
-      OTRAS: [],
-    };
+  const playedByCourt = useMemo(() => {
+    const groups = new Map<string, PlayedByCourt[number]>();
 
     for (const slot of localSlots) {
       if (!slot.was_played) continue;
-
-      const courtType = getCourtType(slot.court?.name);
-      const timeRange = `${formatTime(slot.start_time)} - ${formatTime(
-        slot.end_time
-      )}`;
-
-      groups[courtType].push(timeRange);
+      const courtName = slot.court?.name ?? "Sin cancha";
+      const key = courtKey(slot.court?.id, courtName);
+      const group = groups.get(key) ?? {
+        courtId: slot.court?.id ?? null,
+        courtName,
+        times: [],
+      };
+      group.times.push(
+        `${formatTime(slot.start_time)} - ${formatTime(slot.end_time)}`
+      );
+      groups.set(key, group);
     }
 
-    return groups;
+    return Array.from(groups.values()).sort((a, b) =>
+      a.courtName.localeCompare(b.courtName, "es")
+    );
   }, [localSlots]);
 
-  const unpaidByCourtType = useMemo(() => {
-    const groups: Record<string, Array<{ courtName: string; timeRange: string; unpaidCount: number }>> = {
-      C1: [],
-      C2: [],
-      OTRAS: [],
-    };
+  const unpaidByCourt = useMemo(() => {
+    const groups = new Map<string, UnpaidByCourt[number]>();
 
     for (const slot of dayReport.unpaidSlots) {
-      const courtType = getCourtType(slot.courtName);
-      groups[courtType].push({
+      const key = courtKey(slot.courtId, slot.courtName);
+      const group = groups.get(key) ?? {
+        courtId: slot.courtId,
         courtName: slot.courtName,
+        items: [],
+      };
+      group.items.push({
         timeRange: slot.timeRange,
         unpaidCount: slot.unpaidCount,
       });
+      groups.set(key, group);
     }
 
-    return groups;
+    return Array.from(groups.values()).sort((a, b) =>
+      a.courtName.localeCompare(b.courtName, "es")
+    );
   }, [dayReport.unpaidSlots]);
 
   return {
     dayReport,
     totalRevenue,
     notPlayedSlots,
-    playedByCourtType,
-    unpaidByCourtType,
+    playedByCourt,
+    unpaidByCourt,
   };
 }
 

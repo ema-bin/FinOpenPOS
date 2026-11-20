@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { createRepositories } from "@/lib/repository-factory";
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 type RouteParams = {
   params: {
     courtId: string;
@@ -12,8 +14,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
   try {
     const repos = await createRepositories();
     const body = await request.json();
-    const { rules } = body as {
-      rules: Array<{ start_time: string; end_time: string; price_per_player: number }>;
+    const { rules, valid_from } = body as {
+      rules?: Array<{ start_time: string; end_time: string; price_per_player: number }>;
+      valid_from?: string;
     };
 
     const courtId = parseInt(params.courtId, 10);
@@ -24,7 +27,10 @@ export async function PUT(request: Request, { params }: RouteParams) {
       );
     }
 
-    // Validar reglas
+    if (!Array.isArray(rules)) {
+      return NextResponse.json({ error: "Invalid rules" }, { status: 400 });
+    }
+
     for (const rule of rules) {
       if (!rule.start_time || !rule.end_time || rule.price_per_player < 0) {
         return NextResponse.json(
@@ -34,7 +40,14 @@ export async function PUT(request: Request, { params }: RouteParams) {
       }
     }
 
-    const result = await repos.courtPricing.upsertForCourtId(courtId, rules);
+    if (!DATE.test(valid_from ?? "")) {
+      return NextResponse.json(
+        { error: "Elegí el día a partir del cual cambia la tarifa." },
+        { status: 400 }
+      );
+    }
+
+    const result = await repos.courtPricing.publishForCourtId(courtId, rules, valid_from!);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

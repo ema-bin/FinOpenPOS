@@ -1,4 +1,5 @@
 import type { PaymentMethodDTO } from "@/models/dto/payment-method";
+import { timeInTariffRange } from "@/lib/court-pricing-history";
 
 export const PAYMENT_COLORS = [
   "border-emerald-300 bg-emerald-50 dark:bg-emerald-900/30",
@@ -106,7 +107,7 @@ export function getPricePerPlayer(
         // Incluir si el tiempo está dentro del rango
         // Si el tiempo es exactamente el start_time, incluirlo
         // Si el tiempo es exactamente el end_time, NO incluirlo (pertenece al siguiente rango)
-        const matches = normalizedTime >= start && normalizedTime < end;
+        const matches = timeInTariffRange(normalizedTime, start, end);
         if ((courtName?.toUpperCase().includes("C1") || courtName?.toUpperCase().includes("INDOOR")) && matches) {
           console.log(`[getPricePerPlayer] Match found: ${start}-${end} = ${price}`);
         }

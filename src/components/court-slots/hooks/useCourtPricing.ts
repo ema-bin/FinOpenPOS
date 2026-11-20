@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { courtSlotsService } from "@/services/court-slots.service";
 import type { CourtPricingDB } from "@/models/db/court";
+import { timeInTariffRange } from "@/lib/court-pricing-history";
 
 export interface PricingRule {
   id: number;
@@ -10,7 +11,7 @@ export interface PricingRule {
   price_per_player: number;
 }
 
-export function useCourtPricing() {
+export function useCourtPricing(onDate: string) {
   const [pricing, setPricing] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -19,7 +20,7 @@ export function useCourtPricing() {
     async function loadPricing() {
       try {
         setLoading(true);
-        const rules = await courtSlotsService.getPricing();
+        const rules = await courtSlotsService.getPricing(onDate);
         const pricingMap = new Map<string, number>();
 
         for (const rule of rules) {
@@ -52,7 +53,7 @@ export function useCourtPricing() {
     }
 
     loadPricing();
-  }, []);
+  }, [onDate]);
 
   /**
    * Get price per player for a court ID and time
@@ -69,7 +70,7 @@ export function useCourtPricing() {
         const start = startTime.slice(0, 5);
         const end = endTime.slice(0, 5);
         
-        if (normalizedTime >= start && normalizedTime < end) {
+        if (timeInTariffRange(normalizedTime, start, end)) {
           return price;
         }
       }
@@ -85,7 +86,7 @@ export function useCourtPricing() {
     refetch: async () => {
       try {
         setLoading(true);
-        const rules = await courtSlotsService.getPricing();
+        const rules = await courtSlotsService.getPricing(onDate);
         const pricingMap = new Map<string, number>();
 
         for (const rule of rules) {

@@ -24,8 +24,12 @@ interface DaySummaryProps {
     }>;
   };
   totalRevenue: number;
-  playedByCourtType: Record<string, string[]>;
-  unpaidByCourtType: Record<string, Array<{ courtName: string; timeRange: string; unpaidCount: number }>>;
+  playedByCourt: Array<{ courtId: number | null; courtName: string; times: string[] }>;
+  unpaidByCourt: Array<{
+    courtId: number | null;
+    courtName: string;
+    items: Array<{ timeRange: string; unpaidCount: number }>;
+  }>;
   onDownloadPdf: () => void;
   hasSlots: boolean;
 }
@@ -34,8 +38,8 @@ export function DaySummary({
   selectedDate,
   dayReport,
   totalRevenue,
-  playedByCourtType,
-  unpaidByCourtType,
+  playedByCourt,
+  unpaidByCourt,
   onDownloadPdf,
   hasSlots,
 }: DaySummaryProps) {
@@ -116,44 +120,18 @@ export function DaySummary({
             </h2>
             
             <div className="space-y-2 text-xs">
-              {unpaidByCourtType.C1.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold mb-1 text-foreground">C1</h3>
+              {unpaidByCourt.map((group) => (
+                <div key={group.courtId ?? group.courtName}>
+                  <h3 className="text-xs font-semibold mb-1 text-foreground">{group.courtName}</h3>
                   <div className="space-y-0.5 pl-2">
-                    {unpaidByCourtType.C1.map((slot, idx) => (
+                    {group.items.map((slot, idx) => (
                       <p key={idx} className="text-[11px] font-medium text-destructive/90">
-                        {slot.courtName} - {slot.timeRange} ({slot.unpaidCount} jug.)
+                        {slot.timeRange} ({slot.unpaidCount} jug.)
                       </p>
                     ))}
                   </div>
                 </div>
-              )}
-
-              {unpaidByCourtType.C2.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold mb-1 text-foreground">C2</h3>
-                  <div className="space-y-0.5 pl-2">
-                    {unpaidByCourtType.C2.map((slot, idx) => (
-                      <p key={idx} className="text-[11px] font-medium text-destructive/90">
-                        {slot.courtName} - {slot.timeRange} ({slot.unpaidCount} jug.)
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {unpaidByCourtType.OTRAS.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold mb-1 text-foreground">OTRAS</h3>
-                  <div className="space-y-0.5 pl-2">
-                    {unpaidByCourtType.OTRAS.map((slot, idx) => (
-                      <p key={idx} className="text-[11px] font-medium text-destructive/90">
-                        {slot.courtName} - {slot.timeRange} ({slot.unpaidCount} jug.)
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
 
             {/* Resumen */}
@@ -185,32 +163,14 @@ export function DaySummary({
           ) : (
             <>
               <div className="space-y-2 text-xs">
-                {playedByCourtType.C1.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-semibold mb-1">C1</h3>
+                {playedByCourt.map((group) => (
+                  <div key={group.courtId ?? group.courtName}>
+                    <h3 className="text-xs font-semibold mb-1">{group.courtName}</h3>
                     <p className="text-[11px] text-muted-foreground pl-2">
-                      {playedByCourtType.C1.join(", ")}
+                      {group.times.join(", ")}
                     </p>
                   </div>
-                )}
-
-                {playedByCourtType.C2.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-semibold mb-1">C2</h3>
-                    <p className="text-[11px] text-muted-foreground pl-2">
-                      {playedByCourtType.C2.join(", ")}
-                    </p>
-                  </div>
-                )}
-
-                {playedByCourtType.OTRAS.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-semibold mb-1">OTRAS</h3>
-                    <p className="text-[11px] text-muted-foreground pl-2">
-                      {playedByCourtType.OTRAS.join(", ")}
-                    </p>
-                  </div>
-                )}
+                ))}
               </div>
 
               {/* Resumen */}

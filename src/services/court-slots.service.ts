@@ -98,8 +98,9 @@ class CourtSlotsService {
   }
 
   // Pricing methods
-  async getPricing(): Promise<CourtPricingDB[]> {
-    const response = await fetch(`${this.baseUrl}/pricing`);
+  async getPricing(on?: string): Promise<CourtPricingDB[]> {
+    const query = on ? `?on=${encodeURIComponent(on)}` : "";
+    const response = await fetch(`${this.baseUrl}/pricing${query}`);
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
         throw new Error("No tenés permiso para esto.");
@@ -109,16 +110,30 @@ class CourtSlotsService {
     return response.json();
   }
 
+  async getPricingHistory(courtId: number): Promise<CourtPricingDB[]> {
+    const response = await fetch(
+      `${this.baseUrl}/pricing?courtId=${courtId}&history=1`
+    );
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("No tenés permiso para esto.");
+      }
+      throw new Error("Failed to fetch pricing history");
+    }
+    return response.json();
+  }
+
   async upsertPricingForCourtId(
     courtId: number,
-    rules: Array<{ start_time: string; end_time: string; price_per_player: number }>
+    rules: Array<{ start_time: string; end_time: string; price_per_player: number }>,
+    validFrom: string
   ): Promise<CourtPricingDB[]> {
     const response = await fetch(`${this.baseUrl}/pricing/${courtId}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ rules }),
+      body: JSON.stringify({ rules, valid_from: validFrom }),
     });
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
