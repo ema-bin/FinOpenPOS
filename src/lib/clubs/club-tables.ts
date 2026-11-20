@@ -1,6 +1,7 @@
 /** Tablas de negocio con club_id. categories y la ficha clubs no entran. */
 export const CLUB_SCOPED_TABLES: ReadonlySet<string> = new Set([
   "payment_methods",
+  "payment_method_credentials",
   "players",
   "advertisements",
   "partners",
