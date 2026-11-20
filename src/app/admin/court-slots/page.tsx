@@ -250,9 +250,10 @@ export default function CourtSlotsPage() {
     }
     return map;
   }, [players, localSlots]);
-  const { dayReport, totalRevenue, playedByCourtType, unpaidByCourtType } = useDayReport(
+  const { dayReport, totalRevenue, playedByCourt, unpaidByCourt } = useDayReport(
     localSlots,
-    paymentMethods
+    paymentMethods,
+    selectedDate
   );
 
   // Hook de PDF
@@ -404,8 +405,8 @@ export default function CourtSlotsPage() {
       localSlots,
       dayReport,
       totalRevenue,
-      playedByCourtType as Record<string, string[]>,
-      unpaidByCourtType as Record<string, Array<{ courtName: string; timeRange: string; unpaidCount: number }>>,
+      playedByCourt,
+      unpaidByCourt,
       dayNoteData || null,
       dayNotes
     );
@@ -495,8 +496,8 @@ export default function CourtSlotsPage() {
             selectedDate={selectedDate}
             dayReport={dayReport}
             totalRevenue={totalRevenue}
-            playedByCourtType={playedByCourtType}
-            unpaidByCourtType={unpaidByCourtType}
+            playedByCourt={playedByCourt}
+            unpaidByCourt={unpaidByCourt}
             onDownloadPdf={handleDownloadPdfClick}
             hasSlots={localSlots.length > 0}
           />

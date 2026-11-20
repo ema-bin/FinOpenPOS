@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   "closures.daily": { label: "Cierre de caja diario", group: "Finanzas", mode: "both" },
   "closures.monthly": { label: "Cierre mensual", group: "Finanzas", mode: "both" },
   "balance.manage": { label: "Balance, retiros, ajustes y socios", group: "Finanzas", mode: "both" },
+  "finance.manage": { label: "Balance de canchas", group: "Finanzas", mode: "both" },
   "purchases.manage": { label: "Compras y proveedores", group: "Compras", mode: "both" },
   "products.manage": { label: "Productos, categorías y stock", group: "Compras", mode: "both" },
   "courts.operate": { label: "Turnos de canchas", group: "Canchas", mode: "both" },

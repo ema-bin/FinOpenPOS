@@ -25,8 +25,11 @@ type DayReport = {
   }>;
 };
 
-type PlayedByCourtType = Record<string, string[]>;
-type UnpaidByCourtType = Record<string, Array<{ courtName: string; timeRange: string; unpaidCount: number }>>;
+type PlayedByCourt = Array<{ courtName: string; times: string[] }>;
+type UnpaidByCourt = Array<{
+  courtName: string;
+  items: Array<{ timeRange: string; unpaidCount: number }>;
+}>;
 
 export function usePdfGenerator() {
   const handleDownloadPdf = (
@@ -34,8 +37,8 @@ export function usePdfGenerator() {
     localSlots: CourtSlotDTO[],
     dayReport: DayReport,
     totalRevenue: number,
-    playedByCourtType: PlayedByCourtType,
-    unpaidByCourtType: UnpaidByCourtType,
+    playedByCourt: PlayedByCourt,
+    unpaidByCourt: UnpaidByCourt,
     dayNoteData: CourtSlotDayNoteDTO | null,
     dayNotes: string
   ) => {
@@ -148,7 +151,7 @@ export function usePdfGenerator() {
             y = 15;
           }
           doc.text(
-            `${slot.courtName} - ${slot.timeRange} (${slot.unpaidCount} jug.)`,
+            `${slot.timeRange} (${slot.unpaidCount} jug.)`,
             20,
             y,
             { maxWidth: 170 }
@@ -158,9 +161,16 @@ export function usePdfGenerator() {
         y += 2;
       };
 
-      printUnpaidGroup("C1", unpaidByCourtType.C1);
-      printUnpaidGroup("C2", unpaidByCourtType.C2);
-      printUnpaidGroup("OTRAS", unpaidByCourtType.OTRAS);
+      for (const group of unpaidByCourt) {
+        printUnpaidGroup(
+          group.courtName,
+          group.items.map((slot) => ({
+            courtName: group.courtName,
+            timeRange: slot.timeRange,
+            unpaidCount: slot.unpaidCount,
+          }))
+        );
+      }
 
       // Resumen
       if (y > 280) {
@@ -219,9 +229,9 @@ export function usePdfGenerator() {
         y += 7;
       };
 
-      printGroup("C1", playedByCourtType.C1);
-      printGroup("C2", playedByCourtType.C2);
-      printGroup("OTRAS", playedByCourtType.OTRAS);
+      for (const group of playedByCourt) {
+        printGroup(group.courtName, group.times);
+      }
 
       // Resumen
       if (y > 280) {

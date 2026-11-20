@@ -93,6 +93,8 @@ export interface CourtPricingDB {
   start_time: string; // TIME
   end_time: string; // TIME
   price_per_player: number;
+  valid_from?: string;
+  valid_until?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +104,7 @@ export interface CreateCourtPricingInput {
   start_time: string;
   end_time: string;
   price_per_player: number;
+  valid_from: string;
 }
 
 export interface UpdateCourtPricingInput {

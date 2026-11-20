@@ -2464,3 +2464,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 -- La grilla y los días fijos de la ficha se aplican con scripts/club-schedule-live.sql.
 -- El alta de otro complejo se aplica con scripts/add-club-alta.sql.
 -- La cartelería digital se aplica con scripts/add-signage.sql.
+-- El historial de tarifas de cancha se aplica con scripts/add-court-pricing-history.sql.

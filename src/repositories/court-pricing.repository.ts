@@ -1,5 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import type { CourtPricingDB, CreateCourtPricingInput, UpdateCourtPricingInput } from "@/models/db/court";
+import {
+  planTariffPublish,
+  tariffUnchanged,
+  timeInTariffRange,
+  type TariffRule,
+} from "@/lib/court-pricing-history";
+
+const PRICING_HISTORY_SCRIPT = "Falta aplicar scripts/add-court-pricing-history.sql";
+
+function missingPricingHistory(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /valid_from|valid_until/.test(message)
+  );
+}
 
 export class CourtPricingRepository {
   private supabase = createClient();
@@ -13,6 +31,57 @@ export class CourtPricingRepository {
     } = await this.supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
+    const { data, error } = await this.supabase
+      .from("court_pricing")
+      .select("*")
+      .is("valid_until", null)
+      .order("court_id", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (missingPricingHistory(error)) return this.findEveryRow();
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async findCovering(date: string): Promise<CourtPricingDB[]> {
+    const {
+      data: { user },
+    } = await this.supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await this.supabase
+      .from("court_pricing")
+      .select("*")
+      .lte("valid_from", date)
+      .or(`valid_until.is.null,valid_until.gt.${date}`)
+      .order("court_id", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (missingPricingHistory(error)) return this.findEveryRow();
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async findHistory(courtId: number): Promise<CourtPricingDB[]> {
+    const {
+      data: { user },
+    } = await this.supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await this.supabase
+      .from("court_pricing")
+      .select("*")
+      .eq("court_id", courtId)
+      .not("valid_until", "is", null)
+      .order("valid_from", { ascending: false })
+      .order("start_time", { ascending: true });
+
+    if (missingPricingHistory(error)) return [];
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  private async findEveryRow(): Promise<CourtPricingDB[]> {
     const { data, error } = await this.supabase
       .from("court_pricing")
       .select("*")
@@ -44,7 +113,7 @@ export class CourtPricingRepository {
       const endTime = rule.end_time.slice(0, 5); // HH:MM
       const checkTime = time.slice(0, 5); // HH:MM
       
-      if (checkTime >= startTime && checkTime < endTime) {
+      if (timeInTariffRange(checkTime, startTime, endTime)) {
         return rule;
       }
     }
@@ -65,7 +134,18 @@ export class CourtPricingRepository {
       .from("court_pricing")
       .select("*")
       .eq("court_id", courtId)
+      .is("valid_until", null)
       .order("start_time", { ascending: true });
+
+    if (missingPricingHistory(error)) {
+      const { data: legacy, error: legacyError } = await this.supabase
+        .from("court_pricing")
+        .select("*")
+        .eq("court_id", courtId)
+        .order("start_time", { ascending: true });
+      if (legacyError) throw legacyError;
+      return legacy ?? [];
+    }
 
     if (error) throw error;
     return data ?? [];
@@ -88,6 +168,8 @@ export class CourtPricingRepository {
         start_time: input.start_time,
         end_time: input.end_time,
         price_per_player: input.price_per_player,
+        valid_from: input.valid_from,
+        valid_until: null,
       })
       .select()
       .single();
@@ -163,37 +245,92 @@ export class CourtPricingRepository {
   }
 
   /**
-   * Upsert multiple pricing rules (delete existing for court and create new ones)
+   * Publica una tarifa nueva. La fila anterior queda cerrada en valid_from.
+   * Si la tarifa vigente ya empieza ese día, se corrige esa fila.
    */
-  async upsertForCourtId(
+  async publishForCourtId(
     courtId: number,
-    rules: Array<{ start_time: string; end_time: string; price_per_player: number }>
+    rules: TariffRule[],
+    validFrom: string
   ): Promise<CourtPricingDB[]> {
     const {
       data: { user },
     } = await this.supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    // Delete existing rules for this court
-    await this.deleteByCourtId(courtId);
+    const openRows = await this.findByCourtId(courtId);
+    if (openRows.some((row) => !row.valid_from)) {
+      throw new Error(PRICING_HISTORY_SCRIPT);
+    }
 
-    // Create new rules
-    if (rules.length === 0) return [];
+    const plan = planTariffPublish(
+      openRows.map((row) => ({
+        id: row.id,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        price_per_player: row.price_per_player,
+        valid_from: row.valid_from ?? validFrom,
+        valid_until: row.valid_until ?? null,
+      })),
+      rules,
+      validFrom
+    );
 
-    const { data, error } = await this.supabase
-      .from("court_pricing")
-      .insert(
-        rules.map((rule) => ({
-          user_uid: user.id,
-          court_id: courtId,
-          start_time: rule.start_time,
-          end_time: rule.end_time,
-          price_per_player: rule.price_per_player,
-        }))
-      )
-      .select();
+    if (tariffUnchanged(plan)) return openRows;
 
-    if (error) throw error;
-    return data ?? [];
+    const closed: number[] = [];
+    try {
+      for (const item of plan.close) {
+        const { error } = await this.supabase
+          .from("court_pricing")
+          .update({ valid_until: item.valid_until, updated_at: new Date().toISOString() })
+          .eq("id", item.id);
+        if (missingPricingHistory(error)) throw new Error(PRICING_HISTORY_SCRIPT);
+        if (error) throw error;
+        closed.push(item.id);
+      }
+
+      for (const item of plan.update) {
+        const { error } = await this.supabase
+          .from("court_pricing")
+          .update({
+            price_per_player: item.price_per_player,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        if (error) throw error;
+      }
+
+      for (const id of plan.remove) {
+        const { error } = await this.supabase.from("court_pricing").delete().eq("id", id);
+        if (error) throw error;
+      }
+
+      if (plan.insert.length > 0) {
+        const { error } = await this.supabase.from("court_pricing").insert(
+          plan.insert.map((rule) => ({
+            user_uid: user.id,
+            court_id: courtId,
+            start_time: rule.start_time,
+            end_time: rule.end_time,
+            price_per_player: rule.price_per_player,
+            valid_from: validFrom,
+            valid_until: null,
+          }))
+        );
+        if (missingPricingHistory(error)) throw new Error(PRICING_HISTORY_SCRIPT);
+        if (error) throw error;
+      }
+    } catch (error) {
+      for (const id of closed) {
+        await this.supabase
+          .from("court_pricing")
+          .update({ valid_until: null, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }
+      throw error;
+    }
+
+    return this.findByCourtId(courtId);
   }
 }
