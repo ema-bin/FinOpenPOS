@@ -31,6 +31,8 @@ export function MercadoPagoCredentials() {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [removing, setRemoving] = useState<PaymentCredentialStatus | null>(null);
 
+  const [notice, setNotice] = useState<string | null>(null);
+
   const credentials = useQuery({
     queryKey: ["court-payment-credentials"],
     queryFn: async () => {
@@ -57,6 +59,31 @@ export function MercadoPagoCredentials() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar el token."),
   });
 
+  const bring = useMutation({
+    mutationFn: async (paymentMethodId: number) => {
+      const response = await fetch("/api/court-balance/settlement-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentMethodId }),
+      });
+      return readJson(response, "No se pudieron traer las liquidaciones.") as Promise<{
+        importedFiles: number;
+        insertedRows: number;
+        skippedRows: number;
+      }>;
+    },
+    onSuccess: (result) => {
+      if (result.importedFiles === 0) {
+        setNotice("No hay liquidaciones nuevas.");
+        return;
+      }
+      setNotice(
+        `Se guardaron ${result.insertedRows} fila(s) de ${result.importedFiles} reporte(s). ${result.skippedRows} ya estaban.`,
+      );
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudieron traer las liquidaciones."),
+  });
+
   const remove = useMutation({
     mutationFn: async (paymentMethodId: number) => {
       const response = await fetch(
@@ -80,7 +107,7 @@ export function MercadoPagoCredentials() {
       <div>
         <h2 className="text-sm font-semibold">Mercado Pago</h2>
         <p className="text-sm text-muted-foreground">
-          Aparecen los medios de canchas marcados como Mercado Pago en Configuración. El access token queda cifrado y esta pantalla no lo vuelve a mostrar.
+          Aparecen los medios de canchas marcados como Mercado Pago en Configuración. El access token queda cifrado y esta pantalla no lo vuelve a mostrar. Traer liquidaciones guarda cada fila del reporte, con su id de Mercado Pago y el resto de las columnas.
         </p>
       </div>
 
@@ -94,6 +121,8 @@ export function MercadoPagoCredentials() {
       {methods.length === 0 && credentials.isSuccess && (
         <p className="text-sm text-muted-foreground">Ningún medio de canchas está marcado como Mercado Pago.</p>
       )}
+
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       <div className="space-y-2">
         {methods.map((method) => (
@@ -122,6 +151,16 @@ export function MercadoPagoCredentials() {
                 <Button type="submit" disabled={save.isPending || !(drafts[method.id] ?? "").trim()}>
                   Guardar
                 </Button>
+                {method.configured ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={bring.isPending}
+                    onClick={() => bring.mutate(method.id)}
+                  >
+                    Traer liquidaciones
+                  </Button>
+                ) : null}
                 {method.configured ? (
                   <Button type="button" variant="outline" onClick={() => setRemoving(method)}>
                     Quitar
