@@ -48,6 +48,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
   { prefix: "/admin/suppliers", requirement: read("purchases.manage") },
   { prefix: "/admin/products", requirement: read("products.manage") },
   { prefix: "/admin/court-slots", requirement: read("courts.operate") },
+  { prefix: "/admin/court-balance", requirement: read("finance.manage") },
   { prefix: "/admin/reservations", requirement: read("courts.reservations") },
   { prefix: "/admin/slot-packs", requirement: read("packs.define", "packs.sell", "packs.credits") },
   { prefix: "/admin/classes", requirement: read("classes.manage") },
@@ -65,6 +66,7 @@ export const PAGE_RULES: ReadonlyArray<{ prefix: string; requirement: RouteRequi
 export const LANDING_PAGES: ReadonlyArray<{ path: string; permission: Permission }> = [
   { path: "/admin", permission: "dashboard.view" },
   { path: "/admin/court-slots", permission: "courts.operate" },
+  { path: "/admin/court-balance", permission: "finance.manage" },
   { path: "/admin/reservations", permission: "courts.reservations" },
   { path: "/admin/slot-packs", permission: "packs.define" },
   { path: "/admin/slot-packs", permission: "packs.sell" },
@@ -227,6 +229,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots": crud("courts.operate"),
   "/api/court-slots/[id]": crud("courts.operate"),
   "/api/court-slots/generate": crud("courts.operate"),
+  "/api/court-balance": { GET: read("finance.manage") },
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),
