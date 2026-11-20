@@ -235,6 +235,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
     PUT: write("finance.manage"),
     DELETE: write("finance.manage"),
   },
+  "/api/court-balance/settlement-import": { POST: write("finance.manage") },
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),

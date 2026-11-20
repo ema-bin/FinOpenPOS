@@ -2,6 +2,8 @@
 export const CLUB_SCOPED_TABLES: ReadonlySet<string> = new Set([
   "payment_methods",
   "payment_method_credentials",
+  "mp_settlement_reports",
+  "mp_settlement_rows",
   "players",
   "advertisements",
   "partners",
