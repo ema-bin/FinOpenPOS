@@ -47,6 +47,7 @@ export type SlotPackSaleRow = {
   name: string;
   credits: number;
   amount_paid: number;
+  payment_method_id: number | null;
   payment_method_name: string | null;
   sold_at: string;
   notes: string | null;
@@ -173,6 +174,7 @@ export class SlotCreditsRepository extends BaseRepository {
         name,
         credits,
         amount_paid,
+        payment_method_id,
         sold_at,
         notes,
         player:player_id ( first_name, last_name ),
@@ -196,6 +198,7 @@ export class SlotCreditsRepository extends BaseRepository {
         name: String(row.name),
         credits: Number(row.credits),
         amount_paid: Number(row.amount_paid),
+        payment_method_id: row.payment_method_id == null ? null : Number(row.payment_method_id),
         payment_method_name: method?.name == null ? null : String(method.name),
         sold_at: String(row.sold_at).slice(0, 10),
         notes: row.notes == null ? null : String(row.notes),

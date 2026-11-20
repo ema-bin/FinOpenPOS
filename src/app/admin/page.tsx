@@ -20,6 +20,7 @@ import {
   TruckIcon,
   AlertTriangleIcon,
   DollarSignIcon,
+  WalletIcon,
   ImageIcon,
   MonitorIcon,
   ClipboardListIcon,
@@ -343,6 +344,19 @@ export default function Page() {
             <CardContent>
               <CardDescription className="text-xs">
                 Registrar compras e historial
+              </CardDescription>
+            </CardContent>
+          </Card>}
+          {canRead("finance.manage") && <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push("/admin/court-balance")}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <WalletIcon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Balance de canchas</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-xs">
+                Recaudación del día por cancha y medio de pago
               </CardDescription>
             </CardContent>
           </Card>}
