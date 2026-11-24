@@ -56,11 +56,11 @@ describe("día de negocio del complejo", () => {
     expect(range.end.toISOString()).toBe(historic.end.toISOString());
   });
 
-  it("el cron de reservas de este club cae el sábado a las 03:00", () => {
-    const saturday = new Date("2026-11-14T06:00:00.000Z");
+  it("el cron de reservas de este club cae el sábado a las 06:00", () => {
+    const saturday = new Date("2026-11-14T09:00:00.000Z");
     const local = zonedParts(saturday, DEFAULT_BUSINESS_CLOCK.timeZone);
     expect(local.date).toBe("2026-11-14");
-    expect(local.hour).toBe(3);
+    expect(local.hour).toBe(6);
     expect(local.weekday).toBe(6);
   });
 });

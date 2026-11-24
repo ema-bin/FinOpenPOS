@@ -11,7 +11,7 @@ import { generateReservationWeek } from "@/lib/generate-reservation-week";
 import { CourtSlotsRepository } from "@/repositories/court-slots.repository";
 import { CourtReservationsRepository } from "@/repositories/court-reservations.repository";
 
-/** Sábados 06:00 UTC (03:00 en Argentina). El flag apagado no escribe nada. Cada club entra si ese día y esa hora son los suyos. */
+/** Sábados 09:00 UTC (06:00 en Argentina). El flag apagado no escribe nada. Cada club entra si ese día y esa hora son los suyos. */
 export async function GET(request: Request) {
   try {
     if (!isAuthorizedCronRequest(request)) {

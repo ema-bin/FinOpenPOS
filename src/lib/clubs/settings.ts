@@ -1,4 +1,5 @@
 import { isHslTriplet } from "@/lib/clubs/color";
+import { DAILY_JOB_HOUR } from "@/lib/clubs/schedule";
 
 export type ClubSettings = {
   id: number;
@@ -84,7 +85,6 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
   if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
     return { ok: false, error: "El descuento de inscripción tiene que estar entre 0 y 100" };
   }
-  const closureHour = intIn(raw.daily_closure_hour, "La hora del cierre", 0, 23);
   const weekHour = intIn(raw.reservation_week_hour, "La hora de generar reservas", 0, 23);
   const weekDay = intIn(raw.reservation_week_weekday, "El día de generar reservas", 0, 6);
   const overnight = flag(raw.overnight_slot);
@@ -103,7 +103,7 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
   }
   const checked = [
     name, shortName, primary, accent, onPrimary, timezone, openTime, closeTime, duration,
-    classLimit, closureHour, weekHour, weekDay, overnight, reservations, classes, tournaments,
+    classLimit, weekHour, weekDay, overnight, reservations, classes, tournaments,
     packs, buffet, autoClosure, autoWeek,
   ];
   const invalid = checked.find(failed);
@@ -134,7 +134,7 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
       module_packs: packs as boolean,
       module_buffet: buffet as boolean,
       auto_daily_closure: autoClosure as boolean,
-      daily_closure_hour: closureHour as number,
+      daily_closure_hour: DAILY_JOB_HOUR,
       auto_reservation_week: autoWeek as boolean,
       reservation_week_weekday: weekDay as number,
       reservation_week_hour: weekHour as number,
