@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { usePermissions } from "@/components/permissions-provider";
 import { WEEKDAY_LABELS } from "@/lib/class-time";
 import { hexToHsl, hslToHex } from "@/lib/clubs/color";
+import { DAILY_JOB_HOUR } from "@/lib/clubs/schedule";
 import type { ClubSettings } from "@/lib/clubs/settings";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { cn } from "@/lib/utils";
@@ -355,7 +356,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Reservas"
-        description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 03:00."
+        description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 06:00."
         active={draft.module_reservations}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_reservations", checked)}
@@ -496,7 +497,7 @@ export default function ClubSettingsPage() {
       {tab === "ventas" ? (
       <ModuleSection
         title="Ventas"
-        description="Cada día, una tarea programada hace el cierre de caja a la hora que elijas. Por ahora solo puede correr a las 03:00."
+        description="Cada día a las 06:00 se hace el cierre de caja y se bajan las liquidaciones de Mercado Pago que falten. Esa hora es la misma para todos los complejos."
         active={draft.module_buffet}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_buffet", checked)}
@@ -515,13 +516,10 @@ export default function ClubSettingsPage() {
             <select
               id="club-closure-hour"
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              value={draft.daily_closure_hour}
-              disabled={!canWrite || !draft.module_buffet}
-              onChange={(event) => set("daily_closure_hour", Number(event.target.value))}
+              value={DAILY_JOB_HOUR}
+              disabled
             >
-              {HOURS.map((hour) => (
-                <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>
-              ))}
+              <option value={DAILY_JOB_HOUR}>06:00</option>
             </select>
           </div>
         </div>

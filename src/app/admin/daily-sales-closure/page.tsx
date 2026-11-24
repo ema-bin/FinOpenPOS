@@ -481,8 +481,8 @@ export default function DailySalesClosurePage() {
         <CardHeader>
           <CardTitle>Cierre de caja diario</CardTitle>
           <CardDescription>
-            Registro diario de ventas de cantina (06:00 UTC a 06:00 UTC). No modifica reportes
-            existentes; guarda un snapshot para uso futuro.
+            Registro diario de ventas de cantina. El día corta a las 06:00.
+            No modifica reportes existentes; guarda un snapshot para uso futuro.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -70,15 +70,19 @@ export function MercadoPagoCredentials() {
         importedFiles: number;
         insertedRows: number;
         skippedRows: number;
+        skippedFiles?: number;
       }>;
     },
     onSuccess: (result) => {
+      const skippedFile = result.skippedFiles
+        ? " Un archivo de Mercado Pago no es CSV y no se guarda."
+        : "";
       if (result.importedFiles === 0) {
-        setNotice("No hay liquidaciones nuevas.");
+        setNotice(`No hay liquidaciones nuevas.${skippedFile}`);
         return;
       }
       setNotice(
-        `Se guardaron ${result.insertedRows} fila(s) de ${result.importedFiles} reporte(s). ${result.skippedRows} ya estaban.`,
+        `Se guardaron ${result.insertedRows} fila(s) de ${result.importedFiles} reporte(s). ${result.skippedRows} ya estaban.${skippedFile}`,
       );
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudieron traer las liquidaciones."),

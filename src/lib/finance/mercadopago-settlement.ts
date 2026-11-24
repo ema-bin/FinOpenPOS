@@ -10,6 +10,16 @@ export type MpSettlementReport = {
 
 const FILE_NAME = /^[A-Za-z0-9._-]+$/;
 
+/** El reporte de liquidación que guardamos es el CSV. El Excel manual no trae filas de texto. */
+export function isSettlementCsvName(fileName: string): boolean {
+  return fileName.toLowerCase().endsWith(".csv");
+}
+
+export function isSettlementCsvBody(text: string): boolean {
+  if (!text || text.includes("\u0000") || text.startsWith("PK")) return false;
+  return true;
+}
+
 export class MercadoPagoError extends Error {
   constructor(message: string) {
     super(message);

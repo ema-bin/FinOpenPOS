@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 import { clockOf, parseClubSettings, type ClubSettings } from "@/lib/clubs/settings";
+import { DAILY_JOB_HOUR } from "@/lib/clubs/schedule";
 
 const COLUMNS = `
   id, name, short_name, logo_url, primary_color, accent_color, on_primary_color,
@@ -46,7 +47,7 @@ function toSettings(row: Record<string, unknown>): ClubSettings {
     module_packs: Boolean(row.module_packs),
     module_buffet: Boolean(row.module_buffet),
     auto_daily_closure: Boolean(row.auto_daily_closure),
-    daily_closure_hour: Number(row.daily_closure_hour),
+    daily_closure_hour: DAILY_JOB_HOUR,
     auto_reservation_week: Boolean(row.auto_reservation_week),
     reservation_week_weekday: Number(row.reservation_week_weekday),
     reservation_week_hour: Number(row.reservation_week_hour),

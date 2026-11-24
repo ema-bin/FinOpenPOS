@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 import { clockOf } from "@/lib/clubs/settings";
-import { DEFAULT_BUSINESS_CLOCK, type BusinessClock } from "@/lib/clubs/schedule";
+import { DEFAULT_BUSINESS_CLOCK, DAILY_JOB_HOUR, type BusinessClock } from "@/lib/clubs/schedule";
 
 export type ClubSchedule = {
   id: number;
@@ -31,7 +31,7 @@ const COLUMNS = `
   id, timezone, open_time, close_time, slot_duration_minutes, overnight_slot, fixed_weekdays,
   class_player_limit, registration_discount_percent,
   module_reservations, module_classes, module_tournaments, module_packs, module_buffet,
-  auto_daily_closure, daily_closure_hour,
+  auto_daily_closure,
   auto_reservation_week, reservation_week_weekday, reservation_week_hour
 `;
 
@@ -53,12 +53,12 @@ function fromRow(row: Record<string, unknown>): ClubSchedule {
     modulePacks: Boolean(row.module_packs),
     moduleBuffet: Boolean(row.module_buffet),
     autoDailyClosure: Boolean(row.auto_daily_closure),
-    dailyClosureHour: Number.isInteger(Number(row.daily_closure_hour)) ? Number(row.daily_closure_hour) : 3,
+    dailyClosureHour: DAILY_JOB_HOUR,
     autoReservationWeek: Boolean(row.auto_reservation_week),
     reservationWeekWeekday: Number.isInteger(Number(row.reservation_week_weekday))
       ? Number(row.reservation_week_weekday)
       : 6,
-    reservationWeekHour: Number.isInteger(Number(row.reservation_week_hour)) ? Number(row.reservation_week_hour) : 3,
+    reservationWeekHour: Number.isInteger(Number(row.reservation_week_hour)) ? Number(row.reservation_week_hour) : 6,
   };
 }
 

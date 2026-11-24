@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { WEEKDAY_LABELS } from "@/lib/class-time";
 import { hexToHsl, hslToHex } from "@/lib/clubs/color";
+import { DAILY_JOB_HOUR } from "@/lib/clubs/schedule";
 import type { ClubSettings } from "@/lib/clubs/settings";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { TimezoneSelect } from "@/components/club/TimezoneSelect";
@@ -42,10 +43,10 @@ const EMPTY_SETTINGS: Omit<ClubSettings, "id"> = {
   module_packs: true,
   module_buffet: true,
   auto_daily_closure: true,
-  daily_closure_hour: 3,
+  daily_closure_hour: 6,
   auto_reservation_week: true,
   reservation_week_weekday: 6,
-  reservation_week_hour: 3,
+  reservation_week_hour: 6,
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -306,7 +307,7 @@ export default function PlatformPage() {
 
               <AltaModule
                 title="Reservas"
-                description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 03:00."
+                description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 06:00."
                 active={settings.module_reservations}
                 onActiveChange={(checked) => set("module_reservations", checked)}
               >
@@ -443,7 +444,7 @@ export default function PlatformPage() {
           {step === 4 ? (
             <AltaModule
               title="Ventas"
-              description="Cada día, una tarea programada hace el cierre de caja a la hora que elijas. Por ahora solo puede correr a las 03:00."
+              description="Cada día a las 06:00 se hace el cierre de caja y se bajan las liquidaciones de Mercado Pago que falten. Esa hora es la misma para todos los complejos."
               active={settings.module_buffet}
               onActiveChange={(checked) => set("module_buffet", checked)}
             >
@@ -461,13 +462,10 @@ export default function PlatformPage() {
                   <select
                     id="alta-closure-hour"
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                    value={settings.daily_closure_hour}
-                    disabled={!settings.module_buffet}
-                    onChange={(event) => set("daily_closure_hour", Number(event.target.value))}
+                    value={DAILY_JOB_HOUR}
+                    disabled
                   >
-                    {HOURS.map((hour) => (
-                      <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>
-                    ))}
+                    <option value={DAILY_JOB_HOUR}>06:00</option>
                   </select>
                 </div>
               </div>

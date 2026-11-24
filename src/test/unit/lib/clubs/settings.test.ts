@@ -48,6 +48,13 @@ describe("ficha del complejo", () => {
     expect(parsed.ok).toBe(true);
   });
 
+  it("la hora del cierre diario es la de la tarea, no la del complejo", () => {
+    const parsed = parseClubSettings({ ...valid, daily_closure_hour: 3 });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.daily_closure_hour).toBe(6);
+  });
+
   it("exige al menos un día de turno fijo", () => {
     const parsed = parseClubSettings({ ...valid, fixed_weekdays: [] });
     expect(parsed.ok).toBe(false);

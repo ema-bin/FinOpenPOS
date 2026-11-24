@@ -7,6 +7,9 @@ export type BusinessClock = {
   closureHour: number;
 };
 
+/** La tarea diaria corre a las 06:00 de Argentina para todos los complejos. */
+export const DAILY_JOB_HOUR = 6;
+
 /** Igual que el día de negocio histórico: 03:00 en Buenos Aires, o sea 06:00 UTC. */
 export const DEFAULT_BUSINESS_CLOCK: BusinessClock = {
   timeZone: "America/Argentina/Buenos_Aires",

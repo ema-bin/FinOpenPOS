@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSettlementReportList } from "@/lib/finance/mercadopago-settlement";
+import { parseSettlementReportList, isSettlementCsvBody, isSettlementCsvName } from "@/lib/finance/mercadopago-settlement";
 import {
   parseSettlementCsv,
   settlementInserts,
@@ -81,5 +81,12 @@ describe("lista de reportes", () => {
         createdFrom: "manual",
       },
     ]);
+  });
+
+  it("no trata un Excel de Mercado Pago como liquidación CSV", () => {
+    expect(isSettlementCsvName("settlement_v2-57922868-2026-11-22-012415.csv")).toBe(true);
+    expect(isSettlementCsvName("settlement-182299452-manual-2025-10-29-113033.xlsx")).toBe(false);
+    expect(isSettlementCsvBody("SOURCE_ID;TRANSACTION_AMOUNT\n1;10.00\n")).toBe(true);
+    expect(isSettlementCsvBody("PK\u0003\u0004excel")).toBe(false);
   });
 });
