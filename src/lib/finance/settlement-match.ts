@@ -79,7 +79,7 @@ export function reconciliationTone(differenceCents: number): { tone: Reconciliat
     : Math.abs(differenceCents) < MEDIUM_DIFF_CENTS
       ? "medium"
       : "large";
-  const tone = `${favor ? "favor" : "against"}-${size}` as ReconciliationTone;
+  const tone = `${favor ? "favor" : "against"}-${size}` as Exclude<ReconciliationTone, "even">;
   const label = {
     "favor-small": "A favor, chica",
     "favor-medium": "A favor",
