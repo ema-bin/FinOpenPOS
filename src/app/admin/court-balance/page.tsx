@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CourtDayBalance } from "@/lib/court-balance";
 import { MercadoPagoCredentials } from "@/components/court-balance/MercadoPagoCredentials";
+import { MonthBalance } from "@/components/court-balance/MonthBalance";
 import { SettlementMatch } from "@/components/court-balance/SettlementMatch";
 
 function todayInput() {
@@ -42,11 +44,13 @@ async function loadBalance(date: string): Promise<CourtDayBalance> {
 }
 
 export default function CourtBalancePage() {
+  const [view, setView] = useState<"day" | "month">("day");
   const [date, setDate] = useState(todayInput);
+  const month = date.slice(0, 7);
   const balance = useQuery({
     queryKey: ["court-balance", date],
     queryFn: () => loadBalance(date),
-    enabled: /^\d{4}-\d{2}-\d{2}$/.test(date),
+    enabled: view === "day" && /^\d{4}-\d{2}-\d{2}$/.test(date),
   });
   const data = balance.data;
 
@@ -59,12 +63,42 @@ export default function CourtBalancePage() {
             Los turnos se cobran con la tarifa de ese día. Usar un crédito no suma: suma la venta del pack.
           </p>
         </div>
-        <div>
-          <Label htmlFor="balance-date" className="text-xs">Día</Label>
-          <Input id="balance-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex gap-1">
+            <Button type="button" size="sm" variant={view === "day" ? "default" : "outline"} onClick={() => setView("day")}>Día</Button>
+            <Button type="button" size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>Mes</Button>
+          </div>
+          {view === "day" ? (
+            <div>
+              <Label htmlFor="balance-date" className="text-xs">Día</Label>
+              <Input id="balance-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </div>
+          ) : (
+            <div>
+              <Label htmlFor="balance-month" className="text-xs">Mes</Label>
+              <Input
+                id="balance-month"
+                type="month"
+                value={month}
+                onChange={(event) => {
+                  if (/^\d{4}-\d{2}$/.test(event.target.value)) setDate(`${event.target.value}-01`);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
+      {view === "month" ? (
+        <MonthBalance
+          month={month}
+          onPickDay={(picked) => {
+            setDate(picked);
+            setView("day");
+          }}
+        />
+      ) : (
+        <>
       <SettlementMatch key={date} date={date} />
 
       {balance.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
@@ -212,6 +246,8 @@ export default function CourtBalancePage() {
               ))}
             </section>
           )}
+        </>
+      )}
         </>
       )}
 

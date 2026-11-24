@@ -91,6 +91,28 @@ export function reconciliationTone(differenceCents: number): { tone: Reconciliat
   return { tone, label };
 }
 
+export function reconcileDates(input: {
+  dates: string[];
+  paymentMethodIds: number[];
+  charges: Array<ExpectedCharge & { date: string }>;
+  rows: Array<SettlementMovement & { date: string }>;
+  marks: SettlementMarkInput[];
+}): Array<{ date: string; expectedCents: number; collectedCents: number }> {
+  return input.dates.map((date) => {
+    const methods = crossSettlements({
+      paymentMethodIds: input.paymentMethodIds,
+      charges: input.charges.filter((charge) => charge.date === date),
+      rows: input.rows.filter((row) => row.date === date),
+      marks: input.marks,
+    });
+    return {
+      date,
+      expectedCents: methods.reduce((total, method) => total + method.expectedCents, 0),
+      collectedCents: methods.reduce((total, method) => total + method.collectedCents, 0),
+    };
+  });
+}
+
 function blank(value: string | null): boolean {
   return value == null || value.trim() === "";
 }

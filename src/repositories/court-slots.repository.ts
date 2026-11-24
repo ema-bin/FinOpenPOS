@@ -8,7 +8,7 @@ export class CourtSlotsRepository extends BaseRepository {
   /**
    * Get court slots for a specific date
    */
-  async findByDate(date: string): Promise<CourtSlotWithCourt[]> {
+  async findByDate(date: string, toDate = date): Promise<CourtSlotWithCourt[]> {
     const { data, error } = await this.supabase
       .from("court_slots")
       .select(
@@ -80,7 +80,8 @@ export class CourtSlotsRepository extends BaseRepository {
         )
       `
       )
-      .eq("slot_date", date)
+      .gte("slot_date", date)
+      .lte("slot_date", toDate)
       .order("start_time", { ascending: true })
       .order("court_id", { ascending: true });
 

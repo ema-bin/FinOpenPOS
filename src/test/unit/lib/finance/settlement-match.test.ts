@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chargeFromSeat,
   crossSettlements,
+  reconcileDates,
   reconciliationTone,
   type ExpectedCharge,
   type SettlementMovement,
@@ -43,6 +44,23 @@ describe("color de la diferencia", () => {
     expect(reconciliationTone(-499_999).tone).toBe("against-small");
     expect(reconciliationTone(-500_000).tone).toBe("against-medium");
     expect(reconciliationTone(-2_000_000).label).toBe("En contra, grande");
+  });
+
+  it("suma el mes por día y no mete el rendimiento en lo que entró", () => {
+    const days = reconcileDates({
+      dates: ["2026-11-23", "2026-11-24"],
+      paymentMethodIds: [methodId],
+      charges: [{ ...charge({ key: "seat:10:1", amountCents: 1_000_000, label: "Central" }), date: "2026-11-23" }],
+      rows: [
+        { ...movement({ id: 1, amountCents: 1_000_000 }), date: "2026-11-23" },
+        { ...movement({ id: 2, amountCents: 50_000, paymentMethodType: null, businessUnit: null, subUnit: null }), date: "2026-11-23" },
+      ],
+      marks: [],
+    });
+    expect(days).toEqual([
+      { date: "2026-11-23", expectedCents: 1_000_000, collectedCents: 1_000_000 },
+      { date: "2026-11-24", expectedCents: 0, collectedCents: 0 },
+    ]);
   });
 });
 
