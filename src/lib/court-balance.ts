@@ -84,7 +84,7 @@ function clock(value: string): string {
   return value.slice(0, 5);
 }
 
-function priceCents(
+export function courtTariffCents(
   tariffs: CourtBalanceTariff[],
   courtId: number | null,
   time: string,
@@ -155,7 +155,7 @@ export function buildCourtDayBalance(input: {
         packRevenueCents: 0,
       };
       payment.uses += 1;
-      const price = priceCents(input.tariffs, slot.courtId, slot.startTime, input.date);
+      const price = courtTariffCents(input.tariffs, slot.courtId, slot.startTime, input.date);
       const counted = priceUses.get(payKey) ?? new Map<number | "missing", number>();
       if (price == null) {
         missingTariff += 1;

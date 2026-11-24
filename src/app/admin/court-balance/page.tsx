@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CourtDayBalance } from "@/lib/court-balance";
 import { MercadoPagoCredentials } from "@/components/court-balance/MercadoPagoCredentials";
+import { SettlementMatch } from "@/components/court-balance/SettlementMatch";
 
 function todayInput() {
   const now = new Date();
@@ -63,6 +64,8 @@ export default function CourtBalancePage() {
           <Input id="balance-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
       </div>
+
+      <SettlementMatch key={date} date={date} />
 
       {balance.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
       {balance.isError && (

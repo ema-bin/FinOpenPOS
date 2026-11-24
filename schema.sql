@@ -2469,3 +2469,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS court_slots_court_date_start_idx
 -- La marca de medio Mercado Pago se aplica con scripts/add-payment-method-mercadopago.sql.
 -- Las filas de liquidación de Mercado Pago se aplican con scripts/add-mp-settlement-rows.sql.
 -- La tarea diaria a las 06:00 de Argentina se aplica con scripts/move-daily-job-to-6am.sql.
+-- La marca manual del cruce con Mercado Pago se aplica con scripts/add-mp-settlement-matches.sql.
