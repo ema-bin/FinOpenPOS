@@ -57,6 +57,12 @@ class MercadoPagoSetupError extends Error {
   }
 }
 
+async function allowCredential(level: "read" | "write") {
+  const config = await requirePermission("users.manage", level);
+  if (config.ok || config.response.status === 401) return config;
+  return requirePermission("finance.manage", level);
+}
+
 function paymentMethodIdOf(value: unknown): number | null {
   const id = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(id) || id <= 0) return null;
@@ -80,7 +86,7 @@ async function courtMethod(clubId: number, paymentMethodId: number) {
 
 export async function GET() {
   try {
-    const auth = await requirePermission("finance.manage", "read");
+    const auth = await allowCredential("read");
     if (!auth.ok) return auth.response;
     const service = createServiceClient();
     const clubId = await clubIdForUser(service, auth.userId);
@@ -118,7 +124,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const auth = await requirePermission("finance.manage");
+    const auth = await allowCredential("write");
     if (!auth.ok) return auth.response;
     const body = (await request.json().catch(() => null)) as {
       paymentMethodId?: unknown;
@@ -171,7 +177,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const auth = await requirePermission("finance.manage");
+    const auth = await allowCredential("write");
     if (!auth.ok) return auth.response;
     const paymentMethodId = paymentMethodIdOf(new URL(request.url).searchParams.get("paymentMethodId"));
     if (!paymentMethodId) {

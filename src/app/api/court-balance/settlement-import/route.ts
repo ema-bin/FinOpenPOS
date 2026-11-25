@@ -34,7 +34,10 @@ function failure(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requirePermission("finance.manage");
+    const config = await requirePermission("users.manage");
+    const auth = config.ok || config.response.status === 401
+      ? config
+      : await requirePermission("finance.manage");
     if (!auth.ok) return auth.response;
     const body = (await request.json().catch(() => null)) as { paymentMethodId?: unknown } | null;
     const paymentMethodId = Number(body?.paymentMethodId);

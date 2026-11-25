@@ -18,6 +18,7 @@ import type { ClubSettings } from "@/lib/clubs/settings";
 import type { TournamentRankingPointRule } from "@/models/db/tournament-ranking-point-rule";
 import { cn } from "@/lib/utils";
 import { ClubPaymentLists } from "@/components/club/ClubPaymentLists";
+import { MercadoPagoCredentials } from "@/components/club/MercadoPagoCredentials";
 import { TimezoneSelect } from "@/components/club/TimezoneSelect";
 
 const ROUND_LABELS: Record<string, string> = {
@@ -557,17 +558,30 @@ export default function ClubSettingsPage() {
       ) : null}
 
       {tab === "pagos" ? (
+      <>
       <Card>
         <CardHeader>
           <CardTitle>Medios de pago</CardTitle>
           <CardDescription>
-            Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos. En canchas, Mercado Pago marca el medio que pide el access token en el balance.
+            Canchas, cantina, clases y torneos tienen cada uno su lista. Un medio que hoy sirve para canchas y cantina aparece en las dos. En canchas, Mercado Pago marca el medio que usa el access token.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ClubPaymentLists canWrite={canWrite} />
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Mercado Pago</CardTitle>
+          <CardDescription>
+            Access token de cada medio de canchas marcado como Mercado Pago. Las liquidaciones se bajan solas a las 06:00.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MercadoPagoCredentials />
+        </CardContent>
+      </Card>
+      </>
       ) : null}
 
       {canWrite ? (

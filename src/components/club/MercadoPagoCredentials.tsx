@@ -27,7 +27,7 @@ async function readJson(response: Response, fallback: string) {
 export function MercadoPagoCredentials() {
   const queryClient = useQueryClient();
   const { can, loading } = usePermissions();
-  const canWrite = !loading && can("finance.manage");
+  const canWrite = !loading && can("users.manage");
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [removing, setRemoving] = useState<PaymentCredentialStatus | null>(null);
 
@@ -108,12 +108,9 @@ export function MercadoPagoCredentials() {
 
   return (
     <section className="space-y-2">
-      <div>
-        <h2 className="text-sm font-semibold">Mercado Pago</h2>
-        <p className="text-sm text-muted-foreground">
-          Aparecen los medios de canchas marcados como Mercado Pago en Configuración. El access token queda cifrado y esta pantalla no lo vuelve a mostrar. Traer liquidaciones guarda cada fila del reporte, con su id de Mercado Pago y el resto de las columnas.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        El access token queda cifrado y esta pantalla no lo vuelve a mostrar. A las 06:00 se bajan solas las liquidaciones que falten. Traer liquidaciones hace esa bajada ahora.
+      </p>
 
       {credentials.isLoading && <p className="text-sm text-muted-foreground">Cargando medios…</p>}
       {credentials.isError && (
