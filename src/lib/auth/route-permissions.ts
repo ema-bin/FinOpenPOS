@@ -231,11 +231,11 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
   "/api/court-slots/generate": crud("courts.operate"),
   "/api/court-balance": { GET: read("finance.manage") },
   "/api/court-balance/payment-credentials": {
-    GET: read("finance.manage"),
-    PUT: write("finance.manage"),
-    DELETE: write("finance.manage"),
+    GET: read("users.manage", "finance.manage"),
+    PUT: write("users.manage", "finance.manage"),
+    DELETE: write("users.manage", "finance.manage"),
   },
-  "/api/court-balance/settlement-import": { POST: write("finance.manage") },
+  "/api/court-balance/settlement-import": { POST: write("users.manage", "finance.manage") },
   "/api/court-balance/settlement-match": {
     GET: read("finance.manage"),
     PUT: write("finance.manage"),

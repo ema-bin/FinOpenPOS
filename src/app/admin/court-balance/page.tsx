@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { CourtDayBalance } from "@/lib/court-balance";
 import type { CourtOccupancy } from "@/lib/court-occupancy";
 import { CourtOccupancyCard } from "@/components/court-balance/CourtOccupancyCard";
-import { MercadoPagoCredentials } from "@/components/court-balance/MercadoPagoCredentials";
 import { MonthBalance } from "@/components/court-balance/MonthBalance";
 import { SettlementMatch } from "@/components/court-balance/SettlementMatch";
 
@@ -255,7 +254,6 @@ export default function CourtBalancePage() {
         </>
       )}
 
-      <MercadoPagoCredentials />
     </div>
   );
 }
