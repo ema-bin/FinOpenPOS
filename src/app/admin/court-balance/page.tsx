@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CourtDayBalance } from "@/lib/court-balance";
+import type { CourtOccupancy } from "@/lib/court-occupancy";
+import { CourtOccupancyCard } from "@/components/court-balance/CourtOccupancyCard";
 import { MercadoPagoCredentials } from "@/components/court-balance/MercadoPagoCredentials";
 import { MonthBalance } from "@/components/court-balance/MonthBalance";
 import { SettlementMatch } from "@/components/court-balance/SettlementMatch";
@@ -36,7 +38,7 @@ function PriceUses({ rows }: { rows: Array<{ priceCents: number | null; count: n
   );
 }
 
-async function loadBalance(date: string): Promise<CourtDayBalance> {
+async function loadBalance(date: string): Promise<CourtDayBalance & { occupancy?: CourtOccupancy | null }> {
   const response = await fetch(`/api/court-balance?date=${date}`, { cache: "no-store" });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || "No se pudo cargar el balance.");
@@ -134,6 +136,8 @@ export default function CourtBalancePage() {
               </CardContent>
             </Card>
           </div>
+
+          <CourtOccupancyCard occupancy={data.occupancy} />
 
           <section className="space-y-2">
             <h2 className="text-sm font-semibold">Por cancha</h2>

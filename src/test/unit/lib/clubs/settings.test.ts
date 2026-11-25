@@ -12,6 +12,8 @@ const valid = {
   timezone: "America/Argentina/Buenos_Aires",
   open_time: "10:00",
   close_time: "01:00",
+  occupancy_start_time: "18:00",
+  occupancy_end_time: "23:00",
   slot_duration_minutes: 90,
   overnight_slot: true,
   fixed_weekdays: [1, 2, 3, 4, 5],
@@ -53,6 +55,15 @@ describe("ficha del complejo", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.value.daily_closure_hour).toBe(6);
+  });
+
+  it("guarda el horario del índice de ocupación", () => {
+    const parsed = parseClubSettings(valid);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.occupancy_start_time).toBe("18:00");
+    expect(parsed.value.occupancy_end_time).toBe("23:00");
+    expect(parseClubSettings({ ...valid, occupancy_end_time: "18:00" }).ok).toBe(false);
   });
 
   it("exige al menos un día de turno fijo", () => {

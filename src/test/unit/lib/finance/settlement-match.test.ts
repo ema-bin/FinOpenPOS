@@ -3,6 +3,7 @@ import {
   chargeFromSeat,
   crossSettlements,
   reconcileDates,
+  reconcileMonth,
   reconciliationTone,
   type ExpectedCharge,
   type SettlementMovement,
@@ -61,6 +62,30 @@ describe("color de la diferencia", () => {
       { date: "2026-11-23", expectedCents: 1_000_000, collectedCents: 1_000_000 },
       { date: "2026-11-24", expectedCents: 0, collectedCents: 0 },
     ]);
+  });
+
+  it("separa el mes por medio de pago", () => {
+    const other = 8;
+    const result = reconcileMonth({
+      dates: ["2026-11-23", "2026-11-24"],
+      paymentMethodIds: [methodId, other],
+      charges: [
+        { ...charge({ key: "seat:10:1", amountCents: 1_000_000, label: "Central" }), date: "2026-11-23" },
+        { ...charge({ key: "seat:11:1", amountCents: 500_000, label: "Cancha 2", paymentMethodId: other }), date: "2026-11-24" },
+      ],
+      rows: [
+        { ...movement({ id: 1, amountCents: 1_000_000 }), date: "2026-11-23" },
+        { ...movement({ id: 3, amountCents: 400_000, paymentMethodId: other }), date: "2026-11-24" },
+        { ...movement({ id: 2, amountCents: 50_000, paymentMethodType: null, businessUnit: null, subUnit: null }), date: "2026-11-23" },
+      ],
+      marks: [],
+    });
+    expect(result.methods).toEqual([
+      { paymentMethodId: methodId, expectedCents: 1_000_000, collectedCents: 1_000_000 },
+      { paymentMethodId: other, expectedCents: 500_000, collectedCents: 400_000 },
+    ]);
+    expect(result.days[0].expectedCents).toBe(1_000_000);
+    expect(result.days[1]).toEqual({ date: "2026-11-24", expectedCents: 500_000, collectedCents: 400_000 });
   });
 });
 

@@ -2,7 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-permission";
+import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
+import { loadCourtOccupancy } from "@/lib/court-occupancy-load";
 import { createRepositories } from "@/lib/repository-factory";
+import { createServiceClient } from "@/lib/supabase/service";
 import { buildCourtDayBalance } from "@/lib/court-balance";
 import { methodConsumesCredit } from "@/lib/slot-credits";
 import type { CourtSlotWithCourt } from "@/models/db/court";
@@ -43,8 +46,7 @@ export async function GET(request: Request) {
       repos.slotCredits.listSales(date, date),
     ]);
 
-    return NextResponse.json(
-      buildCourtDayBalance({
+    const balance = buildCourtDayBalance({
         date,
         slots: slots.map((slot) => ({
           id: slot.id,
@@ -71,8 +73,17 @@ export async function GET(request: Request) {
           playerName: `${pack.first_name} ${pack.last_name}`.trim(),
           packName: pack.name,
         })),
-      })
-    );
+      });
+    let occupancy = null;
+    try {
+      const service = createServiceClient();
+      const clubId = await clubIdForUser(service, auth.userId);
+      occupancy = await loadCourtOccupancy(service, clubId, [date]);
+    } catch (error) {
+      if (error instanceof ClubContextError) throw error;
+      console.error("GET /court-balance occupancy:", error);
+    }
+    return NextResponse.json({ ...balance, occupancy });
   } catch (error) {
     console.error("GET /court-balance error:", error);
     return NextResponse.json(

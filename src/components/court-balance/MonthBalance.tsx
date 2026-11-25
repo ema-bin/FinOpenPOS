@@ -1,18 +1,30 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { weekdayOf } from "@/lib/class-time";
 import { reconciliationTone } from "@/lib/finance/settlement-match";
 import { cn } from "@/lib/utils";
-import { TONE_CARD } from "@/components/court-balance/SettlementMatch";
+import { CourtOccupancyCard } from "@/components/court-balance/CourtOccupancyCard";
+import { TONE_CARD, TONE_TEXT } from "@/components/court-balance/SettlementMatch";
+import type { CourtOccupancy } from "@/lib/court-occupancy";
 
 type MonthDay = { date: string; expectedCents: number; collectedCents: number };
+
+type MonthMethod = {
+  paymentMethodId: number;
+  paymentMethodName: string;
+  expectedCents: number;
+  collectedCents: number;
+};
 
 type MonthResponse = {
   balance: { slotRevenueCents: number; packRevenueCents: number; totalRevenueCents: number };
   expectedCents: number;
   collectedCents: number;
+  methods: MonthMethod[];
   days: MonthDay[];
+  occupancy?: CourtOccupancy | null;
 };
 
 function pesos(cents: number) {
@@ -64,6 +76,8 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
             </div>
           </div>
 
+          <CourtOccupancyCard occupancy={data.occupancy} title="Ocupación del mes" />
+
           <div className={cn("grid gap-3 rounded-lg border p-3 md:grid-cols-3", TONE_CARD[tone.tone])}>
             <div>
               <p className="text-xs text-muted-foreground">Debía entrar</p>
@@ -79,6 +93,68 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
               <p className="text-xs">{tone.label}</p>
             </div>
           </div>
+
+          {data.methods.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Por medio de pago</h2>
+              <p className="text-xs text-muted-foreground">Lo que debía entrar y lo que entró en cada cuenta de Mercado Pago.</p>
+              <div className="space-y-2 md:hidden">
+                {data.methods.map((method) => {
+                  const methodDifference = method.collectedCents - method.expectedCents;
+                  const methodTone = reconciliationTone(methodDifference);
+                  return (
+                    <div key={method.paymentMethodId} className={cn("space-y-2 rounded-lg border p-3", TONE_CARD[methodTone.tone])}>
+                      <p className="font-medium">{method.paymentMethodName}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Debía entrar</p>
+                          <p className="text-sm font-semibold">{pesos(method.expectedCents)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Entró</p>
+                          <p className="text-sm font-semibold">{pesos(method.collectedCents)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Diferencia</p>
+                          <p className={cn("text-sm font-semibold", TONE_TEXT[methodTone.tone])}>{pesos(methodDifference)}</p>
+                          <p className={cn("text-xs", TONE_TEXT[methodTone.tone])}>{methodTone.label}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="hidden rounded-lg border md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Medio</TableHead>
+                      <TableHead className="text-right">Debía entrar</TableHead>
+                      <TableHead className="text-right">Entró</TableHead>
+                      <TableHead className="text-right">Diferencia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.methods.map((method) => {
+                      const methodDifference = method.collectedCents - method.expectedCents;
+                      const methodTone = reconciliationTone(methodDifference);
+                      return (
+                        <TableRow key={method.paymentMethodId} className={TONE_CARD[methodTone.tone]}>
+                          <TableCell>{method.paymentMethodName}</TableCell>
+                          <TableCell className="text-right">{pesos(method.expectedCents)}</TableCell>
+                          <TableCell className="text-right">{pesos(method.collectedCents)}</TableCell>
+                          <TableCell className={cn("text-right", TONE_TEXT[methodTone.tone])}>
+                            {pesos(methodDifference)}
+                            <span className="ml-2 text-xs">{methodTone.label}</span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          )}
 
           <div>
             <p className="mb-2 text-xs text-muted-foreground">Cada día: arriba lo que debía entrar, abajo lo que entró.</p>
