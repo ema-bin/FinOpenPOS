@@ -106,6 +106,11 @@ export function zonedDateTimeToUtc(date: string, hour: number, timeZone: string)
   return new Date(guess);
 }
 
+/** El día de canchas corta a las 03:00. La tarea de las 06:00 no mueve este corte. */
+export function courtDayClock(timeZone: string): BusinessClock {
+  return { timeZone, closureHour: DEFAULT_BUSINESS_CLOCK.closureHour };
+}
+
 export function businessDayRange(date: string, clock: BusinessClock = DEFAULT_BUSINESS_CLOCK): { start: Date; end: Date } {
   return {
     start: zonedDateTimeToUtc(date, clock.closureHour, clock.timeZone),

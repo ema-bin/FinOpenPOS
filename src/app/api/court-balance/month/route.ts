@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 import { loadClubSchedule } from "@/lib/clubs/load-club";
-import { todayInTimeZone, zonedDateTimeToUtc } from "@/lib/clubs/schedule";
-import { addDaysIso, monthBounds } from "@/lib/class-time";
+import { businessDayRange, courtDayClock, currentBusinessDate } from "@/lib/clubs/schedule";
+import { monthBounds } from "@/lib/class-time";
 import { createRepositories } from "@/lib/repository-factory";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildCourtDayBalance, courtTariffCents } from "@/lib/court-balance";
@@ -225,8 +225,9 @@ async function monthRows(
   }
   if (probe.error) return { error: NextResponse.json({ error: probe.error.message }, { status: 500 }) };
 
-  const start = zonedDateTimeToUtc(startDate, 0, timeZone);
-  const end = zonedDateTimeToUtc(addDaysIso(endDate, 1), 0, timeZone);
+  const clock = courtDayClock(timeZone);
+  const start = businessDayRange(startDate, clock).start;
+  const end = businessDayRange(endDate, clock).end;
   const stored = await service
     .from("mp_settlement_rows")
     .select("id, payment_method_id, source_id, transaction_type, payment_method_type, business_unit, sub_unit, transaction_amount, transaction_date")
@@ -253,7 +254,7 @@ async function monthRows(
       subUnit: row.sub_unit == null ? null : String(row.sub_unit),
       amountCents,
       at,
-      date: todayInTimeZone(new Date(at), timeZone),
+      date: currentBusinessDate(new Date(at), clock),
     }];
   });
   const rowIds = movements.map((row) => row.id);
