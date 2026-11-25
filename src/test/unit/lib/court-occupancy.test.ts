@@ -103,4 +103,20 @@ describe("índice de ocupación", () => {
     expect(result.availableMinutes).toBe(240);
     expect(result.percent).toBe(38);
   });
+
+  it("suma el mismo horario en dos días y no los pisa", () => {
+    const result = courtOccupancy({
+      courts: [courts[0]],
+      dates: ["2026-11-23", "2026-11-24"],
+      startTime: "13:00",
+      endTime: "23:30",
+      blocks: [
+        { courtId: 1, date: "2026-11-23", start: "18:00", end: "19:30" },
+        { courtId: 1, date: "2026-11-24", start: "18:00", end: "19:30" },
+      ],
+    });
+    expect(result.usedMinutes).toBe(180);
+    expect(result.availableMinutes).toBe(1260);
+    expect(result.percent).toBe(14);
+  });
 });

@@ -39,24 +39,50 @@ async function occupancyWindow(
   };
 }
 
+const PAGE = 1000;
+
+async function eachPage(
+  load: (fromRow: number, toRow: number) => PromiseLike<QueryResult>,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let offset = 0; offset < 20000; offset += PAGE) {
+    const batch = rowsFrom(await load(offset, offset + PAGE - 1));
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return rows;
+}
+
 async function slotRows(service: SupabaseClient, clubId: number, from: string, to: string): Promise<Row[]> {
   const first = await service
     .from("court_slots")
     .select("court_id, slot_date, start_time, end_time, was_played, reservation_status, player1_id, player2_id, player3_id, player4_id")
     .eq("club_id", clubId)
     .gte("slot_date", from)
-    .lte("slot_date", to);
+    .lte("slot_date", to)
+    .range(0, PAGE - 1);
   if (first.error && /reservation_status/i.test(first.error.message ?? "")) {
-    return rowsOrEmpty(
+    return eachPage((fromRow, toRow) =>
       service
         .from("court_slots")
         .select("court_id, slot_date, start_time, end_time, was_played, player1_id, player2_id, player3_id, player4_id")
         .eq("club_id", clubId)
         .gte("slot_date", from)
-        .lte("slot_date", to),
+        .lte("slot_date", to)
+        .range(fromRow, toRow),
     );
   }
-  return rowsFrom(first);
+  if (first.error || (first.data ?? []).length < PAGE) return rowsFrom(first);
+  const rest = await eachPage((fromRow, toRow) =>
+    service
+      .from("court_slots")
+      .select("court_id, slot_date, start_time, end_time, was_played, reservation_status, player1_id, player2_id, player3_id, player4_id")
+      .eq("club_id", clubId)
+      .gte("slot_date", from)
+      .lte("slot_date", to)
+      .range(fromRow, toRow),
+  );
+  return rest;
 }
 
 type QueryResult = { data: Row[] | null; error: { code?: string; message?: string } | null };
@@ -65,10 +91,6 @@ function rowsFrom(result: QueryResult): Row[] {
   if (isMissingRelation(result.error)) return [];
   if (result.error) throw new Error(result.error.message ?? "No se pudo leer la ocupación.");
   return result.data ?? [];
-}
-
-async function rowsOrEmpty(query: PromiseLike<QueryResult>): Promise<Row[]> {
-  return rowsFrom(await query);
 }
 
 /** Arma el índice del rango de fechas con las canchas activas del complejo. */
@@ -94,23 +116,25 @@ export async function loadCourtOccupancy(
   const slots = await slotRows(service, clubId, from, to);
 
   const [classes, matches] = await Promise.all([
-    rowsOrEmpty(
+    eachPage((fromRow, toRow) =>
       service
         .from("class_sessions")
         .select("court_id, session_date, start_time, end_time, status")
         .eq("club_id", clubId)
         .eq("status", "scheduled")
         .gte("session_date", from)
-        .lte("session_date", to),
+        .lte("session_date", to)
+        .range(fromRow, toRow),
     ),
-    rowsOrEmpty(
+    eachPage((fromRow, toRow) =>
       service
         .from("tournament_matches")
         .select("court_id, match_date, start_time, end_time, status")
         .eq("club_id", clubId)
         .gte("match_date", from)
         .lte("match_date", to)
-        .neq("status", "cancelled"),
+        .neq("status", "cancelled")
+        .range(fromRow, toRow),
     ),
   ]);
 

@@ -87,7 +87,7 @@ export function courtOccupancy(input: {
   const span = windowMinutes(input.startTime, input.endTime);
   const dates = new Set(input.dates);
   const courtIds = new Set(input.courts.map((court) => court.id));
-  const byCourt = new Map<number, Array<[number, number]>>();
+  const byCourtDay = new Map<number, Map<string, Array<[number, number]>>>();
   for (const block of input.blocks) {
     if (!courtIds.has(block.courtId) || !dates.has(block.date)) continue;
     const pieces = segments(block.start, block.end).flatMap((piece) =>
@@ -96,15 +96,20 @@ export function courtOccupancy(input: {
         return clipped ? [clipped] : [];
       }),
     );
-    const current = byCourt.get(block.courtId) ?? [];
+    const days = byCourtDay.get(block.courtId) ?? new Map<string, Array<[number, number]>>();
+    const current = days.get(block.date) ?? [];
     current.push(...pieces);
-    byCourt.set(block.courtId, current);
+    days.set(block.date, current);
+    byCourtDay.set(block.courtId, days);
   }
 
   const dayCount = input.dates.length;
   const courts = input.courts.map((court) => {
     const availableMinutes = span * dayCount;
-    const usedMinutes = mergedMinutes(byCourt.get(court.id) ?? []);
+    const usedMinutes = Array.from(byCourtDay.get(court.id)?.values() ?? []).reduce(
+      (total, ranges) => total + mergedMinutes(ranges),
+      0,
+    );
     return {
       courtId: court.id,
       courtName: court.name,
