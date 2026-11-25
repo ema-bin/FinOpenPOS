@@ -62,6 +62,25 @@ export class CourtPricingRepository {
     return data ?? [];
   }
 
+  async findCoveringRange(from: string, to: string): Promise<CourtPricingDB[]> {
+    const {
+      data: { user },
+    } = await this.supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await this.supabase
+      .from("court_pricing")
+      .select("*")
+      .lte("valid_from", to)
+      .or(`valid_until.is.null,valid_until.gt.${from}`)
+      .order("court_id", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (missingPricingHistory(error)) return this.findEveryRow();
+    if (error) throw error;
+    return data ?? [];
+  }
+
   async findHistory(courtId: number): Promise<CourtPricingDB[]> {
     const {
       data: { user },

@@ -240,6 +240,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
     GET: read("finance.manage"),
     PUT: write("finance.manage"),
   },
+  "/api/court-balance/month": { GET: read("finance.manage") },
   "/api/court-slots/pricing": { GET: read("courts.operate", "courts.pricing") },
   "/api/court-slots/pricing/[courtId]": { PUT: write("courts.pricing") },
   "/api/court-slot-day-notes": crud("courts.operate"),

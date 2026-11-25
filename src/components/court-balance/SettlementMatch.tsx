@@ -9,23 +9,26 @@ import { usePermissions } from "@/components/permissions-provider";
 import { reconciliationTone, type ReconciliationTone } from "@/lib/finance/settlement-match";
 import { cn } from "@/lib/utils";
 
-const TONE_CARD: Record<ReconciliationTone, string> = {
-  even: "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40",
-  "favor-small": "border-teal-300 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/40",
-  "favor-medium": "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40",
-  "favor-large": "border-blue-400 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40",
-  "against-small": "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40",
-  "against-medium": "border-orange-400 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40",
-  "against-large": "border-red-400 bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+const GREEN = "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100";
+const RED = "border-red-400 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100";
+
+export const TONE_CARD: Record<ReconciliationTone, string> = {
+  even: "border-border bg-white dark:bg-background",
+  "favor-small": GREEN,
+  "favor-medium": GREEN,
+  "favor-large": GREEN,
+  "against-small": RED,
+  "against-medium": RED,
+  "against-large": RED,
 };
 
 const TONE_TEXT: Record<ReconciliationTone, string> = {
-  even: "text-emerald-800 dark:text-emerald-200",
-  "favor-small": "text-teal-800 dark:text-teal-200",
-  "favor-medium": "text-sky-800 dark:text-sky-200",
-  "favor-large": "text-blue-800 dark:text-blue-200",
-  "against-small": "text-amber-800 dark:text-amber-200",
-  "against-medium": "text-orange-800 dark:text-orange-200",
+  even: "text-foreground",
+  "favor-small": "text-emerald-800 dark:text-emerald-200",
+  "favor-medium": "text-emerald-800 dark:text-emerald-200",
+  "favor-large": "text-emerald-800 dark:text-emerald-200",
+  "against-small": "text-red-800 dark:text-red-200",
+  "against-medium": "text-red-800 dark:text-red-200",
   "against-large": "text-red-800 dark:text-red-200",
 };
 
