@@ -74,9 +74,17 @@ function pesos(cents: number) {
   return (cents / 100).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
 }
 
-function hourOf(iso: string | null, timeZone: string) {
-  if (!iso) return "Sin hora";
-  return new Intl.DateTimeFormat("es-AR", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+function whenOf(iso: string | null, timeZone: string) {
+  if (!iso) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(iso));
 }
 
 const KIND_LABEL: Record<MatchRow["effectiveKind"], string> = {
@@ -149,6 +157,19 @@ function statusText(row: MatchRow) {
   return KIND_LABEL[row.effectiveKind];
 }
 
+/** En la lista solo entran cobros, del más antiguo al más nuevo. Rendimiento, retiros y devoluciones siguen en la base. */
+function collectionRows(rows: MatchRow[]) {
+  return rows
+    .filter((row) => row.kind === "collection" || row.effectiveKind === "collection")
+    .slice()
+    .sort((a, b) => {
+      if (a.at == null && b.at == null) return a.id - b.id;
+      if (a.at == null) return 1;
+      if (b.at == null) return -1;
+      return a.at.localeCompare(b.at) || a.id - b.id;
+    });
+}
+
 export function SettlementMatch({ date }: { date: string }) {
   const { can, loading } = usePermissions();
   const canWrite = !loading && can("finance.manage");
@@ -201,6 +222,7 @@ export function SettlementMatch({ date }: { date: string }) {
         const difference = method.collectedCents - method.expectedCents;
         const tone = reconciliationTone(difference);
         const open = openId === method.paymentMethodId;
+        const collections = collectionRows(method.rows);
         return (
           <div key={method.paymentMethodId} className={cn("space-y-3 rounded-lg border p-3", TONE_CARD[tone.tone])}>
             <p className="font-medium">{method.paymentMethodName}</p>
@@ -224,27 +246,24 @@ export function SettlementMatch({ date }: { date: string }) {
                 {method.missingTariff} pago(s) sin tarifa no entran en lo registrado.
               </p>
             )}
-            {method.rows.length > 0 && (
+            {collections.length > 0 && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setOpenId(open ? null : method.paymentMethodId)}
               >
-                {open ? "Ocultar movimientos" : `Ver movimientos (${method.rows.length})`}
+                {open ? "Ocultar movimientos" : `Ver movimientos (${collections.length})`}
               </Button>
             )}
             {open && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Rendimiento {pesos(method.yieldCents)} · Retiros {pesos(method.withdrawalCents)} · Devoluciones {pesos(method.refundCents)}
-                </p>
                 <div className="space-y-2 md:hidden">
-                  {method.rows.map((row) => (
+                  {collections.map((row) => (
                     <div key={row.id} className="rounded-md border p-3">
                       <p className="font-medium">{pesos(row.amountCents)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {hourOf(row.at, data.timezone)} · {KIND_LABEL[row.effectiveKind]} · {row.sourceId ?? "Sin operación"}
+                        {whenOf(row.at, data.timezone)} · {KIND_LABEL[row.effectiveKind]} · {row.sourceId ?? "Sin operación"}
                       </p>
                       <p className="py-1 text-sm">{statusText(row)}</p>
                       {canWrite ? (
@@ -257,7 +276,7 @@ export function SettlementMatch({ date }: { date: string }) {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Hora</TableHead>
+                        <TableHead>Fecha</TableHead>
                         <TableHead>Operación</TableHead>
                         <TableHead>Clase</TableHead>
                         <TableHead className="text-right">Monto</TableHead>
@@ -265,9 +284,9 @@ export function SettlementMatch({ date }: { date: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {method.rows.map((row) => (
+                      {collections.map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell>{hourOf(row.at, data.timezone)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{whenOf(row.at, data.timezone)}</TableCell>
                           <TableCell>{row.sourceId ?? "—"}</TableCell>
                           <TableCell>{KIND_LABEL[row.effectiveKind]}</TableCell>
                           <TableCell className="text-right">{pesos(row.amountCents)}</TableCell>

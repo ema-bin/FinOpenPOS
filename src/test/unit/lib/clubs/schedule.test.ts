@@ -56,6 +56,15 @@ describe("día de negocio del complejo", () => {
     expect(range.end.toISOString()).toBe(historic.end.toISOString());
   });
 
+  it("una liquidación de las 02:30 sigue en el día anterior y a las 03:00 abre el día nuevo", () => {
+    const clock = { timeZone: DEFAULT_BUSINESS_CLOCK.timeZone, closureHour: 3 };
+    expect(currentBusinessDate(new Date("2026-11-24T05:30:00.000Z"), clock)).toBe("2026-11-23");
+    expect(currentBusinessDate(new Date("2026-11-24T06:00:00.000Z"), clock)).toBe("2026-11-24");
+    const range = businessDayRange("2026-11-23", clock);
+    expect(range.start.toISOString()).toBe("2026-11-23T06:00:00.000Z");
+    expect(range.end.toISOString()).toBe("2026-11-24T06:00:00.000Z");
+  });
+
   it("el cron de reservas de este club cae el sábado a las 06:00", () => {
     const saturday = new Date("2026-11-14T09:00:00.000Z");
     const local = zonedParts(saturday, DEFAULT_BUSINESS_CLOCK.timeZone);

@@ -4,8 +4,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { ClubContextError, clubIdForUser } from "@/lib/clubs/actor-club";
 import { loadClubSchedule } from "@/lib/clubs/load-club";
-import { zonedDateTimeToUtc } from "@/lib/clubs/schedule";
-import { addDaysIso } from "@/lib/class-time";
+import { businessDayRange, courtDayClock } from "@/lib/clubs/schedule";
 import { createRepositories } from "@/lib/repository-factory";
 import { createServiceClient } from "@/lib/supabase/service";
 import { courtTariffCents } from "@/lib/court-balance";
@@ -69,8 +68,7 @@ async function dayContext(userId: string, date: string) {
   const listed = (methods.data ?? []).filter((method) => isCourtPaymentScope(String(method.scope)));
   const paymentMethodIds = listed.map((method) => Number(method.id));
   const names = new Map(listed.map((method) => [Number(method.id), String(method.name)]));
-  const start = zonedDateTimeToUtc(date, 0, club.timezone);
-  const end = zonedDateTimeToUtc(addDaysIso(date, 1), 0, club.timezone);
+  const { start, end } = businessDayRange(date, courtDayClock(club.timezone));
 
   const repos = await createRepositories();
   const [slots, tariffs, packs] = await Promise.all([
