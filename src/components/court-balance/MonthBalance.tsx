@@ -5,7 +5,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { weekdayOf } from "@/lib/class-time";
 import { reconciliationTone } from "@/lib/finance/settlement-match";
 import { cn } from "@/lib/utils";
+import { CourtOccupancyCard } from "@/components/court-balance/CourtOccupancyCard";
 import { TONE_CARD, TONE_TEXT } from "@/components/court-balance/SettlementMatch";
+import type { CourtOccupancy } from "@/lib/court-occupancy";
 
 type MonthDay = { date: string; expectedCents: number; collectedCents: number };
 
@@ -22,6 +24,7 @@ type MonthResponse = {
   collectedCents: number;
   methods: MonthMethod[];
   days: MonthDay[];
+  occupancy?: CourtOccupancy | null;
 };
 
 function pesos(cents: number) {
@@ -72,6 +75,8 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
               <p className="text-lg font-semibold">{pesos(data.balance.totalRevenueCents)}</p>
             </div>
           </div>
+
+          <CourtOccupancyCard occupancy={data.occupancy} title="Ocupación del mes" />
 
           <div className={cn("grid gap-3 rounded-lg border p-3 md:grid-cols-3", TONE_CARD[tone.tone])}>
             <div>

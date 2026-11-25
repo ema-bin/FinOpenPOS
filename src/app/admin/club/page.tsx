@@ -327,6 +327,36 @@ export default function ClubSettingsPage() {
           </label>
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Índice de ocupación</CardTitle>
+          <CardDescription>
+            Horario en el que se mide cuánto se usan las canchas. Entran los turnos, las clases y los torneos. No cambia la grilla de turnos. Si el fin es anterior al inicio, el horario cruza la medianoche.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="occupancy-start">Desde</Label>
+            <Input
+              id="occupancy-start"
+              type="time"
+              value={draft.occupancy_start_time}
+              disabled={!canWrite}
+              onChange={(event) => set("occupancy_start_time", event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="occupancy-end">Hasta</Label>
+            <Input
+              id="occupancy-end"
+              type="time"
+              value={draft.occupancy_end_time}
+              disabled={!canWrite}
+              onChange={(event) => set("occupancy_end_time", event.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

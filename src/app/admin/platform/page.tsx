@@ -32,6 +32,8 @@ const EMPTY_SETTINGS: Omit<ClubSettings, "id"> = {
   timezone: "America/Argentina/Buenos_Aires",
   open_time: "10:00",
   close_time: "01:00",
+  occupancy_start_time: "10:00",
+  occupancy_end_time: "01:00",
   slot_duration_minutes: 90,
   overnight_slot: true,
   fixed_weekdays: [1, 2, 3, 4, 5],
@@ -277,6 +279,25 @@ export default function PlatformPage() {
                     Turno que cruza medianoche
                     <Switch checked={settings.overnight_slot} onCheckedChange={(checked) => set("overnight_slot", checked)} />
                   </label>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Índice de ocupación</CardTitle>
+                  <CardDescription>
+                    Horario en el que se mide cuánto se usan las canchas. Entran los turnos, las clases y los torneos. Si el fin es anterior al inicio, cruza la medianoche.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-occupancy-start">Desde</Label>
+                    <Input id="alta-occupancy-start" type="time" value={settings.occupancy_start_time} onChange={(event) => set("occupancy_start_time", event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="alta-occupancy-end">Hasta</Label>
+                    <Input id="alta-occupancy-end" type="time" value={settings.occupancy_end_time} onChange={(event) => set("occupancy_end_time", event.target.value)} />
+                  </div>
                 </CardContent>
               </Card>
 

@@ -12,6 +12,8 @@ export type ClubSettings = {
   timezone: string;
   open_time: string;
   close_time: string;
+  occupancy_start_time: string;
+  occupancy_end_time: string;
   slot_duration_minutes: number;
   overnight_slot: boolean;
   fixed_weekdays: number[];
@@ -79,6 +81,8 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
   const timezone = text(raw.timezone, "la zona horaria", 80);
   const openTime = clock(raw.open_time, "La apertura");
   const closeTime = clock(raw.close_time, "El cierre");
+  const occupancyStart = clock(raw.occupancy_start_time, "El inicio de la ocupación");
+  const occupancyEnd = clock(raw.occupancy_end_time, "El fin de la ocupación");
   const duration = intIn(raw.slot_duration_minutes, "La duración del turno", 15, 240);
   const classLimit = intIn(raw.class_player_limit, "El cupo de la clase", 1, 30);
   const discount = Number(raw.registration_discount_percent);
@@ -102,7 +106,8 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
     return { ok: false, error: "Elegí al menos un día para los turnos fijos" };
   }
   const checked = [
-    name, shortName, primary, accent, onPrimary, timezone, openTime, closeTime, duration,
+    name, shortName, primary, accent, onPrimary, timezone, openTime, closeTime,
+    occupancyStart, occupancyEnd, duration,
     classLimit, weekHour, weekDay, overnight, reservations, classes, tournaments,
     packs, buffet, autoClosure, autoWeek,
   ];
@@ -110,6 +115,9 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
   if (invalid) return { ok: false, error: invalid.error };
   if (typeof timezone !== "string" || !isKnownTimezone(timezone)) {
     return { ok: false, error: "La zona horaria no es válida" };
+  }
+  if (occupancyStart === occupancyEnd) {
+    return { ok: false, error: "El horario de ocupación tiene que tener un inicio y un fin distintos" };
   }
   return {
     ok: true,
@@ -123,6 +131,8 @@ export function parseClubSettings(body: unknown): { ok: true; value: Omit<ClubSe
       timezone: timezone as string,
       open_time: openTime as string,
       close_time: closeTime as string,
+      occupancy_start_time: occupancyStart as string,
+      occupancy_end_time: occupancyEnd as string,
       slot_duration_minutes: duration as number,
       overnight_slot: overnight as boolean,
       fixed_weekdays: weekdays,

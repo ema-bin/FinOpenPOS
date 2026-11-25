@@ -9,6 +9,7 @@ import { monthBounds } from "@/lib/class-time";
 import { createRepositories } from "@/lib/repository-factory";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildCourtDayBalance, courtTariffCents } from "@/lib/court-balance";
+import { loadCourtOccupancy } from "@/lib/court-occupancy-load";
 import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
 import {
   chargeFromSeat,
@@ -187,6 +188,12 @@ export async function GET(request: Request) {
     const expectedCents = reconciled.days.reduce((total, day) => total + day.expectedCents, 0);
     const collectedCents = reconciled.days.reduce((total, day) => total + day.collectedCents, 0);
     const names = new Map(courtMethods.map((method) => [method.id, method.name]));
+    let occupancy = null;
+    try {
+      occupancy = await loadCourtOccupancy(service, clubId, dates);
+    } catch (error) {
+      console.error("GET /court-balance/month occupancy:", error);
+    }
 
     return NextResponse.json({
       month,
@@ -206,6 +213,7 @@ export async function GET(request: Request) {
         }))
         .sort((a, b) => a.paymentMethodName.localeCompare(b.paymentMethodName, "es")),
       days: reconciled.days,
+      occupancy,
     });
   } catch (error) {
     return failure(error);
