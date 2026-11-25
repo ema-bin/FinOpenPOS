@@ -22,7 +22,7 @@ export const TONE_CARD: Record<ReconciliationTone, string> = {
   "against-large": RED,
 };
 
-const TONE_TEXT: Record<ReconciliationTone, string> = {
+export const TONE_TEXT: Record<ReconciliationTone, string> = {
   even: "text-foreground",
   "favor-small": "text-emerald-800 dark:text-emerald-200",
   "favor-medium": "text-emerald-800 dark:text-emerald-200",

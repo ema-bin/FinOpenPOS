@@ -13,7 +13,7 @@ import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
 import {
   chargeFromSeat,
   chargeKey,
-  reconcileDates,
+  reconcileMonth,
   type ExpectedCharge,
   type SettlementMarkInput,
   type SettlementMovement,
@@ -63,16 +63,17 @@ export async function GET(request: Request) {
     const club = await loadClubSchedule(service, clubId);
     const methods = await service
       .from("payment_methods")
-      .select("id, scope, is_mercadopago")
+      .select("id, name, scope, is_mercadopago")
       .eq("club_id", clubId)
       .eq("is_mercadopago", true);
     if (methods.error && (methods.error.code === "42703" || /is_mercadopago/i.test(methods.error.message ?? ""))) {
       return NextResponse.json({ error: `Falta aplicar ${FLAG_SCRIPT}` }, { status: 503 });
     }
     if (methods.error) return NextResponse.json({ error: methods.error.message }, { status: 500 });
-    const paymentMethodIds = (methods.data ?? [])
+    const courtMethods = (methods.data ?? [])
       .filter((method) => isCourtPaymentScope(String(method.scope)))
-      .map((method) => Number(method.id));
+      .map((method) => ({ id: Number(method.id), name: String(method.name ?? "Medio") }));
+    const paymentMethodIds = courtMethods.map((method) => method.id);
 
     const repos = await createRepositories();
     const dates = Array.from({ length: Number(bounds.end.slice(8, 10)) }, (_, index) => {
@@ -176,15 +177,16 @@ export async function GET(request: Request) {
 
     const rows = await monthRows(service, clubId, club.timezone, paymentMethodIds, bounds.start, bounds.end);
     if ("error" in rows) return rows.error;
-    const days = reconcileDates({
+    const reconciled = reconcileMonth({
       dates,
       paymentMethodIds,
       charges,
       rows: rows.movements,
       marks: rows.marks,
     });
-    const expectedCents = days.reduce((total, day) => total + day.expectedCents, 0);
-    const collectedCents = days.reduce((total, day) => total + day.collectedCents, 0);
+    const expectedCents = reconciled.days.reduce((total, day) => total + day.expectedCents, 0);
+    const collectedCents = reconciled.days.reduce((total, day) => total + day.collectedCents, 0);
+    const names = new Map(courtMethods.map((method) => [method.id, method.name]));
 
     return NextResponse.json({
       month,
@@ -195,7 +197,15 @@ export async function GET(request: Request) {
       },
       expectedCents,
       collectedCents,
-      days,
+      methods: reconciled.methods
+        .map((method) => ({
+          paymentMethodId: method.paymentMethodId,
+          paymentMethodName: names.get(method.paymentMethodId) ?? "Medio",
+          expectedCents: method.expectedCents,
+          collectedCents: method.collectedCents,
+        }))
+        .sort((a, b) => a.paymentMethodName.localeCompare(b.paymentMethodName, "es")),
+      days: reconciled.days,
     });
   } catch (error) {
     return failure(error);
