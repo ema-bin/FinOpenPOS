@@ -14,6 +14,7 @@ import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
 import {
   chargeFromSeat,
   chargeKey,
+  monthExpenses,
   reconcileMonth,
   type ExpectedCharge,
   type SettlementMarkInput,
@@ -213,6 +214,11 @@ export async function GET(request: Request) {
         }))
         .sort((a, b) => a.paymentMethodName.localeCompare(b.paymentMethodName, "es")),
       days: reconciled.days,
+      timezone: club.timezone,
+      expenses: monthExpenses(rows.movements).map((expense) => ({
+        ...expense,
+        paymentMethodName: names.get(expense.paymentMethodId) ?? "Medio",
+      })),
       occupancy,
     });
   } catch (error) {

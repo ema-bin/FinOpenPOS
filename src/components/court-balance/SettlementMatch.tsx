@@ -157,11 +157,26 @@ function statusText(row: MatchRow) {
   return KIND_LABEL[row.effectiveKind];
 }
 
-/** En la lista solo entran cobros, del más antiguo al más nuevo. Rendimiento, retiros y devoluciones siguen en la base. */
+/** En la lista de cobros solo entran montos positivos. Los negativos van a Gastos. */
 function collectionRows(rows: MatchRow[]) {
   return rows
-    .filter((row) => row.kind === "collection" || row.effectiveKind === "collection")
+    .filter((row) => (row.kind === "collection" || row.effectiveKind === "collection") && row.amountCents > 0)
     .slice()
+    .sort((a, b) => {
+      if (a.at == null && b.at == null) return a.id - b.id;
+      if (a.at == null) return 1;
+      if (b.at == null) return -1;
+      return a.at.localeCompare(b.at) || a.id - b.id;
+    });
+}
+
+function expenseRows(methods: MatchMethod[]) {
+  return methods
+    .flatMap((method) =>
+      method.rows
+        .filter((row) => row.amountCents < 0)
+        .map((row) => ({ ...row, paymentMethodName: method.paymentMethodName })),
+    )
     .sort((a, b) => {
       if (a.at == null && b.at == null) return a.id - b.id;
       if (a.at == null) return 1;
@@ -202,8 +217,11 @@ export function SettlementMatch({ date }: { date: string }) {
 
   const data = match.data;
   const [openId, setOpenId] = useState<number | null>(null);
+  const expenses = data ? expenseRows(data.methods) : [];
+  const expenseCents = expenses.reduce((total, expense) => total + expense.amountCents, 0);
 
   return (
+    <>
     <section className="space-y-3">
       <div>
         <h2 className="text-sm font-semibold">Conciliación</h2>
@@ -307,5 +325,58 @@ export function SettlementMatch({ date }: { date: string }) {
         );
       })}
     </section>
+    {data && (
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">Gastos</h2>
+        <p className="text-xs text-muted-foreground">
+          Movimientos del día en los que salió plata. No entran en lo cobrado de canchas.
+        </p>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Total</p>
+          <p className="text-lg font-semibold">{pesos(expenseCents)}</p>
+        </div>
+        {expenses.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay gastos en el día.</p>
+        ) : (
+          <>
+            <div className="space-y-2 md:hidden">
+              {expenses.map((expense) => (
+                <div key={expense.id} className="space-y-1 rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm whitespace-nowrap">{whenOf(expense.at, data.timezone)}</p>
+                    <p className="text-sm font-semibold">{pesos(expense.amountCents)}</p>
+                  </div>
+                  <p className="text-sm">{expense.paymentMethodName}</p>
+                  <p className="text-xs text-muted-foreground">{expense.sourceId ?? "Sin operación"}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden rounded-lg border md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Operación</TableHead>
+                    <TableHead>Medio</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenses.map((expense) => (
+                    <TableRow key={expense.id}>
+                      <TableCell className="whitespace-nowrap">{whenOf(expense.at, data.timezone)}</TableCell>
+                      <TableCell>{expense.sourceId ?? "Sin operación"}</TableCell>
+                      <TableCell>{expense.paymentMethodName}</TableCell>
+                      <TableCell className="text-right">{pesos(expense.amountCents)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </section>
+    )}
+    </>
   );
 }
