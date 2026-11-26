@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { parseSettlementReportList, isSettlementCsvBody, isSettlementCsvName } from "@/lib/finance/mercadopago-settlement";
+import { describe, expect, it, vi } from "vitest";
+import {
+  downloadSettlementReport,
+  isSettlementCsvBody,
+  isSettlementCsvName,
+  parseSettlementReportList,
+} from "@/lib/finance/mercadopago-settlement";
 import {
   parseSettlementCsv,
   settlementInserts,
@@ -81,6 +86,22 @@ describe("lista de reportes", () => {
         createdFrom: "manual",
       },
     ]);
+  });
+
+  it("sigue la redirección del archivo sin reenviar el token", async () => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("api.mercadopago.com")) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://files.example/a.csv" },
+        });
+      }
+      expect(init?.headers).toEqual({});
+      return new Response("SOURCE_ID\n1\n", { status: 200 });
+    });
+    const csv = await downloadSettlementReport("token-secret", "settlement-1.csv", fetchImpl as typeof fetch);
+    expect(csv).toContain("SOURCE_ID");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("no trata un Excel de Mercado Pago como liquidación CSV", () => {
