@@ -7,8 +7,11 @@ export type BusinessClock = {
   closureHour: number;
 };
 
-/** La tarea diaria corre a las 06:00 de Argentina para todos los complejos. */
+/** La bajada de liquidaciones y el cierre de caja corren a las 06:00 de Argentina. */
 export const DAILY_JOB_HOUR = 6;
+
+/** A las 03:00 se le pide a Mercado Pago el reporte del día anterior y del día en curso. */
+export const SETTLEMENT_REQUEST_HOUR = 3;
 
 /** Igual que el día de negocio histórico: 03:00 en Buenos Aires, o sea 06:00 UTC. */
 export const DEFAULT_BUSINESS_CLOCK: BusinessClock = {

@@ -1,4 +1,5 @@
 const LIST_URL = "https://api.mercadopago.com/v1/account/settlement_report/list";
+const CREATE_URL = "https://api.mercadopago.com/v1/account/settlement_report";
 
 export type MpSettlementReport = {
   id: string | null;
@@ -71,6 +72,45 @@ export async function listSettlementReports(token: string, fetchImpl: typeof fet
   });
   const body = await mpText(response, token);
   return parseSettlementReportList(JSON.parse(body));
+}
+
+export type MpSettlementRequest = {
+  id: string | null;
+  status: string | null;
+  beginDate: string | null;
+  endDate: string | null;
+  fileName: string | null;
+};
+
+/** Pide un reporte manual. Mercado Pago lo arma después y recién entonces tiene file_name. */
+export async function requestSettlementReport(
+  token: string,
+  beginDate: string,
+  endDate: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<MpSettlementRequest> {
+  const response = await fetchImpl(CREATE_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ begin_date: beginDate, end_date: endDate }),
+  });
+  const body = await mpText(response, token);
+  const parsed = JSON.parse(body) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new MercadoPagoError("Mercado Pago no devolvió el pedido de reporte.");
+  }
+  const record = parsed as Record<string, unknown>;
+  return {
+    id: textOf(record.id),
+    status: textOf(record.status),
+    beginDate: textOf(record.begin_date),
+    endDate: textOf(record.end_date),
+    fileName: textOf(record.file_name),
+  };
 }
 
 export async function downloadSettlementReport(

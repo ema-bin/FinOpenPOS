@@ -59,6 +59,27 @@ export function MercadoPagoCredentials() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar el token."),
   });
 
+  const generate = useMutation({
+    mutationFn: async (paymentMethodId: number) => {
+      const response = await fetch("/api/court-balance/settlement-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentMethodId }),
+      });
+      return readJson(response, "No se pudo pedir el reporte.") as Promise<{
+        from: string;
+        to: string;
+        status: string | null;
+      }>;
+    },
+    onSuccess: (result) => {
+      const from = result.from.slice(8, 10) + "/" + result.from.slice(5, 7);
+      const to = result.to.slice(8, 10) + "/" + result.to.slice(5, 7);
+      setNotice(`Pedido el reporte del ${from} al ${to}. Mercado Pago lo está armando. Cuando tenga archivo, Traer liquidaciones lo guarda.`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo pedir el reporte."),
+  });
+
   const bring = useMutation({
     mutationFn: async (paymentMethodId: number) => {
       const response = await fetch("/api/court-balance/settlement-import", {
@@ -109,7 +130,7 @@ export function MercadoPagoCredentials() {
   return (
     <section className="space-y-2">
       <p className="text-sm text-muted-foreground">
-        El access token queda cifrado y esta pantalla no lo vuelve a mostrar. A las 06:00 se bajan solas las liquidaciones que falten. Traer liquidaciones hace esa bajada ahora.
+        El access token queda cifrado y esta pantalla no lo vuelve a mostrar. A las 03:00 se pide el reporte de ayer y de hoy. A las 06:00 se baja ese archivo y se guardan las filas. Estos botones hacen eso ahora.
       </p>
 
       {credentials.isLoading && <p className="text-sm text-muted-foreground">Cargando medios…</p>}
@@ -152,6 +173,16 @@ export function MercadoPagoCredentials() {
                 <Button type="submit" disabled={save.isPending || !(drafts[method.id] ?? "").trim()}>
                   Guardar
                 </Button>
+                {method.configured ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={generate.isPending}
+                    onClick={() => generate.mutate(method.id)}
+                  >
+                    Generar reporte
+                  </Button>
+                ) : null}
                 {method.configured ? (
                   <Button
                     type="button"

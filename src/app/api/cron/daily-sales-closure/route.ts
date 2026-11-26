@@ -10,11 +10,13 @@ import {
   runDailySalesClosure,
 } from "@/lib/run-daily-sales-closure";
 import { importClubSettlements } from "@/lib/finance/import-settlements";
+import { runCourtReservations } from "@/lib/run-court-reservations";
 
 /**
  * Una vez por día, 09:00 UTC (06:00 en Argentina).
  * Baja las liquidaciones de Mercado Pago que falten.
  * Cada club cierra la caja si Ventas está activo.
+ * Los sábados también arma los turnos de la semana siguiente.
  */
 export async function GET(request: Request) {
   try {
@@ -72,11 +74,21 @@ export async function GET(request: Request) {
       });
     }
 
+    let reservations: Awaited<ReturnType<typeof runCourtReservations>> | { error: string };
+    try {
+      reservations = await runCourtReservations(supabase, now);
+    } catch (reservationError) {
+      reservations = {
+        error: reservationError instanceof Error ? reservationError.message : "No se pudieron generar las reservas.",
+      };
+    }
+
     console.info(`[cron/daily-sales-closure] clubs=${results.length}`);
 
     return NextResponse.json({
       ok: true,
       clubs: results,
+      reservations,
     });
   } catch (err) {
     console.error("GET /api/cron/daily-sales-closure error:", err);
