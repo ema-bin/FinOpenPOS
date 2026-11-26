@@ -65,6 +65,7 @@ type MatchMethod = {
   withdrawalCents: number;
   refundCents: number;
   missingTariff: number;
+  reconciles?: boolean;
   rows: MatchRow[];
 };
 
@@ -234,9 +235,26 @@ export function SettlementMatch({ date }: { date: string }) {
         <p className="text-sm text-destructive">{match.error instanceof Error ? match.error.message : "No se pudo cruzar Mercado Pago."}</p>
       )}
       {data && data.methods.length === 0 && (
-        <p className="text-sm text-muted-foreground">Ningún medio de cancha está marcado como Mercado Pago.</p>
+        <p className="text-sm text-muted-foreground">No hay medios de pago de cancha.</p>
       )}
       {data?.methods.map((method) => {
+        if (method.reconciles === false) {
+          return (
+            <div key={method.paymentMethodId} className="space-y-3 rounded-lg border p-3">
+              <p className="font-medium">{method.paymentMethodName}</p>
+              <div>
+                <p className="text-xs text-muted-foreground">Registrado</p>
+                <p className="text-lg font-semibold">{pesos(method.expectedCents)}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Sin conciliación</p>
+              {method.missingTariff > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {method.missingTariff} pago(s) sin tarifa no entran en lo registrado.
+                </p>
+              )}
+            </div>
+          );
+        }
         const difference = method.collectedCents - method.expectedCents;
         const tone = reconciliationTone(difference);
         const open = openId === method.paymentMethodId;

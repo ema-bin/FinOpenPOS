@@ -16,6 +16,7 @@ type MonthMethod = {
   paymentMethodName: string;
   expectedCents: number;
   collectedCents: number;
+  reconciles?: boolean;
 };
 
 type MonthExpense = {
@@ -124,9 +125,23 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
           {data.methods.length > 0 && (
             <section className="space-y-2">
               <h2 className="text-sm font-semibold">Por medio de pago</h2>
-              <p className="text-xs text-muted-foreground">Lo que debía entrar y lo que entró en cada cuenta de Mercado Pago.</p>
+              <p className="text-xs text-muted-foreground">
+                Cada medio de cancha. Solo Mercado Pago se compara con lo que entró en la cuenta.
+              </p>
               <div className="space-y-2 md:hidden">
                 {data.methods.map((method) => {
+                  if (method.reconciles === false) {
+                    return (
+                      <div key={method.paymentMethodId} className="space-y-2 rounded-lg border p-3">
+                        <p className="font-medium">{method.paymentMethodName}</p>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Registrado</p>
+                          <p className="text-sm font-semibold">{pesos(method.expectedCents)}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Sin conciliación</p>
+                      </div>
+                    );
+                  }
                   const methodDifference = method.collectedCents - method.expectedCents;
                   const methodTone = reconciliationTone(methodDifference);
                   return (
@@ -163,6 +178,16 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
                   </TableHeader>
                   <TableBody>
                     {data.methods.map((method) => {
+                      if (method.reconciles === false) {
+                        return (
+                          <TableRow key={method.paymentMethodId}>
+                            <TableCell>{method.paymentMethodName}</TableCell>
+                            <TableCell className="text-right">{pesos(method.expectedCents)}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                            <TableCell className="text-right text-muted-foreground">Sin conciliación</TableCell>
+                          </TableRow>
+                        );
+                      }
                       const methodDifference = method.collectedCents - method.expectedCents;
                       const methodTone = reconciliationTone(methodDifference);
                       return (

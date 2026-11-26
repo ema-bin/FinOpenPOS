@@ -4,6 +4,16 @@ export function isCourtPaymentScope(scope: string): boolean {
   return scope === "COURT" || scope === "BOTH";
 }
 
+/** Medios de cancha activos, más los inactivos que tuvieron un cobro en el período. */
+export function courtMethodsForBalance<T extends { id: number; scope: string; is_active: boolean }>(
+  methods: T[],
+  usedIds: ReadonlySet<number>,
+): T[] {
+  return methods.filter((method) =>
+    isCourtPaymentScope(method.scope) && (method.is_active || usedIds.has(method.id)),
+  );
+}
+
 export type CourtPaymentMethodRow = {
   id: number;
   name: string;

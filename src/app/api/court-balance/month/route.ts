@@ -10,7 +10,7 @@ import { createRepositories } from "@/lib/repository-factory";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildCourtDayBalance, courtTariffCents } from "@/lib/court-balance";
 import { loadCourtOccupancy } from "@/lib/court-occupancy-load";
-import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
+import { courtMethodsForBalance, isCourtPaymentScope } from "@/lib/finance/payment-credentials";
 import {
   chargeFromSeat,
   chargeKey,
@@ -65,17 +65,20 @@ export async function GET(request: Request) {
     const club = await loadClubSchedule(service, clubId);
     const methods = await service
       .from("payment_methods")
-      .select("id, name, scope, is_mercadopago")
-      .eq("club_id", clubId)
-      .eq("is_mercadopago", true);
+      .select("id, name, scope, is_active, is_mercadopago")
+      .eq("club_id", clubId);
     if (methods.error && (methods.error.code === "42703" || /is_mercadopago/i.test(methods.error.message ?? ""))) {
       return NextResponse.json({ error: `Falta aplicar ${FLAG_SCRIPT}` }, { status: 503 });
     }
     if (methods.error) return NextResponse.json({ error: methods.error.message }, { status: 500 });
-    const courtMethods = (methods.data ?? [])
-      .filter((method) => isCourtPaymentScope(String(method.scope)))
-      .map((method) => ({ id: Number(method.id), name: String(method.name ?? "Medio") }));
-    const paymentMethodIds = courtMethods.map((method) => method.id);
+    const listed = (methods.data ?? []).map((method) => ({
+      id: Number(method.id),
+      name: String(method.name ?? "Medio"),
+      scope: String(method.scope),
+      is_active: method.is_active !== false,
+      is_mercadopago: method.is_mercadopago === true,
+    }));
+    const courtIds = new Set(listed.filter((method) => isCourtPaymentScope(method.scope)).map((method) => method.id));
 
     const repos = await createRepositories();
     const dates = Array.from({ length: Number(bounds.end.slice(8, 10)) }, (_, index) => {
@@ -140,7 +143,7 @@ export async function GET(request: Request) {
           [4, slot.player4_payment_method],
         ];
         for (const [seatIndex, method] of seats) {
-          if (!method || !paymentMethodIds.includes(method.id)) continue;
+          if (!method || !courtIds.has(method.id)) continue;
           const amountCents = courtTariffCents(
             tariffRows,
             slot.court?.id ?? slot.court_id ?? null,
@@ -160,7 +163,7 @@ export async function GET(request: Request) {
         }
       });
       for (const pack of dayPacks) {
-        if (pack.payment_method_id == null || !paymentMethodIds.includes(pack.payment_method_id)) continue;
+        if (pack.payment_method_id == null || !courtIds.has(pack.payment_method_id)) continue;
         const amountCents = pesosToCents(pack.amount_paid);
         if (amountCents == null) continue;
         charges.push({
@@ -177,18 +180,29 @@ export async function GET(request: Request) {
       }
     }
 
-    const rows = await monthRows(service, clubId, club.timezone, paymentMethodIds, bounds.start, bounds.end);
+    const usedIds = new Set(charges.map((charge) => charge.paymentMethodId));
+    const visible = courtMethodsForBalance(listed, usedIds)
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const mpIds = visible.filter((method) => method.is_mercadopago).map((method) => method.id);
+    const mpIdSet = new Set(mpIds);
+    const rows = await monthRows(service, clubId, club.timezone, mpIds, bounds.start, bounds.end);
     if ("error" in rows) return rows.error;
     const reconciled = reconcileMonth({
       dates,
-      paymentMethodIds,
-      charges,
+      paymentMethodIds: mpIds,
+      charges: charges.filter((charge) => mpIdSet.has(charge.paymentMethodId)),
       rows: rows.movements,
       marks: rows.marks,
     });
     const expectedCents = reconciled.days.reduce((total, day) => total + day.expectedCents, 0);
     const collectedCents = reconciled.days.reduce((total, day) => total + day.collectedCents, 0);
-    const names = new Map(courtMethods.map((method) => [method.id, method.name]));
+    const byMethod = new Map(reconciled.methods.map((method) => [method.paymentMethodId, method]));
+    const registered = new Map<number, number>();
+    for (const charge of charges) {
+      if (mpIdSet.has(charge.paymentMethodId)) continue;
+      registered.set(charge.paymentMethodId, (registered.get(charge.paymentMethodId) ?? 0) + charge.amountCents);
+    }
+    const names = new Map(visible.map((method) => [method.id, method.name]));
     let occupancy = null;
     try {
       occupancy = await loadCourtOccupancy(service, clubId, dates);
@@ -205,14 +219,16 @@ export async function GET(request: Request) {
       },
       expectedCents,
       collectedCents,
-      methods: reconciled.methods
-        .map((method) => ({
-          paymentMethodId: method.paymentMethodId,
-          paymentMethodName: names.get(method.paymentMethodId) ?? "Medio",
-          expectedCents: method.expectedCents,
-          collectedCents: method.collectedCents,
-        }))
-        .sort((a, b) => a.paymentMethodName.localeCompare(b.paymentMethodName, "es")),
+      methods: visible.map((method) => {
+        const matched = byMethod.get(method.id);
+        return {
+          paymentMethodId: method.id,
+          paymentMethodName: names.get(method.id) ?? method.name,
+          expectedCents: matched?.expectedCents ?? registered.get(method.id) ?? 0,
+          collectedCents: matched?.collectedCents ?? 0,
+          reconciles: method.is_mercadopago,
+        };
+      }),
       days: reconciled.days,
       timezone: club.timezone,
       expenses: monthExpenses(rows.movements).map((expense) => ({

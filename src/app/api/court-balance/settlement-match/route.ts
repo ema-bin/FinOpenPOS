@@ -8,7 +8,7 @@ import { businessDayRange, courtDayClock } from "@/lib/clubs/schedule";
 import { createRepositories } from "@/lib/repository-factory";
 import { createServiceClient } from "@/lib/supabase/service";
 import { courtTariffCents } from "@/lib/court-balance";
-import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
+import { courtMethodsForBalance, isCourtPaymentScope } from "@/lib/finance/payment-credentials";
 import {
   chargeFromSeat,
   chargeKey,
@@ -57,17 +57,21 @@ async function dayContext(userId: string, date: string) {
   const club = await loadClubSchedule(service, clubId);
   const methods = await service
     .from("payment_methods")
-    .select("id, name, scope, is_mercadopago")
-    .eq("club_id", clubId)
-    .eq("is_mercadopago", true);
+    .select("id, name, scope, is_active, is_mercadopago")
+    .eq("club_id", clubId);
   if (methods.error && (methods.error.code === "42703" || /is_mercadopago/i.test(methods.error.message ?? ""))) {
     return { error: NextResponse.json({ error: `Falta aplicar ${FLAG_SCRIPT}` }, { status: 503 }) };
   }
   if (methods.error) return { error: NextResponse.json({ error: methods.error.message }, { status: 500 }) };
 
-  const listed = (methods.data ?? []).filter((method) => isCourtPaymentScope(String(method.scope)));
-  const paymentMethodIds = listed.map((method) => Number(method.id));
-  const names = new Map(listed.map((method) => [Number(method.id), String(method.name)]));
+  const listed = (methods.data ?? []).map((method) => ({
+    id: Number(method.id),
+    name: String(method.name ?? "Medio"),
+    scope: String(method.scope),
+    is_active: method.is_active !== false,
+    is_mercadopago: method.is_mercadopago === true,
+  }));
+  const courtIds = new Set(listed.filter((method) => isCourtPaymentScope(method.scope)).map((method) => method.id));
   const { start, end } = businessDayRange(date, courtDayClock(club.timezone));
 
   const repos = await createRepositories();
@@ -98,7 +102,7 @@ async function dayContext(userId: string, date: string) {
       [4, slot.player4_payment_method],
     ];
     for (const [seatIndex, method] of seats) {
-      if (!method || !paymentMethodIds.includes(method.id)) continue;
+      if (!method || !courtIds.has(method.id)) continue;
       const amountCents = courtTariffCents(tariffRows, slot.court?.id ?? slot.court_id ?? null, slot.start_time, date);
       const charge = chargeFromSeat({
         paymentMethodId: method.id,
@@ -117,7 +121,7 @@ async function dayContext(userId: string, date: string) {
     }
   }
   for (const pack of packs) {
-    if (pack.payment_method_id == null || !paymentMethodIds.includes(pack.payment_method_id)) continue;
+    if (pack.payment_method_id == null || !courtIds.has(pack.payment_method_id)) continue;
     const amountCents = pesosToCents(pack.amount_paid);
     if (amountCents == null) continue;
     const player = `${pack.first_name} ${pack.last_name}`.trim() || "Sin jugador";
@@ -133,8 +137,16 @@ async function dayContext(userId: string, date: string) {
     });
   }
 
+  const usedIds = new Set(charges.map((charge) => charge.paymentMethodId));
+  const visible = courtMethodsForBalance(listed, usedIds)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const visibleIds = visible.map((method) => method.id);
+  const mpIds = visible.filter((method) => method.is_mercadopago).map((method) => method.id);
+  const names = new Map(visible.map((method) => [method.id, method.name]));
+  const reconciles = new Set(mpIds);
+
   let movements: SettlementMovement[] = [];
-  if (paymentMethodIds.length > 0) {
+  if (mpIds.length > 0) {
     const probe = await service.from("mp_settlement_matches").select("id").eq("club_id", clubId).limit(1);
     if (missingTable(probe.error, "mp_settlement_matches")) {
       return { error: NextResponse.json({ error: `Falta aplicar ${MATCH_SCRIPT}` }, { status: 503 }) };
@@ -144,7 +156,7 @@ async function dayContext(userId: string, date: string) {
       .from("mp_settlement_rows")
       .select("id, payment_method_id, source_id, transaction_type, payment_method_type, business_unit, sub_unit, transaction_amount, transaction_date")
       .eq("club_id", clubId)
-      .in("payment_method_id", paymentMethodIds)
+      .in("payment_method_id", mpIds)
       .gte("transaction_date", start.toISOString())
       .lt("transaction_date", end.toISOString());
     if (missingTable(stored.error, "mp_settlement_rows")) {
@@ -189,10 +201,16 @@ async function dayContext(userId: string, date: string) {
     }));
   }
 
-  const methodsOut = crossSettlements({ paymentMethodIds, charges, rows: movements, marks }).map((method) => ({
+  const methodsOut = crossSettlements({
+    paymentMethodIds: visibleIds,
+    charges,
+    rows: movements,
+    marks,
+  }).map((method) => ({
     ...method,
     paymentMethodName: names.get(method.paymentMethodId) ?? `Método #${method.paymentMethodId}`,
     missingTariff: missingTariff.get(method.paymentMethodId) ?? 0,
+    reconciles: reconciles.has(method.paymentMethodId),
   }));
 
   return { service, clubId, timezone: club.timezone, methods: methodsOut, charges, movements, marks };
