@@ -8,7 +8,7 @@ import {
   TokenFormatError,
   CredentialsKeyError,
 } from "@/lib/finance/credentials";
-import { paymentCredentialStatus } from "@/lib/finance/payment-credentials";
+import { courtMethodsForBalance, paymentCredentialStatus } from "@/lib/finance/payment-credentials";
 
 const token = "APP_USR-1234567890abcdefghij";
 
@@ -66,5 +66,19 @@ describe("estado del medio de pago", () => {
       configured: true,
       updatedAt: "2026-11-20T12:00:00.000Z",
     });
+  });
+
+  it("en el balance muestra el efectivo y deja afuera la cantina", () => {
+    const shown = courtMethodsForBalance(
+      [
+        { id: 2, name: "Efectivo", scope: "BOTH", is_active: true },
+        { id: 8, name: "Mercado Pago", scope: "COURT", is_active: true },
+        { id: 9, name: "Cantina", scope: "BAR", is_active: true },
+        { id: 4, name: "Viejo", scope: "COURT", is_active: false },
+        { id: 5, name: "Transferencia", scope: "COURT", is_active: false },
+      ],
+      new Set([5]),
+    );
+    expect(shown.map((row) => row.name)).toEqual(["Efectivo", "Mercado Pago", "Transferencia"]);
   });
 });

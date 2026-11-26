@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chargeFromSeat,
   crossSettlements,
+  monthExpenses,
   reconcileDates,
   reconcileMonth,
   reconciliationTone,
@@ -177,6 +178,31 @@ describe("cruce de liquidaciones", () => {
     expect(result.refundCents).toBe(-500_000);
     expect(result.withdrawalCents).toBe(5_000_000);
     expect(result.rows.filter((row) => row.sourceId === "190839674778")).toHaveLength(2);
+  });
+
+  it("un cobro negativo es un gasto y no entra en lo cobrado", () => {
+    const rows = [
+      movement({ id: 1, amountCents: 1_000_000, at: "2026-11-02T13:00:00.000Z" }),
+      movement({ id: 2, amountCents: -82_039_437, sourceId: "187344531784", at: "2026-11-02T13:43:00.000Z" }),
+    ];
+    const result = crossSettlements({
+      paymentMethodIds: [methodId],
+      charges: [],
+      rows,
+      marks: [],
+    })[0];
+    expect(result.rows).toHaveLength(2);
+    expect(result.collectedCents).toBe(1_000_000);
+    expect(monthExpenses(rows)).toEqual([
+      {
+        id: 2,
+        paymentMethodId: methodId,
+        sourceId: "187344531784",
+        at: "2026-11-02T13:43:00.000Z",
+        amountCents: -82_039_437,
+        kind: "collection",
+      },
+    ]);
   });
 
   it("después de marcar un turno, el otro cobro del mismo monto queda único", () => {

@@ -16,6 +16,16 @@ type MonthMethod = {
   paymentMethodName: string;
   expectedCents: number;
   collectedCents: number;
+  reconciles?: boolean;
+};
+
+type MonthExpense = {
+  id: number;
+  sourceId: string | null;
+  at: string | null;
+  amountCents: number;
+  kind: "collection" | "yield" | "withdrawal" | "refund";
+  paymentMethodName: string;
 };
 
 type MonthResponse = {
@@ -24,11 +34,26 @@ type MonthResponse = {
   collectedCents: number;
   methods: MonthMethod[];
   days: MonthDay[];
+  timezone?: string;
+  expenses?: MonthExpense[];
   occupancy?: CourtOccupancy | null;
 };
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+}
+
+function whenOf(iso: string | null, timeZone: string) {
+  if (!iso) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(iso));
 }
 
 function chip(cents: number) {
@@ -52,6 +77,9 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
   const difference = data ? data.collectedCents - data.expectedCents : 0;
   const tone = reconciliationTone(difference);
   const lead = data && data.days.length > 0 ? (weekdayOf(data.days[0].date) + 6) % 7 : 0;
+  const expenses = data?.expenses ?? [];
+  const expenseCents = expenses.reduce((total, expense) => total + expense.amountCents, 0);
+  const timeZone = data?.timezone || "America/Argentina/Buenos_Aires";
 
   return (
     <section className="space-y-4">
@@ -97,9 +125,23 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
           {data.methods.length > 0 && (
             <section className="space-y-2">
               <h2 className="text-sm font-semibold">Por medio de pago</h2>
-              <p className="text-xs text-muted-foreground">Lo que debía entrar y lo que entró en cada cuenta de Mercado Pago.</p>
+              <p className="text-xs text-muted-foreground">
+                Cada medio de cancha. Solo Mercado Pago se compara con lo que entró en la cuenta.
+              </p>
               <div className="space-y-2 md:hidden">
                 {data.methods.map((method) => {
+                  if (method.reconciles === false) {
+                    return (
+                      <div key={method.paymentMethodId} className="space-y-2 rounded-lg border p-3">
+                        <p className="font-medium">{method.paymentMethodName}</p>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Registrado</p>
+                          <p className="text-sm font-semibold">{pesos(method.expectedCents)}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Sin conciliación</p>
+                      </div>
+                    );
+                  }
                   const methodDifference = method.collectedCents - method.expectedCents;
                   const methodTone = reconciliationTone(methodDifference);
                   return (
@@ -136,6 +178,16 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
                   </TableHeader>
                   <TableBody>
                     {data.methods.map((method) => {
+                      if (method.reconciles === false) {
+                        return (
+                          <TableRow key={method.paymentMethodId}>
+                            <TableCell>{method.paymentMethodName}</TableCell>
+                            <TableCell className="text-right">{pesos(method.expectedCents)}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                            <TableCell className="text-right text-muted-foreground">Sin conciliación</TableCell>
+                          </TableRow>
+                        );
+                      }
                       const methodDifference = method.collectedCents - method.expectedCents;
                       const methodTone = reconciliationTone(methodDifference);
                       return (
@@ -155,6 +207,57 @@ export function MonthBalance({ month, onPickDay }: { month: string; onPickDay: (
               </div>
             </section>
           )}
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold">Gastos</h2>
+            <p className="text-xs text-muted-foreground">
+              Movimientos en los que salió plata. No entran en lo cobrado de canchas.
+            </p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-lg font-semibold">{pesos(expenseCents)}</p>
+            </div>
+            {expenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay gastos en el mes.</p>
+            ) : (
+              <>
+                <div className="space-y-2 md:hidden">
+                  {expenses.map((expense) => (
+                    <div key={expense.id} className="space-y-1 rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm whitespace-nowrap">{whenOf(expense.at, timeZone)}</p>
+                        <p className="text-sm font-semibold">{pesos(expense.amountCents)}</p>
+                      </div>
+                      <p className="text-sm">{expense.paymentMethodName}</p>
+                      <p className="text-xs text-muted-foreground">{expense.sourceId ?? "Sin operación"}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden rounded-lg border md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Operación</TableHead>
+                        <TableHead>Medio</TableHead>
+                        <TableHead className="text-right">Monto</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((expense) => (
+                        <TableRow key={expense.id}>
+                          <TableCell className="whitespace-nowrap">{whenOf(expense.at, timeZone)}</TableCell>
+                          <TableCell>{expense.sourceId ?? "Sin operación"}</TableCell>
+                          <TableCell>{expense.paymentMethodName}</TableCell>
+                          <TableCell className="text-right">{pesos(expense.amountCents)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </section>
 
           <div>
             <p className="mb-2 text-xs text-muted-foreground">Cada día: arriba lo que debía entrar, abajo lo que entró.</p>

@@ -12,7 +12,7 @@ import {
 } from "@/lib/finance/credentials";
 import { MercadoPagoError, requestSettlementReport } from "@/lib/finance/mercadopago-settlement";
 import { isCourtPaymentScope } from "@/lib/finance/payment-credentials";
-import { settlementRequestWindow } from "@/lib/finance/settlement-window";
+import { settlementRangeWindow, settlementRequestWindow } from "@/lib/finance/settlement-window";
 
 const FLAG_SCRIPT = "scripts/add-payment-method-mercadopago.sql";
 
@@ -40,7 +40,11 @@ export async function POST(request: Request) {
       ? config
       : await requirePermission("finance.manage");
     if (!auth.ok) return auth.response;
-    const body = (await request.json().catch(() => null)) as { paymentMethodId?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as {
+      paymentMethodId?: unknown;
+      from?: unknown;
+      to?: unknown;
+    } | null;
     const paymentMethodId = Number(body?.paymentMethodId);
     if (!Number.isInteger(paymentMethodId) || paymentMethodId <= 0) {
       return NextResponse.json({ error: "Elegí un medio de pago." }, { status: 400 });
@@ -87,14 +91,23 @@ export async function POST(request: Request) {
       loadCredentialsKey(),
     );
     const club = await loadClubSchedule(service, clubId);
-    const window = settlementRequestWindow(new Date(), club.timezone);
-    const report = await requestSettlementReport(token, window.beginDate, window.endDate);
+    const hasRange = body?.from != null || body?.to != null;
+    const window = !hasRange
+      ? settlementRequestWindow(new Date(), club.timezone)
+      : typeof body?.from === "string" && typeof body?.to === "string"
+        ? settlementRangeWindow(body.from, body.to, club.timezone)
+        : { ok: false as const, error: "Elegí un desde y un hasta." };
+    if ("ok" in window && !window.ok) {
+      return NextResponse.json({ error: window.error }, { status: 400 });
+    }
+    const range = "ok" in window ? window.window : window;
+    const report = await requestSettlementReport(token, range.beginDate, range.endDate);
     return NextResponse.json({
-      ...window,
+      ...range,
       id: report.id,
       status: report.status,
-      beginDate: report.beginDate ?? window.beginDate,
-      endDate: report.endDate ?? window.endDate,
+      beginDate: report.beginDate ?? range.beginDate,
+      endDate: report.endDate ?? range.endDate,
       fileName: report.fileName,
     });
   } catch (error) {

@@ -56,8 +56,49 @@ export function parseSettlementReportList(body: unknown): MpSettlementReport[] {
   return reports;
 }
 
+function fetchFailure(error: unknown, token: string): MercadoPagoError {
+  const err = error instanceof Error ? error : new Error("fetch failed");
+  const cause = err.cause instanceof Error ? err.cause.message : "";
+  const detail = [err.message, cause].filter(Boolean).join(": ").replaceAll(token, "").slice(0, 300);
+  return new MercadoPagoError(`No se pudo conectar con Mercado Pago. ${detail}`.trim());
+}
+
+/** El archivo suele venir por una redirección. El token solo va a Mercado Pago; el destino lo rechaza. */
+async function mpFetch(
+  url: string,
+  token: string,
+  fetchImpl: typeof fetch,
+  headers: Record<string, string>,
+): Promise<Response> {
+  let current = url;
+  for (let hop = 0; hop < 5; hop += 1) {
+    const host = new URL(current).hostname;
+    const sendToken = host === "api.mercadopago.com" || host.endsWith(".mercadopago.com");
+    let response: Response;
+    try {
+      response = await fetchImpl(current, {
+        redirect: "manual",
+        headers: sendToken ? { ...headers, Authorization: `Bearer ${token}` } : headers,
+      });
+    } catch (error) {
+      throw fetchFailure(error, token);
+    }
+    if (response.status < 300 || response.status >= 400) return response;
+    await response.body?.cancel().catch(() => undefined);
+    const location = response.headers.get("location");
+    if (!location) throw new MercadoPagoError("Mercado Pago no indicó dónde bajar el archivo.");
+    current = new URL(location, current).toString();
+  }
+  throw new MercadoPagoError("Mercado Pago redirigió demasiadas veces.");
+}
+
 async function mpText(response: Response, token: string): Promise<string> {
-  const body = await response.text();
+  let body = "";
+  try {
+    body = await response.text();
+  } catch (error) {
+    throw fetchFailure(error, token);
+  }
   if (response.ok) return body;
   const safe = body.replaceAll(token, "").slice(0, 300);
   if (response.status === 401 || response.status === 403) {
@@ -67,9 +108,7 @@ async function mpText(response: Response, token: string): Promise<string> {
 }
 
 export async function listSettlementReports(token: string, fetchImpl: typeof fetch = fetch): Promise<MpSettlementReport[]> {
-  const response = await fetchImpl(LIST_URL, {
-    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-  });
+  const response = await mpFetch(LIST_URL, token, fetchImpl, { Accept: "application/json" });
   const body = await mpText(response, token);
   return parseSettlementReportList(JSON.parse(body));
 }
@@ -89,15 +128,20 @@ export async function requestSettlementReport(
   endDate: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<MpSettlementRequest> {
-  const response = await fetchImpl(CREATE_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ begin_date: beginDate, end_date: endDate }),
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(CREATE_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ begin_date: beginDate, end_date: endDate }),
+    });
+  } catch (error) {
+    throw fetchFailure(error, token);
+  }
   const body = await mpText(response, token);
   const parsed = JSON.parse(body) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -121,9 +165,15 @@ export async function downloadSettlementReport(
   if (!FILE_NAME.test(fileName)) {
     throw new MercadoPagoError("El nombre del reporte no es válido.");
   }
-  const response = await fetchImpl(
-    `https://api.mercadopago.com/v1/account/settlement_report/${encodeURIComponent(fileName)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  return mpText(response, token);
+  const url = `https://api.mercadopago.com/v1/account/settlement_report/${encodeURIComponent(fileName)}`;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await mpFetch(url, token, fetchImpl, {});
+      return await mpText(response, token);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }

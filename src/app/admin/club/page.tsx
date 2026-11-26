@@ -578,7 +578,7 @@ export default function ClubSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MercadoPagoCredentials />
+          <MercadoPagoCredentials timeZone={draft.timezone} />
         </CardContent>
       </Card>
       </>

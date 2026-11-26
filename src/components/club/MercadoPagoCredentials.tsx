@@ -15,6 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/components/permissions-provider";
 import type { PaymentCredentialStatus } from "@/lib/finance/payment-credentials";
+import { settlementRequestWindow } from "@/lib/finance/settlement-window";
+
+const DEFAULT_TIME_ZONE = "America/Argentina/Buenos_Aires";
 
 type Payload = { methods: PaymentCredentialStatus[] };
 
@@ -24,12 +27,15 @@ async function readJson(response: Response, fallback: string) {
   return body;
 }
 
-export function MercadoPagoCredentials() {
+export function MercadoPagoCredentials({ timeZone = DEFAULT_TIME_ZONE }: { timeZone?: string }) {
   const queryClient = useQueryClient();
   const { can, loading } = usePermissions();
   const canWrite = !loading && can("users.manage");
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [removing, setRemoving] = useState<PaymentCredentialStatus | null>(null);
+  const [generating, setGenerating] = useState<PaymentCredentialStatus | null>(null);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -60,11 +66,11 @@ export function MercadoPagoCredentials() {
   });
 
   const generate = useMutation({
-    mutationFn: async (paymentMethodId: number) => {
+    mutationFn: async ({ paymentMethodId, from, to }: { paymentMethodId: number; from: string; to: string }) => {
       const response = await fetch("/api/court-balance/settlement-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethodId }),
+        body: JSON.stringify({ paymentMethodId, from, to }),
       });
       return readJson(response, "No se pudo pedir el reporte.") as Promise<{
         from: string;
@@ -73,6 +79,7 @@ export function MercadoPagoCredentials() {
       }>;
     },
     onSuccess: (result) => {
+      setGenerating(null);
       const from = result.from.slice(8, 10) + "/" + result.from.slice(5, 7);
       const to = result.to.slice(8, 10) + "/" + result.to.slice(5, 7);
       setNotice(`Pedido el reporte del ${from} al ${to}. Mercado Pago lo está armando. Cuando tenga archivo, Traer liquidaciones lo guarda.`);
@@ -130,7 +137,7 @@ export function MercadoPagoCredentials() {
   return (
     <section className="space-y-2">
       <p className="text-sm text-muted-foreground">
-        El access token queda cifrado y esta pantalla no lo vuelve a mostrar. A las 03:00 se pide el reporte de ayer y de hoy. A las 06:00 se baja ese archivo y se guardan las filas. Estos botones hacen eso ahora.
+        El access token queda cifrado y esta pantalla no lo vuelve a mostrar. A las 03:00 se pide el reporte de ayer y de hoy. A las 06:00 se baja ese archivo y se guardan las filas. Generar reporte deja cambiar ese rango, hasta 60 días.
       </p>
 
       {credentials.isLoading && <p className="text-sm text-muted-foreground">Cargando medios…</p>}
@@ -178,7 +185,12 @@ export function MercadoPagoCredentials() {
                     type="button"
                     variant="outline"
                     disabled={generate.isPending}
-                    onClick={() => generate.mutate(method.id)}
+                    onClick={() => {
+                      const range = settlementRequestWindow(new Date(), timeZone);
+                      setFromDate(range.from);
+                      setToDate(range.to);
+                      setGenerating(method);
+                    }}
                   >
                     Generar reporte
                   </Button>
@@ -203,6 +215,41 @@ export function MercadoPagoCredentials() {
           </form>
         ))}
       </div>
+
+      <Dialog open={generating != null} onOpenChange={(open) => { if (!open) setGenerating(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generar reporte</DialogTitle>
+            <DialogDescription>
+              {generating ? `${generating.name}. Mercado Pago arma días enteros, de 00:00 a 23:59.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1.5 text-sm">
+              Desde
+              <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+            </label>
+            <label className="space-y-1.5 text-sm">
+              Hasta
+              <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setGenerating(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={generate.isPending || !fromDate || !toDate || generating == null}
+              onClick={() => {
+                if (generating) generate.mutate({ paymentMethodId: generating.id, from: fromDate, to: toDate });
+              }}
+            >
+              Generar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={removing != null} onOpenChange={(open) => { if (!open) setRemoving(null); }}>
         <DialogContent>

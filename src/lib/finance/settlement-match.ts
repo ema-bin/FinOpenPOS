@@ -143,6 +143,30 @@ export function reconcileDates(input: ReconcileMonthInput): Array<{ date: string
   return reconcileMonth(input).days;
 }
 
+export type MonthExpense = {
+  id: number;
+  paymentMethodId: number;
+  sourceId: string | null;
+  at: string | null;
+  amountCents: number;
+  kind: SettlementKind;
+};
+
+/** Todo monto negativo del mes. Sigue guardado y no entra en lo cobrado de canchas. */
+export function monthExpenses(rows: SettlementMovement[]): MonthExpense[] {
+  return rows
+    .filter((row) => row.amountCents < 0)
+    .map((row) => ({
+      id: row.id,
+      paymentMethodId: row.paymentMethodId,
+      sourceId: row.sourceId,
+      at: row.at,
+      amountCents: row.amountCents,
+      kind: settlementKind(row),
+    }))
+    .sort((a, b) => (a.at ?? "").localeCompare(b.at ?? "") || a.id - b.id);
+}
+
 function blank(value: string | null): boolean {
   return value == null || value.trim() === "";
 }
@@ -211,7 +235,7 @@ function effectiveKind(kind: SettlementKind, mark: SettlementMarkInput | null): 
 /**
  * Cruza cobros de Mercado Pago con turnos y packs del mismo medio.
  * No elige una cancha cuando el monto aparece más de una vez.
- * El rendimiento, los retiros y las devoluciones no entran en la suma de cobros.
+ * El rendimiento, los retiros, las devoluciones y los cobros negativos no entran en la suma.
  */
 export function crossSettlements(input: {
   paymentMethodIds: number[];
@@ -271,7 +295,9 @@ export function crossSettlements(input: {
     });
 
     const sum = (kind: SettlementCrossRow["effectiveKind"]) =>
-      crossed.filter((row) => row.effectiveKind === kind).reduce((total, row) => total + row.amountCents, 0);
+      crossed
+        .filter((row) => row.effectiveKind === kind && (kind !== "collection" || row.amountCents > 0))
+        .reduce((total, row) => total + row.amountCents, 0);
 
     return {
       paymentMethodId,
