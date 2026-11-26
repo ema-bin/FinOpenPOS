@@ -387,7 +387,7 @@ export default function ClubSettingsPage() {
 
       <ModuleSection
         title="Reservas"
-        description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Elegí el día y la hora. Por ahora solo puede correr los sábados a las 06:00."
+        description="Cada semana arma los turnos de la semana siguiente con los horarios fijos. Corre los sábados a las 06:00, dentro de la tarea que baja las liquidaciones."
         active={draft.module_reservations}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_reservations", checked)}
@@ -528,7 +528,7 @@ export default function ClubSettingsPage() {
       {tab === "ventas" ? (
       <ModuleSection
         title="Ventas"
-        description="Cada día a las 06:00 se hace el cierre de caja y se bajan las liquidaciones de Mercado Pago que falten. Esa hora es la misma para todos los complejos."
+        description="A las 03:00 se pide a Mercado Pago el reporte de ayer y de hoy. A las 06:00 se baja ese archivo, se guardan las filas y se hace el cierre de caja. Esas horas son las mismas para todos los complejos."
         active={draft.module_buffet}
         canWrite={canWrite}
         onActiveChange={(checked) => set("module_buffet", checked)}
@@ -574,7 +574,7 @@ export default function ClubSettingsPage() {
         <CardHeader>
           <CardTitle>Mercado Pago</CardTitle>
           <CardDescription>
-            Access token de cada medio de canchas marcado como Mercado Pago. Las liquidaciones se bajan solas a las 06:00.
+            Access token de cada medio de canchas marcado como Mercado Pago. A las 03:00 se pide el reporte y a las 06:00 se baja.
           </CardDescription>
         </CardHeader>
         <CardContent>

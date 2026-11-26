@@ -9,12 +9,12 @@
   },
   "crons": [
     {
-      "path": "/api/cron/daily-sales-closure",
-      "schedule": "0 9 * * *"
+      "path": "/api/cron/settlement-report",
+      "schedule": "0 6 * * *"
     },
     {
-      "path": "/api/cron/court-reservations",
-      "schedule": "0 9 * * 6"
+      "path": "/api/cron/daily-sales-closure",
+      "schedule": "0 9 * * *"
     }
   ]
 }

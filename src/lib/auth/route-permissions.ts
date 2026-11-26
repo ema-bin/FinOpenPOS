@@ -139,8 +139,8 @@ const AD_SOURCES = ["advertisements.manage", "tournaments.manage"] as const;
 const PUBLIC: RouteRequirement = { kind: "public" };
 
 export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, RouteRequirement>>>> = {
+  "/api/cron/settlement-report": { GET: PUBLIC },
   "/api/cron/daily-sales-closure": { GET: PUBLIC },
-  "/api/cron/court-reservations": { GET: PUBLIC },
 
   // Dashboard y reportes financieros
   "/api/admin/dashboard/sales": { GET: read("sales.operate") },
@@ -236,6 +236,7 @@ export const API_RULES: Readonly<Record<string, Partial<Record<HttpMethod, Route
     DELETE: write("users.manage", "finance.manage"),
   },
   "/api/court-balance/settlement-import": { POST: write("users.manage", "finance.manage") },
+  "/api/court-balance/settlement-report": { POST: write("users.manage", "finance.manage") },
   "/api/court-balance/settlement-match": {
     GET: read("finance.manage"),
     PUT: write("finance.manage"),
