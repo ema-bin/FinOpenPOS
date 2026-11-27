@@ -108,6 +108,10 @@ export function FreeSlotsMessage() {
       slots,
       courts,
       openTime,
+      window: {
+        start: club?.occupancy_start_time ?? openTime,
+        end: club?.occupancy_end_time ?? club?.close_time ?? "01:00",
+      },
       fromOrder: offset === 0 ? start.fromOrder : undefined,
     }));
   }
@@ -149,7 +153,9 @@ export function FreeSlotsMessage() {
           <DialogHeader>
             <DialogTitle>Mensaje de turnos libres</DialogTitle>
             <DialogDescription>
-              Hoy entra desde la hora actual. Podés sumar días hacia adelante y retocar el texto antes de mandarlo.
+              Solo turnos dentro del horario del índice de ocupación
+              {club ? ` (${club.occupancy_start_time} a ${club.occupancy_end_time})` : ""}. Hoy entra desde la hora actual.
+              Podés sumar días hacia adelante y retocar el texto antes de mandarlo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

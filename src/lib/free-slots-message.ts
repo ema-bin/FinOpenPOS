@@ -3,6 +3,7 @@ import { WEEKDAY_LABELS, addDaysIso, weekdayOf } from "@/lib/class-time";
 export type FreeSlotInput = {
   court_id: number;
   start_time: string;
+  end_time: string;
   was_played: boolean;
   reservation_status: "free" | "reserved";
   reservation_source: "manual" | "fixed" | null;
@@ -53,6 +54,17 @@ export function freeSlotsStart(input: {
   return { date: input.date, fromOrder: now };
 }
 
+/** El turno entero cae dentro del rango del índice de ocupación. */
+function insideWindow(start: string, end: string, window: { start: string; end: string }, open: number): boolean {
+  const windowStart = dayOrder(window.start, open);
+  let windowEnd = dayOrder(window.end, open);
+  if (windowEnd <= windowStart) windowEnd += 1440;
+  const slotStart = dayOrder(start, open);
+  let slotEnd = dayOrder(end, open);
+  if (slotEnd <= slotStart) slotEnd += 1440;
+  return slotStart >= windowStart && slotEnd <= windowEnd;
+}
+
 function joinCourts(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
@@ -63,6 +75,7 @@ export function freeSlotsBlock(input: {
   slots: FreeSlotInput[];
   courts: Array<{ id: number; name: string }>;
   openTime: string;
+  window: { start: string; end: string };
   fromOrder?: number;
 }): string {
   const open = minutesOf(input.openTime);
@@ -73,6 +86,7 @@ export function freeSlotsBlock(input: {
     if (!slotIsFree(slot) || !courtIndex.has(slot.court_id)) continue;
     const start = slot.start_time.slice(0, 5);
     if (dayOrder(start, open) < from) continue;
+    if (!insideWindow(start, slot.end_time.slice(0, 5), input.window, open)) continue;
     const list = byStart.get(start) ?? [];
     if (!list.includes(slot.court_id)) list.push(slot.court_id);
     byStart.set(start, list);

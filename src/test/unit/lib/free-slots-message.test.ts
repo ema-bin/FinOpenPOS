@@ -6,10 +6,19 @@ const courts = [
   { id: 2, name: "C2" },
 ];
 
+const wide = { start: "10:00", end: "02:00" };
+
+function plus90(start: string): string {
+  const [hour, minute] = start.split(":").map(Number);
+  const total = (hour * 60 + minute + 90) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 function slot(courtId: number, start: string, patch: Partial<FreeSlotInput> = {}): FreeSlotInput {
   return {
     court_id: courtId,
     start_time: `${start}:00`,
+    end_time: `${plus90(start)}:00`,
     was_played: false,
     reservation_status: "free",
     reservation_source: null,
@@ -24,7 +33,8 @@ describe("mensaje de turnos libres", () => {
     const text = freeSlotsBlock({
       date: "2026-11-27",
       courts,
-      openTime: "13:00",
+      openTime: "10:00",
+      window: wide,
       slots: [
         slot(2, "13:00"),
         slot(1, "13:00"),
@@ -46,11 +56,23 @@ describe("mensaje de turnos libres", () => {
     ].join("\n"));
   });
 
+  it("solo comparte turnos dentro del rango del índice de ocupación", () => {
+    const text = freeSlotsBlock({
+      date: "2026-11-27",
+      courts,
+      openTime: "10:00",
+      window: { start: "13:00", end: "23:30" },
+      slots: [slot(1, "10:00"), slot(1, "11:30"), slot(1, "13:00"), slot(2, "22:00"), slot(1, "23:30")],
+    });
+    expect(text).toBe("*TURNOS LIBRES VIERNES:*\n-13:00 hs C1\n-22:00 hs C2");
+  });
+
   it("hoy arranca desde la hora actual y lo de madrugada va al final", () => {
     const text = freeSlotsBlock({
       date: "2026-11-27",
       courts,
       openTime: "13:00",
+      window: { start: "13:00", end: "02:00" },
       fromOrder: 16 * 60 + 10,
       slots: [slot(1, "00:30"), slot(1, "16:00"), slot(1, "17:30"), slot(2, "23:00")],
     });
@@ -58,7 +80,7 @@ describe("mensaje de turnos libres", () => {
   });
 
   it("sin libres lo dice", () => {
-    expect(freeSlotsBlock({ date: "2026-11-28", courts, openTime: "13:00", slots: [] }))
+    expect(freeSlotsBlock({ date: "2026-11-28", courts, openTime: "13:00", window: wide, slots: [] }))
       .toBe("*TURNOS LIBRES SÁBADO:*\nSin turnos libres");
   });
 
