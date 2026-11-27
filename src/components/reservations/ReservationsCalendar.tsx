@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlayerSearchSelect } from "@/components/player-search-select/PlayerSearchSelect";
+import { FreeSlotsMessage } from "@/components/reservations/FreeSlotsMessage";
 import { courtReservationsService, courtSlotsService, playersService } from "@/services";
 import { buildCourtSlotGrid, todayInTimeZone } from "@/lib/clubs/schedule";
 import type { ClubSettings } from "@/lib/clubs/settings";
@@ -433,6 +434,7 @@ export function ReservationsCalendar({
                 {court.name}
               </button>
             ))}
+            {mode === "calendar" ? <FreeSlotsMessage /> : null}
           </div>
           {selectedCourt ? (
             <section className={cn("overflow-hidden rounded-xl border-2", mode === "fixed" ? "border-blue-600" : "border-orange-500")}>

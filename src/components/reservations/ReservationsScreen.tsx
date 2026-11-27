@@ -3,7 +3,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/components/permissions-provider";
 import { ReservationsCalendar } from "@/components/reservations/ReservationsCalendar";
-
 export function ReservationsScreen() {
   const { can, loading } = usePermissions();
   const canWrite = !loading && can("courts.reservations");
